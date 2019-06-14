@@ -15,11 +15,16 @@ testname = ["forward traveltime 2D","forward traveltime 3D",
 testfun  = [test_fwdtt_2D,          test_fwdtt_3D,
             test_gradtt_2D,          test_gradtt_3D]
 
-for (tn,fun) in zip(testname,testfun)
-    @testset "Test $tn" begin
-        ##printstyled("* $test_file\n", color=:green)
+nwor = nworkers()
+
+@testset "Tests " begin
+    println("\n Number of workers available: $nwor")
+    for (tn,fun) in zip(testname,testfun)
+        println()
+        printstyled("Testing $tn \n", color=:green)
         @test fun()
     end
+    println()
 end
 
 

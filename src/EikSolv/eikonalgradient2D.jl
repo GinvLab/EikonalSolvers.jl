@@ -6,24 +6,22 @@
 
 
 ###############################################################################
-########################################################################################
-## @doc raw because of some backslashes in the string...
-@doc raw""" 
-    gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},
-                coordrec::Array{Float64,2},pickobs::Array{Float64,2},
-                pickcalc::Array{Float64,2}, stdobs::Float64 ; 
-                gradttalgo::String="gradFMM_hiord")
 
-Calculate the gradient using the adjoint state method for 3D velocity models. 
-Returns the gradient of the misfit function with respect to velocity calculated at the given point (velocity model).
-The gradient is calculated using the adjoint state method. 
+## @doc raw because of some backslashes in the string...
+@doc raw"""
+    gradttime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
+                pickobs::Array{Float64,2},stdobs::Float64 ; gradttalgo::String="gradFMM_hiord")
+
+Calculate the gradient using the adjoint state method for 2D velocity models. 
+Returns the gradient of the misfit function with respect to velocity calculated at the given point (velocity model). 
+The gradient is calculated using the adjoint state method.
 The computations are run in parallel depending on the number of workers (nworkers()) available.
 
 # Arguments
-- `vel`: the 3D velocity model 
+- `vel`: the 2D velocity model 
 - `grd`: a struct specifying the geometry and size of the model
-- `coordsrc`: the coordinates of the source(s) (x,y,z), a 3-column array 
-- `coordrec`: the coordinates of the receiver(s) (x,y,z), a 3-column array 
+- `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array 
+- `coordrec`: the coordinates of the receiver(s) (x,y), a 2-column array 
 - `pickobs`: observed traveltime picks
 - `stdobs`: standard deviation of error on observed traveltime picks
 - `gradttalgo`: the algorithm to use to compute the forward and gradient, one amongst the following
@@ -32,18 +30,17 @@ The computations are run in parallel depending on the number of workers (nworker
     * "gradFMM\_hiord", second order fast marching method for forward, high order fast marching method for adjoint  
 
 # Returns
-- `grad`: the gradient as a 3D array
+- `grad`: the gradient as a 2D array
 
 """
-function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                     pickobs::Array{Float64,2},stdobs::Float64 ; gradttalgo::String="gradFMM_hiord")
-   
-    @assert size(coordsrc,2)==3
-    @assert size(coordrec,2)==3
+function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
+                    pickobs::Array{Float64,2},stdobs::Float64 ; gradttalgo::String="gradFMM_hiord")
+
+    @assert size(coordsrc,2)==2
+    @assert size(coordrec,2)==2
     @assert all(vel.>=0.0)
     @assert all(grd.xinit.<coordsrc[:,1].<((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<coordsrc[:,2].<((grd.ny-1)*grd.hgrid+grd.yinit))
-    @assert all(grd.zinit.<coordsrc[:,3].<((grd.nz-1)*grd.hgrid+grd.zinit))
 
     nsrc=size(coordsrc,1)
     nw = nworkers()
@@ -54,63 +51,71 @@ function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2
     ## array of workers' ids
     wks = workers()
     
-    tmpgrad = zeros(grd.nx,grd.ny,grd.nz,nchu)
+    tmpgrad = zeros(grd.nx,grd.ny,nchu)
     ## do the calculations
     @sync begin 
         for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
-            @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
+            @async tmpgrad[:,:,s] = remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
                                                      coordsrc[igrs,:],coordrec,
                                                      grd,stdobs,pickobs[:,igrs],
-                                                     adjalgo )
+                                                     gradttalgo )
         end
     end
-    grad = sum(tmpgrad,dims=4)
+    grad = sum(tmpgrad,dims=3)[:,:]
     return grad
 end
 
-################################################################3
+###############################################################################
 
 """
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc3D(vel::Array{Float64,2},xysrc::Array{Float64,2},
+function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
                          coordrec::Array{Float64,2},
-                         grd::Grid3D,
+                         grd::Grid2D,
                          stdobs::Float64,pickobs1::Array{Float64,2},
                          adjalgo::String)
 
-    nx,ny,nz=size(vel)
-    ttpicks1 = zeros(size(coordrec,1))
+    nx,ny=size(vel)
     nsrc = size(xysrc,1)
-    grad1 = zeros(nx,ny,nz)
-
-
+    nrec = size(coordrec,1)                
+    ttpicks1 = zeros(nrec)
+    grad1 = zeros(nx,ny)
+  
+    if adjalgo=="ttFMM_hiord"
+        # in this case velocity and time arrays have the same shape
+        ttgrdonesrc = zeros(grd.nx,grd.ny,nsrc)
+    else
+        # in this case the time array has shape(velocity)+1
+        ttgrdonesrc = zeros(grd.ntx,grd.nty,nsrc)
+    end
+    
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
 
         ###########################################
         ## calc ttime
-    
-        if adjalgo=="gradFMM_podlec"
-            ttonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
- 
-        elseif adjalgo=="ttFMM_hiord"
-            ttonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
 
-        elseif adjalgo=="ttFS_podlec"
-            ttonesrc = ttFS_podlec(vel,xysrc[s,:],grd)
+        if adjalgo=="gradFMM_podlec"
+            ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
+ 
+        elseif adjalgo=="gradFMM_hiord"
+            ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
+
+        elseif adjalgo=="gradFS_podlec"
+            ttgrdonesrc = ttFS_podlec(vel,xysrc[s,:],grd)
  
         else
-            println("\ncalcgradsomesrc(): Wrong ttalgo name: $(ttalgo)... \n")
+            println("\ncalcgradsomesrc(): Wrong adjalgo name: $(adjalgo)... \n")
             return nothing
         end
             
         ## ttime at receivers
         for i=1:size(coordrec,1)
-            ttpicks1[i] = trilinear_interp( ttonesrc,grd.hgrid,grd.xinit,
-                                           grd.yinit,grd.zinit,coordrec[i,1],coordrec[i,2] )
+            ttpicks1[i] = bilinear_interp( ttgrdonesrc,grd.hgrid,grd.xinit,
+                                           grd.yinit,coordrec[i,1],coordrec[i,2] )
         end
 
         ###########################################
@@ -119,16 +124,16 @@ function calcgradsomesrc3D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFS_podlec"
 
-            grad1 += eikgrad_FS_SINGLESRC(ttonesrc,vel,xysrc[s,:],coordrec,grd,
+            grad1 += eikgrad_FS_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec,grd,
                                      pickobs1[:,s],ttpicks1,stdobs)
 
         elseif adjalgo=="gradFMM_podlec"
 
-            grad1 += eikgrad_FMM_SINGLESRC(ttonesrc,vel,xysrc[s,:],coordrec,
+            grad1 += eikgrad_FMM_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec,
                                           grd,pickobs1[:,s],ttpicks1,stdobs)
             
         elseif adjalgo=="gradFMM_hiord"
-            grad1 += eikgrad_FMM_hiord_SINGLESRC(ttonesrc,vel,xysrc[s,:],coordrec,
+            grad1 += eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec,
                                                   grd,pickobs1[:,s],ttpicks1,stdobs)
 
         else
@@ -139,354 +144,34 @@ function calcgradsomesrc3D(vel::Array{Float64,2},xysrc::Array{Float64,2},
     end
     
     return grad1
-end
-
-############################################################################
-############################################################################
-
-function gradeikFS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
-                         src::Array{Float64,1},rec::Array{Float64,2},grd::Grid3D,
-                         pickobs::Array{Float64,1},ttpicks::Array{Float64,1},stdobs::Float64)
-
-    @assert size(src)==(3,)
-    
-    @assert size(ttime)==(size(vel).+1)
-    nx,ny,nz = size(ttime)
-
-    epsilon = 1e-5
-    mindistsrc = 1e-5
-    
-    ## init adjoint variable
-    lambdaold = zeros((nx,ny,nz)) + 1e32
-    lambdaold[:,1,:]   = 0.0
-    lambdaold[:,end,:] = 0.0
-    lambdaold[1,:,:]   = 0.0
-    lambdaold[end,:,:] = 0.0
-    lambdaold[:,:,1]   = 0.0
-    lambdaold[:,:,end] = 0.0
-
-    onarec = zeros(Bool,nx,ny,nz)
-    onarec[:,:,:] = false
-    dtonarec = zeros(nx,ny,nz)
- 
-    #copy ttime 'cause it might be changed around src
-    tt = copy(ttime)
-    dh = grd.hgrid
-
-    ## Grid position
-    xinit = grd.xinit
-    yinit = grd.yinit
-    zinit = grd.zinit
-    ntx = grd.ntx
-    nty = grd.nty
-    ntz = grd.ntz
-    
-    ## source
-    ## grd.xinit-hgr because TIME array on STAGGERED grid
-    hgr = grd.hgrid/2.0
-    xsrc,ysrc,zsrc = src[1],src[2],src[3]
-    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-    rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
-    ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-    rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
-    #@show dist,src,rx,ry
-    onsrc = zeros(Bool,nx,ny,nz)
-    onsrc[:,:,:] = false    
-    halfg = 0.0
-
-    #@show xsrc,ysrc,zsrc,rx,ry,rz
-    
-    src_on_nodeedge = false
-    max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
-    max_y = (grd.nty-1)*grd.hgrid+grd.yinit
-    max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
-    ## loop to make sure we don't accidentally move the src to another node/edge
-    while (sqrt(rx^2+ry^2+rz^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
-        src_on_nodeedge = true
-        
-        ## shift the source 
-        if xsrc < max_x-0.002*dh
-            xsrc = xsrc+0.001*dh
-        else #(make sure it's not already at the bottom y)
-            xsrc = xsrc-0.001*dh
-        end
-        if ysrc < max_y-0.002*dh
-            ysrc = ysrc+0.001*dh
-        else #(make sure it's not already at the bottom y)
-            ysrc = ysrc-0.001*dh
-        end
-        if zsrc < max_z-0.002*dh
-            zsrc = zsrc+0.001*dh
-        else #(make sure it's not already at the bottom y)
-            zsrc = zsrc-0.001*dh
-        end
-
-        # print("new time at src:  $(tt[ix,iy]) ")
-        ## recompute parameters related to position of source
-        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
-
-        #@show xsrc,ysrc,zsrc,rx,ry,rz
-    end
-
-    
-    ## To avoid singularities, the src can only be inside a box,
-    ##  not on a grid node or edge... see above. So we need to have
-    ##  always 8 nodes (corners) where onsrc is true
-    if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-        onsrc[ix:ix+1,iy:iy+1,iz:iz+1] = true
-    elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-        onsrc[ix-1:ix,iy:iy+1,iz:iz+1] = true
-    elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-        onsrc[ix-1:ix,iy-1:iy,iz:iz+1] = true
-    elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-        onsrc[ix:ix+1,iy-1:iy,iz:iz+1] = true
-
-    elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-        onsrc[ix:ix+1,iy:iy+1,iz-1:iz] = true
-    elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-        onsrc[ix-1:ix,iy:iy+1,iz-1:iz] = true
-    elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-        onsrc[ix-1:ix,iy-1:iy,iz-1:iz] = true
-    elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-        onsrc[ix:ix+1,iy-1:iy,iz-1:iz] = true
-    end
-
-    ## if src on node or edge, recalculate traveltimes in box
-    if src_on_nodeedge==true
-        ## RE-set a new ttime around source 
-        isrc,jsrc,ksrc = ind2sub(size(onsrc),find(onsrc))
-        for k in ksrc
-            for j in jsrc
-                for i in isrc
-                    @show "onsrc",i,j,k
-                    xp = (i-1)*grd.hgrid+grd.xinit
-                    yp = (j-1)*grd.hgrid+grd.yinit
-                    zp = (k-1)*grd.hgrid+grd.zinit
-                    ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-                    jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-                    kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-                    #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-                    ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-                    ##println("$i $j $j  $xp $yp $zp")
-                end
-            end
-        end
-    end
-
-    ## init receivers
-    nrec=size(rec,1)
-    for r=1:nrec
-        i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,3],xinit,yinit,zinit,grd.hgrid)
-        onarec[i,j,k] = true
-        dtonarec[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
-        lambdaold[i,j,k] = dtonarec[i,j,k]
-        #@show r,i,j,k
-    end
-  
-    ######################################################
- 
-    ##============================================================================
-
-    iswe = [2 ntx-1  1; 2 ntx-1  1; 2 ntx-1  1; 2 ntx-1  1;
-            ntx-1 2 -1; ntx-1 2 -1; ntx-1 2 -1; ntx-1 2 -1 ] 
-    jswe = [2 nty-1  1; 2 nty-1  1; nty-1 2 -1; nty-1 2 -1;
-            2 nty-1  1; 2 nty-1  1; nty-1 2 -1; nty-1 2 -1 ]
-    kswe = [2 ntz-1  1; ntz-1 2 -1; 2 ntz-1  1; ntz-1 2 -1;
-            2 ntz-1  1; ntz-1 2 -1; 2 ntz-1  1; ntz-1 2 -1 ]
-
-    ##=============================================================================    
-  
-    lambdanew=copy(lambdaold)
-   
-    #############################
-    pa=0
-    swedifference = 100*epsilon
-    while swedifference>epsilon 
-        pa +=1
-        lambdaold[:,:,:] =  lambdanew
-
-        for swe=1:8
-
-            for k=kswe[swe,1]:kswe[swe,3]:kswe[swe,2]            
-                for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
-                    for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
-                        
-                        if onsrc[i,j,k]==true
-
-                                                        
-                            ## If we are in the square containing the source,
-                            ## use real position of source for the derivatives.
-                            ## Calculate tt on x and y on the edges of the square
-                            ##  H is the projection of the point src onto X, Y and Z edges
-                            xp = Float64(i-1)*dh+xinit
-                            yp = Float64(j-1)*dh+yinit
-                            zp = Float64(k-1)*dh+zinit
-
-                            distPSx = abs(xp-xsrc) ## abs needed for later...
-                            distPSy = abs(yp-ysrc)
-                            distPSz = abs(zp-zsrc)
-                            dist2src = sqrt(distPSx^2+distPSy^2+distPSz^2)
-
-                            ## Calculate the traveltime to hit the x edge
-                            ## time at H along x
-                            thx = tt[i,j,k]*(sqrt(distPSy^2+distPSz^2))/dist2src
-                            ## Calculate the traveltime to hit the y edge
-                            ## time at H along y
-                            thy = tt[i,j,k]*(sqrt(distPSx^2+distPSz^2))/dist2src
-                            ## Calculate the traveltime to hit the z edge
-                            ## time at H along z
-                            thz = tt[i,j,k]*(sqrt(distPSx^2+distPSy^2))/dist2src
-                            
-                            if onsrc[i+1,j,k]==true              
-                                aback = -(tt[i,j,k]  -tt[i-1,j,k])/dh
-                                aforw = -(thx     -tt[i,j,k])/distPSx
-                            elseif onsrc[i-1,j,k]==true
-                                aback = -(tt[i,j,k]  -thx)/distPSx
-                                aforw = -(tt[i+1,j,k]-tt[i,j,k])/dh
-                            end
-                            if onsrc[i,j+1,k]==true
-                                bback = -(tt[i,j,k]  -tt[i,j-1,k])/dh
-                                bforw = -(thy     -tt[i,j,k])/distPSy
-                            else onsrc[i,j-1,k]==true
-                                bback = -(tt[i,j,k]  -thy)/distPSy 
-                                bforw = -(tt[i,j+1,k]-tt[i,j,k])/dh
-                            end
-                            if onsrc[i,j,k+1]==true     
-                                cback = -(tt[i,j,k]  -tt[i,j,k-1])/dh
-                                cforw = -(thz      -tt[i,j,k])/distPSz
-                            elseif onsrc[i,j,k-1]==true
-                                cback = -(tt[i,j,k]  -thz)/distPSz
-                                cforw = -(tt[i,j,k+1]-tt[i,j,k])/dh
-                            end
-                            
-                        else
-                            ## along x
-                            aback = -(tt[i,j,k]  -tt[i-1,j,k])/dh
-                            aforw = -(tt[i+1,j,k]-tt[i,j,k])/dh
-                            ## along y
-                            bback = -(tt[i,j,k]  -tt[i,j-1,k])/dh
-                            bforw = -(tt[i,j+1,k]-tt[i,j,k])/dh
-                            ## along z
-                            cback = -(tt[i,j,k]  -tt[i,j,k-1])/dh
-                            cforw = -(tt[i,j,k+1]-tt[i,j,k])/dh
-                        end
-
-                        ##-----------------------------------
-                        aforwplus  = ( aforw+abs(aforw) )/2.0
-                        aforwminus = ( aforw-abs(aforw) )/2.0
-                        abackplus  = ( aback+abs(aback) )/2.0
-                        abackminus = ( aback-abs(aback) )/2.0
-
-                        bforwplus  = ( bforw+abs(bforw) )/2.0
-                        bforwminus = ( bforw-abs(bforw) )/2.0
-                        bbackplus  = ( bback+abs(bback) )/2.0
-                        bbackminus = ( bback-abs(bback) )/2.0
-
-                        cforwplus  = ( cforw+abs(cforw) )/2.0
-                        cforwminus = ( cforw-abs(cforw) )/2.0
-                        cbackplus  = ( cback+abs(cback) )/2.0
-                        cbackminus = ( cback-abs(cback) )/2.0
-                        
-                        ##-------------------------------------------
-                        numer =
-                            (abackplus * lambdanew[i-1,j,k] - aforwminus * lambdanew[i+1,j,k]) / dh +
-                            (bbackplus * lambdanew[i,j-1,k] - bforwminus * lambdanew[i,j+1,k]) / dh +
-                            (cbackplus * lambdanew[i,j,k-1] - cforwminus * lambdanew[i,j,k+1]) / dh
-                        
-                        denom = (aforwplus - abackminus)/dh + (bforwplus - bbackminus)/dh +
-                            (cforwplus - cbackminus)/dh
-                        
-                        ###################################################################
-                        ###################################################################
-
-                        # if (i<6 && j==2 && k==2 && pa==1)
-                        #     println("$i,$j,$k numer, denom $numer $denom")
-                        # end
-                            
-                        # if( abs(denom)<=1e-9 ) 
-                        #     println("\n$i,$j: (abs(denom)<=1e-9)  ")
-                        #     @show swe,i,j,k,numer,denom,onsrc[i,j,k],aback,aforw,bback,bforw,cback,cforw
-                        #     @show aforwplus,aforwminus,abackplus,abackminus,cbackplus,cbackminus
-                        #     @show bforwplus,bforwminus,bbackplus,bbackminus,cbackplus,cbackminus
-                        #     @show tt[i,j,k]#,thx,thy,thz
-                        # end
-                        
-
-                        ####################################################
-                        
-                        if onarec[i,j,k]==true                            
-                            #gradT = sqrt( (tt[i+1,j]-tt[i,j])^2 + (tt[i,j+1]-tt[i,j])^2 )
-                            numer2 = numer + dtonarec[i,j,k]
-                            lambdaprop = numer2/denom 
-                            lambdanew[i,j,k] = min(lambdaold[i,j,k],lambdaprop)
-                        else 
-                            lambdaprop = numer/denom
-                            lambdanew[i,j,k] = min(lambdaold[i,j,k],lambdaprop)
-                        end
-  
-                    end
-                end
-            end
-        end
-        ##################################################
-        # println(">>>>err=',NP.sum(abs(lambdanew-lambdaold)),'\n'
-        # print 'max old new',lambdanew.max(),lambdaold.max()
-        swedifference = sum(abs.(lambdanew.-lambdaold))
-        inm=indmin(lambdanew)
-        
-        ##################################################
-    end
-
-    ## STAGGERED GRID, so lambdanew[1:end-1,1:end-1]... any better idea? Interpolation?
-    # gradadj = -lambdanew[1:end-1,1:end-1,1:end-1]./vel.^3
-    # Average grad at the center of cells (velocity cells -STAGGERED GRID)
-    averlambda = ( lambdanew[1:end-1, 1:end-1, 1:end-1].+
-                   lambdanew[2:end,   1:end-1, 1:end-1].+
-                   lambdanew[1:end-1, 2:end,   1:end-1].+
-                   lambdanew[2:end,   2:end,   1:end-1].+
-                   lambdanew[1:end-1, 1:end-1, 2:end].+
-                   lambdanew[2:end,   1:end-1, 2:end].+
-                   lambdanew[1:end-1, 2:end,   2:end].+
-                   lambdanew[2:end,   2:end,   2:end] ) ./ 8.0
-    gradadj = -averlambda./vel.^3
-        
-    return gradadj
-end
-
-
-
-
+end 
 
 #############################################################################
 
-
-function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
+function eikgrad_FS_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                          src::Array{Float64,1},rec::Array{Float64,2},
-                         grd::Grid3D,pickobs::Array{Float64,1},
+                         grd::Grid2D,pickobs::Array{Float64,1},
                          ttpicks::Array{Float64,1},stdobs::Float64)
 
-    @assert size(src)==(3,)
+    @assert size(src)==(2,)
     mindistsrc = 1e-5
     
     #@assert size(src)=
     @assert size(ttime)==(size(vel).+1)
-    nx,ny,nz = size(ttime)
+    nx,ny = size(ttime)
 
     epsilon = 1e-5
     
     #println("nx,ny ",nx," ",ny)
-    lambda = zeros((nx,ny)) # + 1e32
-    # lambda[:,1]   = 0.0
-    # lambda[:,end] = 0.0
-    # lambda[1,:]   = 0.0
-    # lambda[end,:] = 0.0
+    lambdaold = zeros((nx,ny)) .+ 1e32
+    lambdaold[:,1]   .= 0.0
+    lambdaold[:,end] .= 0.0
+    lambdaold[1,:]   .= 0.0
+    lambdaold[end,:] .= 0.0
    
     onarec = zeros(Bool,nx,ny)
     onarec[:,:] .= false
-    #dtonarec = zeros(nx,ny)
+    dtonarec = zeros(nx,ny)
  
     #copy ttime 'cause it might be changed around src
     tt=copy(ttime)
@@ -551,6 +236,261 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
         onsrc[ix:ix+1,iy-1:iy] .= true
     end
 
+    ## if src on node or edge, recalculate traveltimes in box
+    if src_on_nodeedge==true
+        ## RE-set a new ttime around source 
+        # isrc,jsrc = ind2sub(size(onsrc),find(onsrc))
+        # for (j,i) in zip(jsrc,isrc)
+        ijsrc = findall(onsrc)
+        for lcart in ijsrc
+            i = lcart[1]
+            j = lcart[2]
+            #    for i in isrc
+            xp = (i-1)*grd.hgrid+grd.xinit
+            yp = (j-1)*grd.hgrid+grd.yinit
+            ii = i-1 ##Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+            jj = j-1 ##Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+            #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+            tt[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]#[isrc[1,1],jsrc[1,1]]
+            #println("$i $j  $xp $yp")
+        end
+    end
+        
+    ##-------------------------------------------
+    ## init receivers
+    nrec=size(rec,1)
+    for r=1:nrec
+        i,j = findclosestnode(rec[r,1],rec[r,2],grd.xinit,grd.yinit,grd.hgrid)
+        if (i==1) || (i==ntx) || (j==1) || (j==nty)
+            println(" Receiver on border of model (i==1)||(i==ntx)||(j==1)||(j==nty)")
+            println(" Not yet implemented...")
+            return []
+        end
+        onarec[i,j] = true
+        dtonarec[i,j] = (ttpicks[r]-pickobs[r])/stdobs^2
+        lambdaold[i,j] = dtonarec[i,j]
+    end
+  
+    ######################################################
+
+    iswe = [2 nx-1 1; nx-1 2 -1; nx-1 2 -1; 2 nx-1 1]
+    jswe = [2 ny-1 1; 2 ny-1  1; ny-1 2 -1; ny-1 2 -1]
+    
+    ###################################################
+    lambdanew=copy(lambdaold)
+    #pa=0
+    swedifference = 100*epsilon
+    while swedifference>epsilon 
+        #pa +=1
+        lambdaold[:,:] =  lambdanew
+
+        for swe=1:4
+      
+            for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
+                for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
+                                     
+                    if onsrc[i,j]==true 
+
+                        ## If we are in the square containing the source,
+                        ## use real position of source for the derivatives.
+                        ## Calculate tt on x and y on the edges of the square
+                        ##  H is the projection of the point src onto X and Y
+                        xp = Float64(i-1)*dh+xinit
+                        yp = Float64(j-1)*dh+yinit
+                        dist2src = dist2src = sqrt( (xp-xsrc)^2+(yp-ysrc)^2 )
+                        ## distances P to src
+                        distHPx = abs(xp-xsrc)
+                        distHPy = abs(yp-ysrc)
+                        ## Calculate the traveltime to hit the x side
+                        ## time at H along x
+                        thx = tt[i,j]*distHPy/dist2src
+                        ## Calculate the traveltime to hit the y side
+                        ## time at H along y
+                        thy = tt[i,j]*distHPx/dist2src
+                                                
+                        if onsrc[i+1,j]==true                            
+                            aback = -(tt[i,j] -tt[i-1,j])/dh
+                            aforw = -(thx     -tt[i,j])/distHPx # dist along x
+                        elseif onsrc[i-1,j]==true
+                            aback = -(tt[i,j]  -thx)/distHPx # dist along x
+                            aforw = -(tt[i+1,j]-tt[i,j])/dh
+                        end
+                        if onsrc[i,j+1]==true
+                            bback = -(tt[i,j] -tt[i,j-1])/dh
+                            bforw = -(thy     -tt[i,j])/distHPy # dist along y
+                        else onsrc[i,j-1]==true
+                            bback = -(tt[i,j]  -thy)/distHPy # dist along y
+                            bforw = -(tt[i,j+1]-tt[i,j])/dh
+                        end
+                        
+                    else # not on src
+                        ## Leung & Qian, 2006 ( -deriv...)
+                        aback = -(tt[i,j]  -tt[i-1,j])/dh
+                        aforw = -(tt[i+1,j]-tt[i,j])/dh
+                        bback = -(tt[i,j]  -tt[i,j-1])/dh
+                        bforw = -(tt[i,j+1]-tt[i,j])/dh
+                    end                    
+                                        
+                    ##================================================
+                        
+                    aforwplus  = ( aforw+abs(aforw) )/2.0
+                    aforwminus = ( aforw-abs(aforw) )/2.0
+                    abackplus  = ( aback+abs(aback) )/2.0
+                    abackminus = ( aback-abs(aback) )/2.0
+
+                    bforwplus  = ( bforw+abs(bforw) )/2.0
+                    bforwminus = ( bforw-abs(bforw) )/2.0
+                    bbackplus  = ( bback+abs(bback) )/2.0
+                    bbackminus = ( bback-abs(bback) )/2.0
+
+                    ## Leung & Qian, 2006 
+                    numer = (abackplus * lambdanew[i-1,j] - aforwminus * lambdanew[i+1,j] ) / dh +
+                        (bbackplus * lambdanew[i,j-1] - bforwminus * lambdanew[i,j+1]) / dh
+                    
+                    denom = (aforwplus - abackminus)/dh + (bforwplus - bbackminus)/dh
+                    
+                    ###################################################################
+                    ###################################################################
+
+                    # if( abs(denom)<=1e-9 ) #& (onarec[i,j]==false) 
+                    #     println("\n$i,$j: (abs(denom)<=1e-9)  ")
+                    #     @show swe,i,j,numer,denom,onsrc[i,j],aback,aforw,bback,bforw
+                    #     @show aforwplus,aforwminus,abackplus,abackminus
+                    #     @show bforwplus,bforwminus,bbackplus,bbackminus
+                    #     @show tt[i,j]#,thx,thy
+                    # end
+  
+                    # if isnan(lambdanew[i,j])
+                    #      println("\n isnan(lambdanew[i,j])")
+                    #     @show swe,i,j,numer,denom,onsrc[i,j],aback,aforw,bback,bforw
+                    #     @show aforwplus,aforwminus,abackplus,abackminus
+                    #     @show bforwplus,bforwminus,bbackplus,bbackminus
+                    #     @show tt[i,j]                                              
+                    # end
+                    
+                    ####################################################
+                    
+                    if onarec[i,j]==true 
+                        #gradT = sqrt( (tt[i+1,j]-tt[i,j])^2 + (tt[i,j+1]-tt[i,j])^2 )
+                        numer2 = numer + dtonarec[i,j]
+                        lambdaprop = numer2/denom 
+                        lambdanew[i,j] = min(lambdaold[i,j],lambdaprop)
+                    else 
+                        lambdaprop = numer/denom
+                        lambdanew[i,j] = min(lambdaold[i,j],lambdaprop)
+                    end                
+                    
+                end
+            end
+        end
+   
+        ##################################################
+        # println(">>>>err=',NP.sum(abs(lambdanew-lambdaold)),'\n'
+        # print 'max old new',lambdanew.max(),lambdaold.max()
+        swedifference = sum(abs.(lambdanew .- lambdaold))
+        ##################################################
+    end
+
+    ## STAGGERED GRID, so lambdanew[1:end-1,1:end-1]... any better idea? Interpolation?
+    # gradadj = -lambdanew[1:end-1,1:end-1]./vel.^3
+    # Average grad at the center of cells (velocity cells -STAGGERED GRID)
+    averlambda = ( lambdanew[1:end-1,1:end-1].+lambdanew[2:end,1:end-1].+
+                   lambdanew[1:end-1,2:end].+lambdanew[2:end,2:end]) ./ 4.0
+    gradadj = -averlambda./vel.^3
+        
+    return gradadj
+end
+
+###############################################################################
+
+function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
+                         src::Array{Float64,1},rec::Array{Float64,2},
+                         grd::Grid2D,pickobs::Array{Float64,1},
+                         ttpicks::Array{Float64,1},stdobs::Float64)
+
+    @assert size(src)==(2,)
+    mindistsrc = 1e-5
+    
+    #@assert size(src)=
+    @assert size(ttime)==(size(vel).+1)
+    nx,ny = size(ttime)
+
+    epsilon = 1e-5
+    
+    #println("nx,ny ",nx," ",ny)
+    lambda = zeros((nx,ny)) # + 1e32
+    # lambda[:,1]   = 0.0
+    # lambda[:,end] = 0.0
+    # lambda[1,:]   = 0.0
+    # lambda[end,:] = 0.0
+   
+    onarec = zeros(Bool,nx,ny)
+    onarec[:,:] .= false
+    #dtonarec = zeros(nx,ny)
+ 
+    #copy ttime 'cause it might be changed around src
+    tt=copy(ttime)
+    dh = grd.hgrid
+    ntx = grd.ntx
+    nty = grd.nty
+    
+    ## Grid position
+    xinit = grd.xinit
+    yinit = grd.yinit
+    
+    ## source
+    xsrc,ysrc = src[1],src[2]
+    ## grd.xinit-hgr because TIME array on STAGGERED grid
+    hgr = grd.hgrid/2.0
+    ix,iy = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid) 
+    rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+    ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+    #@show dist,src,rx,ry
+    onsrc = zeros(Bool,nx,ny)
+    onsrc[:,:] .= false    
+    halfg = 0.0
+    
+    src_on_nodeedge = false
+    max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
+    max_y = (grd.nty-1)*grd.hgrid+grd.yinit
+
+    ## loop to make sure we don't accidentally move the src to another node/edge
+    while (sqrt(rx^2+ry^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc)
+        src_on_nodeedge = true
+        
+        ## shift the source 
+        if xsrc < max_x-0.002*dh
+            xsrc = xsrc+0.001*dh
+        else #(make sure it's not already at the bottom y)
+            xsrc = xsrc-0.001*dh
+        end
+        if ysrc < max_y-0.002*dh
+            ysrc = ysrc+0.001*dh
+        else #(make sure it's not already at the bottom y)
+            ysrc = ysrc-0.001*dh
+        end
+
+        # print("new time at src:  $(tt[ix,iy]) ")
+        ## recompute parameters related to position of source
+        ix,iy = findclosestnode(xsrc,ysrc,grd.xinit-hgr,grd.yinit-hgr,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)        
+
+    end
+
+    ## To avoid singularities, the src can only be inside a box,
+    ##  not on a grid node or edge... see above. So we need to have
+    ##  always 4 nodes where onsrc is true
+    if (rx>=halfg) & (ry>=halfg)
+        onsrc[ix:ix+1,iy:iy+1] .= true
+    elseif (rx<halfg) & (ry>=halfg)
+        onsrc[ix-1:ix,iy:iy+1] .= true
+    elseif (rx<halfg) & (ry<halfg)
+        onsrc[ix-1:ix,iy-1:iy] .= true
+    elseif (rx>=halfg) & (ry<halfg)
+        onsrc[ix:ix+1,iy-1:iy] .= true
+    end
+
 
     ## if src on node or edge, recalculate traveltimes in box
     if src_on_nodeedge==true
@@ -564,8 +504,8 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
             j = lcart[2]
             xp = (i-1)*grd.hgrid+grd.xinit
             yp = (j-1)*grd.hgrid+grd.yinit
-            ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-            jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+            ii = i-1 ##Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+            jj = j-1 ##Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
             #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
             tt[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]#[isrc[1,1],jsrc[1,1]]
             #println("$i $j  $xp $yp")
@@ -714,10 +654,9 @@ end # eikadj_FMM_SINGLESRC
 
 ##--------------------------------------------
 
-function calcLAMBDA!(tt::Array{Float64,2},status::Array{Int64},
-                     onsrc::Array{Bool,2},onarec::Array{Bool,2},
-                    dh::Float64,xinit::Float64,yinit::Float64,
-                    xsrc::Float64,ysrc::Float64,lambda::Array{Float64},i::Int64,j::Int64)
+function calcLAMBDA!(tt::Array{Float64,2},status::Array{Int64,2},onsrc::Array{Bool,2},
+                     onarec::Array{Bool,2},dh::Float64,xinit::Float64,yinit::Float64,
+                     xsrc::Float64,ysrc::Float64,lambda::Array{Float64,2},i::Int64,j::Int64)
 
     
     if onsrc[i,j]==true 
@@ -795,12 +734,13 @@ function calcLAMBDA!(tt::Array{Float64,2},status::Array{Int64},
     return #lambda
 end
 
+###############################################################################
 
-#############################################################################
+###############################################################################
 
-function eikgrad_FMM_highord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
+function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                          src::Array{Float64,1},rec::Array{Float64,2},
-                         grd::Grid3D,pickobs::Array{Float64,1},
+                         grd::Grid2D,pickobs::Array{Float64,1},
                          ttpicks::Array{Float64,1},stdobs::Float64)
 
     @assert size(src)==(2,)
@@ -808,15 +748,12 @@ function eikgrad_FMM_highord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float6
     
     #@assert size(src)=
     @assert size(ttime)==(size(vel)) ## SAME SIZE!!
-    nx,ny,nz = size(ttime)
+    nx,ny = size(ttime)
 
     epsilon = 1e-5
     
     #println("nx,ny ",nx," ",ny)
-    lambda = zeros((nx,ny,nz)) # + 1e32
-
-##>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
+    lambda = zeros((nx,ny)) # + 1e32
     # lambda[:,1]   = 0.0
     # lambda[:,end] = 0.0
     # lambda[1,:]   = 0.0
@@ -830,7 +767,7 @@ function eikgrad_FMM_highord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float6
     tt=copy(ttime)
     dh = grd.hgrid
     ntx = nx ##grd.ntx
-    nty = nx ##grd.nty
+    nty = ny ##grd.nty
     
     ## Grid position
     xinit = grd.xinit
@@ -902,7 +839,7 @@ function eikgrad_FMM_highord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float6
             yp = (j-1)*grd.hgrid+grd.yinit
             ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
             jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-            #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+            #### vel[isrc[1,1],jsrc[1,1]] 
             tt[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]#[isrc[1,1],jsrc[1,1]]
             #println("$i $j  $xp $yp")
             #     end
@@ -1007,7 +944,7 @@ function eikgrad_FMM_highord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float6
         status[ia,ja] = 2 # 2=accepted
 
         # set lambda of the new accepted point
-        calcLAMBDA_highord!(tt,status,onsrc,onarec,dh,
+        calcLAMBDA_hiord!(tt,status,onsrc,onarec,dh,
                             xinit,yinit,xsrc,ysrc,lambda,ia,ja)
         
         ## try all neighbors of newly accepted point
@@ -1041,7 +978,7 @@ function eikgrad_FMM_highord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float6
     gradadj = -lambda./vel.^3
         
     return gradadj
-end # eikadj_FMM_highord_SINGLESRC  
+end # eikadj_FMM_hiord_SINGLESRC  
 
 
 ##====================================================================##
@@ -1062,7 +999,7 @@ end
 
 ##--------------------------------------------
 
-function calcLAMBDA_highord!(tt::Array{Float64,2},status::Array{Int64},
+function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
                              onsrc::Array{Bool,2},onarec::Array{Bool,2},
                              dh::Float64,xinit::Float64,yinit::Float64,
                              xsrc::Float64,ysrc::Float64,lambda::Array{Float64,2},i::Int64,j::Int64)
@@ -1160,5 +1097,5 @@ end
 
 
 ##################################################
-#end # end module
+#end # module EikonalGrad2D                      ##
 ##################################################

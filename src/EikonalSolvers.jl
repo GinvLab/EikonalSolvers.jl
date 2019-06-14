@@ -2,8 +2,8 @@
 
 ##############################################
 """
-     EikonalSolvers module
-    """
+     EikonalSolvers module, 2D and 3D traveltime and gradient computations.
+"""
 module EikonalSolvers
 
 
@@ -20,20 +20,20 @@ export gradttime3D
 using Distributed
 
 ## Binary heaps
-include("../BinHeap/BinHeaps.jl")
+include("BinHeap/BinHeaps.jl")
 using .BinHeaps
 
 
 ## general utils
-include("eikonalutils.jl")
+include("EikSolv/eikonalutils.jl")
 
 ## 2D stuff
-include("eikonalforward2D.jl")
-include("eikonalgradient2D.jl")
+include("EikSolv/eikonalforward2D.jl")
+include("EikSolv/eikonalgradient2D.jl")
 
 ## 3D stuff
-include("eikonalforward3D.jl")
-include("eikonalgradient3D.jl")
+include("EikSolv/eikonalforward3D.jl")
+include("EikSolv/eikonalgradient3D.jl")
 
 
 end

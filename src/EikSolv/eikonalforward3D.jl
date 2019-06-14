@@ -127,8 +127,7 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
     
     nsrc = size(coordsrc,1)
     nrec = size(coordrec,1)                
-    ttpicksGRPSRC = zeros(nrec,nsrc) 
-
+    ttpicks = zeros(nrec,nsrc)
 
     if algo=="ttFMM_hiord" 
         # in this case velocity and time arrays have the same shape
@@ -145,15 +144,15 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         ## Compute traveltime and interpolation at receivers in one go for parallelization
         
         if algo=="ttFS_podlec"        
-                ttGRPSRC[:,:,:,s] = ttFS_podlec(vel,coordsrc[s,:],grd)
+            ttime[:,:,:,s] = ttFS_podlec(vel,coordsrc[s,:],grd)
         
 
         elseif algo=="ttFMM_podlec"            
-                ttGRPSRC[:,: ,:,s] = ttFMM_podlec(vel,coordsrc[s,:],grd)
+            ttime[:,: ,:,s] = ttFMM_podlec(vel,coordsrc[s,:],grd)
         
 
         elseif algo=="ttFMM_hiord"        
-                ttGRPSRC[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
+            ttime[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
                     
         else
             println("\n WRONG tt algo name $algo .... \n")
@@ -170,9 +169,9 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
     end
 
      if returntt
-        return ttGRPSRC,ttpicksGRPSRC
+        return ttime,ttpicks
      end
-    return ttpicksGRPSRC 
+    return ttpicks
 end
 
 ###############################################################################
@@ -182,7 +181,7 @@ end
 function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D) 
 
     epsilon = 1e-5
-      
+
     ## ttime
     HUGE::Float64 = 1.0e300
     inittt = HUGE
@@ -193,6 +192,7 @@ function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
     ##------------------------
     ## source location, etc.      
     mindistsrc = 1e-5
+   
     onsrc = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
     onsrc[:,:,:] .= false
     xsrc,ysrc,zsrc=src[1],src[2],src[3]
@@ -205,7 +205,6 @@ function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
     rz = src[3]-((iz-1)*grd.hgrid+grd.zinit-hgr)
     halfg = 0.0 #hgrid/2.0
 
- 
     dist = sqrt(rx^2+ry^2+rz^2)
     #@show dist,src,rx,ry
     if dist<=mindistsrc
@@ -214,22 +213,22 @@ function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
     else
         
         if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz:iz+1] = true
+            onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
         elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz:iz+1] = true
+            onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
         elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz:iz+1] = true
+            onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
         elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz:iz+1] = true
+            onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
 
         elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz-1:iz] = true
+            onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
         elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz-1:iz] = true
+            onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
         elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz-1:iz] = true
+            onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
         elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz-1:iz] = true
+            onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
         end
 
         ## set ttime around source ONLY FOUR points!!!
@@ -249,14 +248,14 @@ function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
             ii = i-1 ##Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
             jj = j-1 ##Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
             kk = k-1 ##Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-                    #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-                    ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+            ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
                     ##println("$i $j $k $xp $yp $zp")
             #     end
             # end
         end
     end
-        
+
     ######################################################################################
 
     ##================================
@@ -909,7 +908,6 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
 
         # pop top of heap
         han,tmptt = pop_minheap!(bheap)
-        #ia,ja,ka = ind2sub((ntx,nty,ntz),han)
         cijka = cartid_nxnynz[han]
         ia,ja,ka = cijka[1],cijka[2],cijka[3]
         #ja = div(han,ntx) +1
@@ -932,8 +930,7 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
             end
 
             if status[i,j,k]==0 ## far, active
-#println(">>> 1")                
-#@time begin
+
                 ## add tt of point to binary heap and give handle
                 tmptt = calcttpt(ttime,rotste,onsrc,slowness,grd,HUGE,i,j,k)
                 #han = sub2ind((ntx,nty,ntz),i,j,k)
@@ -941,10 +938,9 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
                 status[i,j,k]=1                
-#end
+
             elseif status[i,j,k]==1 ## narrow band
-#println(">>> 2")                
-#@time begin
+
                 # update the traveltime for this point
                 tmptt = calcttpt(ttime,rotste,onsrc,slowness,grd,HUGE,i,j,k)
                 # get handle
@@ -1260,18 +1256,256 @@ function calcttpt(ttime::Array{Float64,3},rotste::RotoStencils,
     return ttpt
 end
 
-
-##======================================================##
-
-
+#############################################################################
+##=========================================================================##
 
 
+function ttFMM_hiord(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D) 
+
+    ## Sizes
+    nx,ny,nz=grd.nx,grd.ny,grd.nz #size(vel)  ## NOT A STAGGERED GRID!!!
+
+    epsilon = 1e-5
+    
+    ## 
+    ## Time array
+    ##
+    inittt = 1e30
+    ttime = Array{Float64}(undef,nx,ny,nz)
+    ttime[:,:,:] .= inittt
+    ##
+    ## Status of nodes
+    ##
+    status = Array{Int64}(undef,nx,ny,nz)
+    status[:,:,:] .= 0   ## set all to far
+    
+    ##########################################
+    refinearoundsrc=true
+
+    if refinearoundsrc
+        ##---------------------------------
+        ## 
+        ## Refinement around the source      
+        ##
+        ttaroundsrc!(status,ttime,vel,src,grd,inittt)
+        # println("\n\n#### DELETE using PyPlot at the TOP of eikonalforward2D.jl\n\n")
+        # figure()
+        # subplot(121)
+        # title("ttime")
+        # imshow(ttime,vmax=30)
+        # colorbar()
+        # subplot(122)
+        # title("status")
+        # imshow(status)
+        # colorbar()
+
+    else
+        ##-----------------------------------------
+        ## 
+        ## NO refinement around the source      
+        ##
+
+        ## source location, etc.      
+        mindistsrc = 1e-5
+        onsrc = zeros(Bool,nx,ny,nz)
+        onsrc[:,:,:] .= false
+        xsrc,ysrc,zsrc=src[1],src[2],src[3]
+        
+        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+        rx = src[1]-((ix-1)*grd.hgrid+grd.xinit)
+        ry = src[2]-((iy-1)*grd.hgrid+grd.yinit)
+        rz = src[3]-((iz-1)*grd.hgrid+grd.zinit)
+        halfg = 0.0 #hgrid/2.0
+
+        
+        dist = sqrt(rx^2+ry^2+rz^2)
+        #@show dist,src,rx,ry
+        if dist<=mindistsrc
+            onsrc[ix,iy,iz] = true
+            ttime[ix,iy,iz] = 0.0 
+        else
+            
+            if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
+                onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
+            elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
+                onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
+            elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
+                onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
+            elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
+                onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
+
+            elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
+                onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
+            elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
+                onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
+            elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
+                onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
+            elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
+                onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
+            end
+
+            ## set ttime around source ONLY FOUR points!!!
+            #isrc,jsrc,ksrc = ind2sub(size(onsrc),find(onsrc))
+            ijksrc = findall(onsrc)
+            # println(" set time around src $isrc  $jsrc $ksrc") 
+            #for (k,j,i) in zip(ksrc,jsrc,isrc)
+            for lcart in ijksrc
+                # for j in jsrc
+                #     for i in isrc
+                i = lcart[1]
+                j = lcart[2]
+                k = lcart[3]
+                # println(" set time around src $isrc  $jsrc $ksrc") 
+                # for (k,j,i) in zip(ksrc,jsrc,isrc)
+                # for j in jsrc
+                #     for i in isrc
+                xp = (i-1)*grd.hgrid+grd.xinit
+                yp = (j-1)*grd.hgrid+grd.yinit
+                zp = (k-1)*grd.hgrid+grd.zinit
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+                kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+                ##println("$i $j $k $xp $yp $zp")
+                #     end
+                # end
+            end
+        end
+        
+        ##
+        ## Status of nodes
+        status[onsrc] .= 2 ## set to accepted on src
+        
+    end # if refinearoundsrc
+
+    ######################################################################################
+    
+    ttlocmin::Float64 = 0.0
+    i::Int64 = 0
+    j::Int64 = 0
+    k::Int64 = 0
+    
+    ##===========================================================================================    
+    #-------------------------------
+    ## init FMM 
+    neigh = [1  0  0;
+             0  1  0;
+            -1  0  0;
+             0 -1  0;
+             0  0  1;
+             0  0 -1]
+
+    ## get all i,j,k accepted
+    ijkss = findall(status.==2) 
+    is = [l[1] for l in ijkss]
+    js = [l[2] for l in ijkss]
+    ks = [l[3] for l in ijkss]
+    naccinit = length(ijkss)
+
+     ## Init the max binary heap with void arrays but max size
+    Nmax=nx*ny*nz
+    bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+
+    ## conversion cart to lin indices, old sub2ind
+    linid_nxnynz = LinearIndices((nx,ny,nz))
+    ## conversion lin to cart indices, old sub2ind
+    cartid_nxnynz = CartesianIndices((nx,ny,nz))
+
+    ## pre-allocate
+    tmptt::Float64 = 0.0 
+
+    ## construct initial narrow band
+    for l=1:naccinit ##
+        
+        for ne=1:6 ## six potential neighbors
+            
+            i = is[l] + neigh[ne,1]
+            j = js[l] + neigh[ne,2]
+            k = ks[l] + neigh[ne,3]
+            
+            ## if the point is out of bounds skip this iteration
+            if ( (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1) )
+                continue
+            end
+
+            if status[i,j,k]==0 ## far
+
+                ## add tt of point to binary heap and give handle
+                tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j,k)
+                # get handle
+                #han = sub2ind((ntx,nty,ntz),i,j,k)
+                han = linid_nxnynz[i,j,k]
+                # insert into heap
+                insert_minheap!(bheap,tmptt,han)
+                # change status, add to narrow band
+                status[i,j,k]=1
+
+            end            
+        end
+    end
+    
+    #-------------------------------
+    ## main FMM loop
+    totnpts = nx*ny*nz 
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+
+        ## if no top left exit the game...
+        if bheap.Nh<1
+            break
+        end
+
+        # pop top of heap
+        han,tmptt = pop_minheap!(bheap)
+        cijka = cartid_nxnynz[han]
+        ia,ja,ka = cijka[1],cijka[2],cijka[3]
+        # set status to accepted
+        status[ia,ja,ka] = 2 # 2=accepted
+        # set traveltime of the new accepted point
+        ttime[ia,ja,ka] = tmptt
+
+        ## try all neighbors of newly accepted point
+        for ne=1:6
+
+            i = ia + neigh[ne,1]
+            j = ja + neigh[ne,2]
+            k = ka + neigh[ne,3]
+            
+            ## if the point is out of bounds skip this iteration
+            if ( (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1) )
+                continue
+            end
+
+            if status[i,j,k]==0 ## far, active
+
+                ## add tt of point to binary heap and give handle
+                #print("calc tt  ")
+                tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j,k)
+                han = linid_nxnynz[i,j,k]
+                insert_minheap!(bheap,tmptt,han)
+                # change status, add to narrow band
+                status[i,j,k]=1                
+
+            elseif status[i,j,k]==1 ## narrow band
+
+                # update the traveltime for this point
+                tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j,k)
+                # get handle
+                #han = sub2ind((ntx,nty,ntz),i,j,k)
+                han = linid_nxnynz[i,j,k]
+                # update the traveltime for this point in the heap
+                #print("update heap  ")
+                update_node_minheap!(bheap,tmptt,han)
+
+            end
+        end
+        ##-------------------------------
+    end
+    return ttime
+end  # ttFMM_hiord
 
 
-
-
-##============================================================================##
-##====================================================================##
+###################################################################
 
 function isonbord(ib::Int64,jb::Int64,kb::Int64,nx::Int64,ny::Int64,nz::Int64)
     isonb1 = false
@@ -1287,7 +1521,7 @@ function isonbord(ib::Int64,jb::Int64,kb::Int64,nx::Int64,ny::Int64,nz::Int64)
     return isonb1,isonb2
 end
 
-##====================================================================##
+###################################################################
 
 """
    Compute the traveltime at a given node using 2nd order stencil 
@@ -1446,35 +1680,137 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},
     return soughtt
 end
 
+###################################################################
 
-##============================================================================##
 
-function ttFMM_hiord(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D) 
+"""
+  Refinement of the grid around the source. FMM calculated inside a finer grid 
+    and then passed on to coarser grid
+"""
+function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3},
+    vel::Array{Float64,3},src::Array{Float64,1},grdcoarse::Grid3D,inittt::Float64)
+      
+    ##
+    ## 2x10 nodes -> 2x50 nodes
+    ##
+    downscalefactor::Int = 5
+    noderadius::Int = 5
 
-    epsilon = 1e-5
+    ## find indices of closest node to source in the "big" array
+    ## ix, iy will become the center of the refined grid
+    ixsrcglob,iysrcglob,izsrcglob = findclosestnode(src[1],src[2],src[3],grdcoarse.xinit,
+                                                    grdcoarse.yinit,grdcoarse.zinit,grdcoarse.hgrid) 
     
-    ## ttime
-    ## Init to HUGE to make the FMM work
-    HUGE::Float64 = 1.0e300
-    nx,ny,nz = grd.nx,grd.ny,grd.nz
-    ttime = HUGE*ones(Float64,nx,ny,nz)
+    
+    ##
+    ## Define chunck of coarse grid
+    ##
+    i1coarsevirtual = ixsrcglob - noderadius
+    i2coarsevirtual = ixsrcglob + noderadius
+    j1coarsevirtual = iysrcglob - noderadius
+    j2coarsevirtual = iysrcglob + noderadius
+    k1coarsevirtual = izsrcglob - noderadius
+    k2coarsevirtual = izsrcglob + noderadius
 
-    ## source location, etc.      
-    mindistsrc = 1e-5
+    # if hitting borders
+    outxmin = i1coarsevirtual<1
+    outxmax = i2coarsevirtual>grdcoarse.nx
+    outymin = j1coarsevirtual<1 
+    outymax = j2coarsevirtual>grdcoarse.ny
+    outzmin = k1coarsevirtual<1 
+    outzmax = k2coarsevirtual>grdcoarse.nz
+
+    outxmin ? i1coarse=1            : i1coarse=i1coarsevirtual
+    outxmax ? i2coarse=grdcoarse.nx : i2coarse=i2coarsevirtual
+    outymin ? j1coarse=1            : j1coarse=j1coarsevirtual
+    outymax ? j2coarse=grdcoarse.ny : j2coarse=j2coarsevirtual
+    outzmin ? k1coarse=1            : k1coarse=k1coarsevirtual
+    outzmax ? k2coarse=grdcoarse.nz : k2coarse=k2coarsevirtual
+
+    ##
+    ## Refined grid parameters
+    ##
+    dh = grdcoarse.hgrid/downscalefactor
+    # fine grid size
+    nx = (i2coarse-i1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
+    ny = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
+    nz = (k2coarse-k1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
+
+    # @show ixsrcglob,iysrcglob
+    # @show i1coarse,i2coarse,j1coarse,j2coarse
+    # @show nx,ny
+    xinit = 0.0
+    yinit = 0.0
+    zinit = 0.0
+    grdfine = Grid3D(dh,xinit,yinit,zinit,nx,ny,nz)
+
+    ## 
+    ## Time array
+    ##
+    inittt = 1e30
+    ttime = Array{Float64}(undef,nx,ny,nz)
+    ttime[:,:,:] .= inittt
+    ##
+    ## Status of nodes
+    ##
+    status = Array{Int64}(undef,nx,ny,nz)
+    status[:,:,:] .= 0   ## set all to far
+   
+    ##
+    ## Get the vel around the source on the coarse grid
+    ##
+    velcoarsegrd = view(vel,i1coarse:i2coarse,j1coarse:j2coarse,k1coarse:k2coarse)
+    
+    ##
+    ## Reset coodinates to match the fine grid
+    ##
+    xorig = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
+    yorig = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
+    zorig = ((k1coarse-1)*grdcoarse.hgrid+grdcoarse.zinit)
+    xsrc = src[1] - xorig - grdcoarse.xinit
+    ysrc = src[2] - yorig - grdcoarse.yinit
+    zsrc = src[3] - zorig - grdcoarse.zinit
+    
+    ##
+    ## Nearest neighbor interpolation for velocity on finer grid
+    ## 
+    velfinegrd = Array{Float64}(undef,nx,ny,nz)
+    @inbounds for k=1:nz
+        @inbounds for j=1:ny
+            @inbounds for i=1:nx
+                di=div(i-1,downscalefactor)
+                ri=i-di*downscalefactor
+                ii = ri>=downscalefactor/2+1 ? di+2 : di+1
+
+                dj=div(j-1,downscalefactor)
+                rj=j-dj*downscalefactor
+                jj = rj>=downscalefactor/2+1 ? dj+2 : dj+1
+
+                dk=div(k-1,downscalefactor)
+                rk=k-dk*downscalefactor
+                kk = rk>=downscalefactor/2+1 ? dk+2 : dk+1
+
+                velfinegrd[i,j,k] = velcoarsegrd[ii,jj,kk]
+            end
+        end
+    end
+ 
+  
+    ##
+    ## Source location, etc. within fine grid
+    ##  
+    mindistsrc = 1e-6
     onsrc = zeros(Bool,nx,ny,nz)
     onsrc[:,:,:] .= false
-    xsrc,ysrc,zsrc=src[1],src[2],src[3]
-    
-    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-    rx = src[1]-((ix-1)*grd.hgrid+grd.xinit)
-    ry = src[2]-((iy-1)*grd.hgrid+grd.yinit)
-    rz = src[3]-((iz-1)*grd.hgrid+grd.zinit)
+    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,0.0,0.0,0.0,dh) 
+    rx = xsrc-((ix-1)*dh)
+    ry = ysrc-((iy-1)*dh)
+    rz = zsrc-((iz-1)*dh)
     halfg = 0.0 #hgrid/2.0
-
     
     dist = sqrt(rx^2+ry^2+rz^2)
     #@show dist,src,rx,ry
-    if dist<=mindistsrc
+      if dist<=mindistsrc
         onsrc[ix,iy,iz] = true
         ttime[ix,iy,iz] = 0.0 
     else
@@ -1497,191 +1833,166 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
         elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
             onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
         end
-
+        
         ## set ttime around source ONLY FOUR points!!!
-        #isrc,jsrc,ksrc = ind2sub(size(onsrc),find(onsrc))
+        #isrc,jsrc = ind2sub(size(onsrc),find(onsrc))
         ijksrc = findall(onsrc)
-        # println(" set time around src $isrc  $jsrc $ksrc") 
-        #for (k,j,i) in zip(ksrc,jsrc,isrc)
-        for lcart in ijksrc
-            # for j in jsrc
-            #     for i in isrc
+        @inbounds for lcart in ijksrc
             i = lcart[1]
             j = lcart[2]
             k = lcart[3]
-            # println(" set time around src $isrc  $jsrc $ksrc") 
-            # for (k,j,i) in zip(ksrc,jsrc,isrc)
-            # for j in jsrc
-            #     for i in isrc
-            xp = (i-1)*grd.hgrid+grd.xinit
-            yp = (j-1)*grd.hgrid+grd.yinit
-            zp = (k-1)*grd.hgrid+grd.zinit
-            ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-            jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-            kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-            #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-            ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-            ##println("$i $j $k $xp $yp $zp")
-            #     end
-            # end
+            xp = (i-1)*dh
+            yp = (j-1)*dh
+            zp = (k-1)*dh
+            ii = Int(floor(xsrc/dh)) +1
+            jj = Int(floor(ysrc/dh)) +1
+            kk = Int(floor(zsrc/dh)) +1             
+            ttime[i,j,k] = sqrt((xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / velfinegrd[ii,jj,kk]
         end
     end
-    
-    ######################################################################################
-
+        
+    ######################################################
+  
     ##================================
-    ## slowness = 1.0./vel
-    ##================================
-    
-    ttlocmin::Float64 = 0.0
-    i::Int64 = 0
-    j::Int64 = 0
-    k::Int64 = 0
-    
-    ##===========================================================================================    
-    #-------------------------------
-    ## init FMM 
-    neigh = [1  0  0;
+      neigh = [1  0  0;
              0  1  0;
             -1  0  0;
              0 -1  0;
              0  0  1;
              0  0 -1]
 
-    status = Array{Int64}(undef,nx,ny,nz)
-    status[:,:,:] .= 0   ## set all to far
-    status[onsrc] .= 2  ## set to accepted on src
-    naccinit = count(status.==2)
+    #-------------------------------
+    ## init FMM 
 
+    status[onsrc] .= 2 ## set to accepted on src
+    naccinit=count(status.==2)
+
+    ## get all i,j accepted
     ijkss = findall(status.==2) 
     is = [l[1] for l in ijkss]
     js = [l[2] for l in ijkss]
-    ks = [l[3] for l in ijkss]
+    ks = [l[2] for l in ijkss]
+    naccinit = length(ijkss)
 
-    # is = Array{Int64,1}(naccinit)
-    # js = Array{Int64,1}(naccinit)
-    # ks = Array{Int64,1}(naccinit)
-    # l=1
-    # for k=1:ntz,j=1:nty,i=1:ntx
-    #     if status[i,j,k]==2
-    #         is[l] = i
-    #         js[l] = j
-    #         ks[l] = k
-    #         l+=1
-    #     end
-    # end
-
-    ## Init the max binary heap with void arrays but max size
+    ## Init the min binary heap with void arrays but max size
     Nmax=nx*ny*nz
     bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
 
-    ## conversion cart to lin indices, old sub2ind
-    linid_nxnynz = LinearIndices((nx,ny,nz))
-    ## conversion lin to cart indices, old sub2ind
-    cartid_nxnynz = CartesianIndices((nx,ny,nz))
-
     ## pre-allocate
     tmptt::Float64 = 0.0 
-
+    
+    ## conversion cart to lin indices, old sub2ind
+    linid_nxnynz= LinearIndices((nx,ny,nz))
+    ## conversion lin to cart indices, old ind2sub
+    cartid_nxnynz = CartesianIndices((nx,ny,nz))
+    
     ## construct initial narrow band
-    for l=1:naccinit ##
+    @inbounds for l=1:naccinit ##
         
-        for ne=1:6 ## six potential neighbors
-            
+        @inbounds for ne=1:4 ## four potential neighbors
+
             i = is[l] + neigh[ne,1]
             j = js[l] + neigh[ne,2]
             k = ks[l] + neigh[ne,3]
             
             ## if the point is out of bounds skip this iteration
-            if ( (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1) )
-                continue
+            if (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1)
+                    continue
             end
 
             if status[i,j,k]==0 ## far
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j,k)
+                tmptt = calcttpt_2ndord(ttime,velfinegrd,grdfine,status,i,j,k)
                 # get handle
-                #han = sub2ind((ntx,nty,ntz),i,j,k)
+                # han = sub2ind((nx,ny),i,j)
                 han = linid_nxnynz[i,j,k]
                 # insert into heap
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
                 status[i,j,k]=1
-
             end            
         end
     end
 
-    
     #-------------------------------
     ## main FMM loop
-    totnpts = nx*ny*nz 
-    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    totnpts = nx*ny*nz
+    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
         if bheap.Nh<1
             break
         end
 
-        # pop top of heap
         han,tmptt = pop_minheap!(bheap)
-        cijka = cartid_nxnynz[han]
-        ia,ja,ka = cijka[1],cijka[2],cijka[3]
+        #ia,ja = ind2sub((nx,ny),han)
+        cija = cartid_nxnynz[han]
+        ia,ja,ka = cija[1],cija[2],cija[3]
         # set status to accepted
         status[ia,ja,ka] = 2 # 2=accepted
         # set traveltime of the new accepted point
         ttime[ia,ja,ka] = tmptt
 
+        ##########################################################
+        ##
+        ## If the the accepted point is on the edge of the
+        ##  fine grid, stop computing and jump to coarse grid
+        ##
+        ##########################################################
+        #  if (ia==nx) || (ia==1) || (ja==ny) || (ja==1)
+        if (ia==1 && !outxmin) || (ia==nx && !outxmax) || (ja==1 && !outymin) || (ja==ny && !outxmax) || (ka==1 && !outzmin) || (ka==nz && !outzmax)
+            ttimecoarse[i1coarse:i2coarse,j1coarse:j2coarse,k1coarse:k2coarse]  =  ttime[1:downscalefactor:end,1:downscalefactor:end,1:downscalefactor:end]
+            statuscoarse[i1coarse:i2coarse,j1coarse:j2coarse,k1coarse:k2coarse] = status[1:downscalefactor:end,1:downscalefactor:end,1:downscalefactor:end]
+            ## delete current narrow band to avoid problems when returned to coarse grid
+            statuscoarse[statuscoarse.==1] .= 0
+            return ttime,status
+        end
+        ##########################################################
+
         ## try all neighbors of newly accepted point
-        for ne=1:6
+        @inbounds for ne=1:4 
 
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
             k = ka + neigh[ne,3]
             
             ## if the point is out of bounds skip this iteration
-            if ( (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1) )
+            if (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1)
                 continue
             end
 
             if status[i,j,k]==0 ## far, active
-#println(">>> 1")                
-#@time begin
+
                 ## add tt of point to binary heap and give handle
-                #print("calc tt  ")
-                tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j,k)
+                tmptt = calcttpt_2ndord(ttime,velfinegrd,grdfine,status,i,j,k)
                 han = linid_nxnynz[i,j,k]
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
                 status[i,j,k]=1                
-#end
-            elseif status[i,j,k]==1 ## narrow band
-#println(">>> 2")                
-#@time begin
+
+            elseif status[i,j,k]==1 ## narrow band                
+
                 # update the traveltime for this point
-                tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j,k)
+                tmptt = calcttpt_2ndord(ttime,velfinegrd,grdfine,status,i,j,k)
                 # get handle
-                #han = sub2ind((ntx,nty,ntz),i,j,k)
                 han = linid_nxnynz[i,j,k]
                 # update the traveltime for this point in the heap
-                #print("update heap  ")
                 update_node_minheap!(bheap,tmptt,han)
-#end     
+
             end
         end
         ##-------------------------------
     end
-    return ttime
-end  # ttFMM_hiord
 
+    return error("Ouch...")
+    
+end
 
-
-##==============================================##
-
+#################################################################3
 
 #########################################################
-#end # end module
+#end
 #########################################################
 
 

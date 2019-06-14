@@ -80,9 +80,6 @@ end
 
 function test_fwdtt_2D()
     
-    @show nprocs()
-    @show nworkers()
-
     #--------------------------------------
     # Create a grid and a velocity model
      grd,coordsrc,coordrec,velmod = creategridmod2D()
@@ -101,9 +98,6 @@ end
 #############################################
 
 function test_fwdtt_3D()
-    
-    @show nprocs()
-    @show nworkers()
 
     #--------------------------------------
     # Create a grid and a velocity model
@@ -123,9 +117,6 @@ end
 #############################################
 
 function test_gradtt_2D()
-    
-    @show nprocs()
-    @show nworkers()
 
     #--------------------------------------
     # Create a grid and a velocity model
@@ -151,9 +142,6 @@ end
 #############################################
     
 function test_gradtt_3D()
-    
-    @show nprocs()
-    @show nworkers()
 
     #--------------------------------------
     # Create a grid and a velocity model
@@ -169,8 +157,8 @@ function test_gradtt_3D()
     
     gradalgos = ["gradFS_podlec","gradFMM_podlec","gradFMM_hiord"]
     for gradalgo in gradalgos
-        println("Gradien 3D using $ttalgo")
-        @time  grad = gradttime2D(flatmod,grd,coordsrc,coordrec,dobs,stdobs,gradttalgo=gradalgo)
+        println("Gradient 3D using $gradalgo")
+        grad = gradttime3D(flatmod,grd,coordsrc,coordrec,dobs,stdobs,gradttalgo=gradalgo)
     end
 
     return true
