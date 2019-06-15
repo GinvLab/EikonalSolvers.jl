@@ -136,8 +136,6 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         # in this case the time array has shape(velocity)+1
         ttime = zeros(grd.ntx,grd.nty,grd.ntz,nsrc)
     end
-
-
     
     ## group of pre-selected sources
     for s=1:nsrc
@@ -175,36 +173,37 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
 end
 
 ###############################################################################
-###############################################################################
 
+function sourceboxloctt!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Array{Float64,1},grd::Grid3D; staggeredgrid::Bool )
+    ## staggeredgrid keyword required!
 
-function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D) 
-
-    epsilon = 1e-5
-
-    ## ttime
-    HUGE::Float64 = 1.0e300
-    inittt = HUGE
-    ttime = inittt * ones(grd.ntx,grd.nty,grd.ntz)
-    ntx,nty,ntz = grd.ntx,grd.nty,grd.ntz
-    ntxyz = [ntx,nty,ntz]
-    
-    ##------------------------
-    ## source location, etc.      
     mindistsrc = 1e-5
-   
-    onsrc = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
-    onsrc[:,:,:] .= false
-    xsrc,ysrc,zsrc=src[1],src[2],src[3]
+  
+    xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
+    
+    if staggeredgrid==false
+        ## regular grid
+        onsrc = zeros(Bool,grd.nx,grd.ny,grd.nz)
+        onsrc[:,:,:] .= false
+        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
 
-    ## grd.xinit-hgr because TIME array on STAGGERED grid
-    hgr = grd.hgrid/2.0
-    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-    rx = src[1]-((ix-1)*grd.hgrid+grd.xinit-hgr)
-    ry = src[2]-((iy-1)*grd.hgrid+grd.yinit-hgr)
-    rz = src[3]-((iz-1)*grd.hgrid+grd.zinit-hgr)
+    elseif staggeredgrid==true
+        ## grd.xinit-hgr because TIME array on STAGGERED grid
+        onsrc = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
+        onsrc[:,:,:] .= false
+        hgr = grd.hgrid/2.0
+        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
+
+    end
+
+  
     halfg = 0.0 #hgrid/2.0
-
     dist = sqrt(rx^2+ry^2+rz^2)
     #@show dist,src,rx,ry
     if dist<=mindistsrc
@@ -232,29 +231,54 @@ function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
         end
 
         ## set ttime around source ONLY FOUR points!!!
-        #isrc,jsrc,ksrc = ind2sub(size(onsrc),find(onsrc))
         ijksrc = findall(onsrc)
-        # println(" set time around src $isrc  $jsrc $ksrc") 
-        #for (k,j,i) in zip(ksrc,jsrc,isrc)
         for lcart in ijksrc
-            # for j in jsrc
-            #     for i in isrc
             i = lcart[1]
             j = lcart[2]
             k = lcart[3]
-            xp = (i-1)*grd.hgrid+grd.xinit-hgr
-            yp = (j-1)*grd.hgrid+grd.yinit-hgr
-            zp = (k-1)*grd.hgrid+grd.zinit-hgr
-            ii = i-1 ##Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-            jj = j-1 ##Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-            kk = k-1 ##Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-            #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-            ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-                    ##println("$i $j $k $xp $yp $zp")
-            #     end
-            # end
+            if staggeredgrid==false
+                ## regular grid
+                xp = (i-1)*grd.hgrid+grd.xinit
+                yp = (j-1)*grd.hgrid+grd.yinit
+                zp = (k-1)*grd.hgrid+grd.zinit
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+                kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            elseif staggeredgrid==true
+                ## grd.xinit-hgr because TIME array on STAGGERED grid
+                xp = (i-1)*grd.hgrid+grd.xinit-hgr
+                yp = (j-1)*grd.hgrid+grd.yinit-hgr
+                zp = (k-1)*grd.hgrid+grd.zinit-hgr
+                ii = i-1 
+                jj = j-1 
+                kk = k-1 
+                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            end
         end
     end
+    return onsrc
+end
+
+###############################################################################
+
+
+function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D) 
+
+    epsilon = 1e-5
+
+    ## ttime
+    HUGE::Float64 = 1.0e300
+    inittt = HUGE
+    ttime = inittt * ones(grd.ntx,grd.nty,grd.ntz)
+    ntx,nty,ntz = grd.ntx,grd.nty,grd.ntz
+    ntxyz = [ntx,nty,ntz]
+    
+    ##------------------------
+    ## source location, etc.      
+    ## STAGGERED grid
+    onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=true )
 
     ######################################################################################
 
@@ -265,9 +289,6 @@ function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
     swedifference::Float64 = 0.0
     curpt = zeros(Int64,3)
     ttlocmin::Float64 = 0.0
-    # iswe = Array{Int64,2}(8,3)
-    # jswe = Array{Int64,2}(8,3)
-    # kswe = Array{Int64,2}(8,3)
     ttimeold = zeros(Float64,ntx,nty,ntz)
     i::Int64 = 0
     j::Int64 = 0
@@ -330,10 +351,8 @@ function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
                         ## If on a source node, skip this iteration
                         onsrc[i,j,k]==true && continue
                        
-
                         ####################################################
                         ##   Local solver (Podvin, Lecomte, 1991)         ##
-
                         curpt[1],curpt[2],curpt[3] = i,j,k  ## faster than the above...
 
                         tdiff_cor[:]  .= HUGE
@@ -729,84 +748,14 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
     ntx,nty,ntz = grd.ntx,grd.nty,grd.ntz
     ntxyz = [ntx,nty,ntz]
     
-
     ## source location, etc.      
-    mindistsrc = 1e-5
-    onsrc = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
-    onsrc[:,:,:] .= false
-    xsrc,ysrc,zsrc=src[1],src[2],src[3]
+    ## STAGGERED grid
+    onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=true )
     
-    ## grd.xinit-hgr because TIME array on STAGGERED grid
-    hgr = grd.hgrid/2.0
-    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-    rx = src[1]-((ix-1)*grd.hgrid+grd.xinit-hgr)
-    ry = src[2]-((iy-1)*grd.hgrid+grd.yinit-hgr)
-    rz = src[3]-((iz-1)*grd.hgrid+grd.zinit-hgr)
-    halfg = 0.0 #hgrid/2.0
-
-    
-    dist = sqrt(rx^2+ry^2+rz^2)
-    #@show dist,src,rx,ry
-    if dist<=mindistsrc
-        onsrc[ix,iy,iz] = true
-        ttime[ix,iy,iz] = 0.0 
-    else
-        
-        if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-        elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-        elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-        elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
-
-        elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-        elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-        elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-        elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
-        end
-
-        ## set ttime around source ONLY FOUR points!!!
-        #isrc,jsrc,ksrc = ind2sub(size(onsrc),find(onsrc))
-        ijksrc = findall(onsrc)
-        # println(" set time around src $isrc  $jsrc $ksrc") 
-        #for (k,j,i) in zip(ksrc,jsrc,isrc)
-        for lcart in ijksrc
-            # for j in jsrc
-            #     for i in isrc
-            i = lcart[1]
-            j = lcart[2]
-            k = lcart[3]
-            # println(" set time around src $isrc  $jsrc $ksrc") 
-            #for (k,j,i) in zip(ksrc,jsrc,isrc)
-            # for j in jsrc
-            #     for i in isrc
-            xp = (i-1)*grd.hgrid+grd.xinit-hgr
-            yp = (j-1)*grd.hgrid+grd.yinit-hgr
-            zp = (k-1)*grd.hgrid+grd.zinit-hgr
-            ii = i-1 ##Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-            jj = j-1 ##Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-            kk = k-1 ##Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-            #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-            ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-            ##println("$i $j $k $xp $yp $zp")
-            #     end
-            # end
-        end
-    end
-    
-    ######################################################################################
-
     ##================================
     slowness = 1.0./vel
     ##================================
     
-
     ttlocmin::Float64 = 0.0
     i::Int64 = 0
     j::Int64 = 0
@@ -816,12 +765,7 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
     ## Get all the rotations, points, etc.
     rotste = initloccomp()
     
-    ##===========================================================================================
-
-
-    ##===========================================================================================    
-
-    #-------------------------------
+    ##==========================================
     ## init FMM 
     neigh = [1  0  0;
              0  1  0;
@@ -839,19 +783,6 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
     is = [l[1] for l in ijkss]
     js = [l[2] for l in ijkss]
     ks = [l[3] for l in ijkss]
-
-    # is = Array{Int64,1}(undef,naccinit)
-    # js = Array{Int64,1}(undef,naccinit)
-    # ks = Array{Int64,1}(undef,naccinit)
-    # l=1
-    # for k=1:ntz,j=1:nty,i=1:ntx
-    #     if status[i,j,k]==2
-    #         is[l] = i
-    #         js[l] = j
-    #         ks[l] = k
-    #         l+=1
-    #     end
-    # end
 
     ## Init the max binary heap with void arrays but max size
     Nmax=ntx*nty*ntz
@@ -895,7 +826,6 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
         end
     end
 
-    
     #-------------------------------
     ## main FMM loop
     totnpts = ntx*nty*ntz 
@@ -996,14 +926,12 @@ function calcttpt(ttime::Array{Float64,3},rotste::RotoStencils,
     SQRTOF2 = sqrt(2.0)
     SQRTOF3 = sqrt(3.0)
 
-    
     ##===========================================
     ## If on a source node, skip this iteration
     if onsrc[i,j,k]==true
         println("calcttpt(): on a source node... return 0.0")
         return 0.0 ##???
     end
-    
 
     ####################################################
     ##   Local solver (Podvin, Lecomte, 1991)         ##
@@ -1248,11 +1176,7 @@ function calcttpt(ttime::Array{Float64,3},rotste::RotoStencils,
     
     ttlocmin = minimum(tmin)                        
 
-    #############################################
-    
-    #ttime[i,j,k] = min(ttimeold[i,j,k],ttlocmin)
     ttpt = ttlocmin
-    #############################################
     return ttpt
 end
 
@@ -1306,72 +1230,8 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
         ##
 
         ## source location, etc.      
-        mindistsrc = 1e-5
-        onsrc = zeros(Bool,nx,ny,nz)
-        onsrc[:,:,:] .= false
-        xsrc,ysrc,zsrc=src[1],src[2],src[3]
-        
-        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-        rx = src[1]-((ix-1)*grd.hgrid+grd.xinit)
-        ry = src[2]-((iy-1)*grd.hgrid+grd.yinit)
-        rz = src[3]-((iz-1)*grd.hgrid+grd.zinit)
-        halfg = 0.0 #hgrid/2.0
-
-        
-        dist = sqrt(rx^2+ry^2+rz^2)
-        #@show dist,src,rx,ry
-        if dist<=mindistsrc
-            onsrc[ix,iy,iz] = true
-            ttime[ix,iy,iz] = 0.0 
-        else
-            
-            if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-                onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-            elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-                onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-            elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-                onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-            elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-                onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
-
-            elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-                onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-            elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-                onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-            elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-                onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-            elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-                onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
-            end
-
-            ## set ttime around source ONLY FOUR points!!!
-            #isrc,jsrc,ksrc = ind2sub(size(onsrc),find(onsrc))
-            ijksrc = findall(onsrc)
-            # println(" set time around src $isrc  $jsrc $ksrc") 
-            #for (k,j,i) in zip(ksrc,jsrc,isrc)
-            for lcart in ijksrc
-                # for j in jsrc
-                #     for i in isrc
-                i = lcart[1]
-                j = lcart[2]
-                k = lcart[3]
-                # println(" set time around src $isrc  $jsrc $ksrc") 
-                # for (k,j,i) in zip(ksrc,jsrc,isrc)
-                # for j in jsrc
-                #     for i in isrc
-                xp = (i-1)*grd.hgrid+grd.xinit
-                yp = (j-1)*grd.hgrid+grd.yinit
-                zp = (k-1)*grd.hgrid+grd.zinit
-                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-                kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-                ##println("$i $j $k $xp $yp $zp")
-                #     end
-                # end
-            end
-        end
+        ## REGULAR grid
+        onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=false )
         
         ##
         ## Status of nodes
@@ -1770,7 +1630,8 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     xsrc = src[1] - xorig - grdcoarse.xinit
     ysrc = src[2] - yorig - grdcoarse.yinit
     zsrc = src[3] - zorig - grdcoarse.zinit
-    
+    srcfine = Float64[xsrc,ysrc,zsrc]
+
     ##
     ## Nearest neighbor interpolation for velocity on finer grid
     ## 
@@ -1799,62 +1660,12 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     ##
     ## Source location, etc. within fine grid
     ##  
-    mindistsrc = 1e-6
-    onsrc = zeros(Bool,nx,ny,nz)
-    onsrc[:,:,:] .= false
-    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,0.0,0.0,0.0,dh) 
-    rx = xsrc-((ix-1)*dh)
-    ry = ysrc-((iy-1)*dh)
-    rz = zsrc-((iz-1)*dh)
-    halfg = 0.0 #hgrid/2.0
-    
-    dist = sqrt(rx^2+ry^2+rz^2)
-    #@show dist,src,rx,ry
-      if dist<=mindistsrc
-        onsrc[ix,iy,iz] = true
-        ttime[ix,iy,iz] = 0.0 
-    else
-        
-        if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-        elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-        elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-        elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
+    ## REGULAR grid, use"grdfine","finegrd", source position in the fine grid!!
+    onsrc = sourceboxloctt!(ttime,velfinegrd,srcfine,grdfine, staggeredgrid=false )
 
-        elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-        elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-        elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-        elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
-        end
-        
-        ## set ttime around source ONLY FOUR points!!!
-        #isrc,jsrc = ind2sub(size(onsrc),find(onsrc))
-        ijksrc = findall(onsrc)
-        @inbounds for lcart in ijksrc
-            i = lcart[1]
-            j = lcart[2]
-            k = lcart[3]
-            xp = (i-1)*dh
-            yp = (j-1)*dh
-            zp = (k-1)*dh
-            ii = Int(floor(xsrc/dh)) +1
-            jj = Int(floor(ysrc/dh)) +1
-            kk = Int(floor(zsrc/dh)) +1             
-            ttime[i,j,k] = sqrt((xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / velfinegrd[ii,jj,kk]
-        end
-    end
-        
     ######################################################
-  
-    ##================================
-      neigh = [1  0  0;
+
+    neigh = [1  0  0;
              0  1  0;
             -1  0  0;
              0 -1  0;
@@ -1984,9 +1795,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         end
         ##-------------------------------
     end
-
-    return error("Ouch...")
-    
+    error("Ouch...")
 end
 
 #################################################################3

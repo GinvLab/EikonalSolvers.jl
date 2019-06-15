@@ -143,64 +143,47 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xysrc::Array{Float64,2},
 end
 
 ############################################################################
-############################################################################
 
-function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
-                         src::Array{Float64,1},rec::Array{Float64,2},grd::Grid3D,
-                         pickobs::Array{Float64,1},ttpicks::Array{Float64,1},stdobs::Float64)
+function sourceboxlocgrad!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Array{Float64,1},
+                           grd::Grid3D; staggeredgrid::Bool )
 
-    @assert size(src)==(3,)
-    
-    @assert size(ttime)==(size(vel).+1)
-    nx,ny,nz = size(ttime)
-
-    epsilon = 1e-5
+    ##########################
+    ##   Init source
+    ##########################
     mindistsrc = 1e-5
-    
-    ## init adjoint variable
-    lambdaold = zeros((nx,ny,nz)) .+ 1e32
-    lambdaold[:,1,:]   .= 0.0
-    lambdaold[:,end,:] .= 0.0
-    lambdaold[1,:,:]   .= 0.0
-    lambdaold[end,:,:] .= 0.0
-    lambdaold[:,:,1]   .= 0.0
-    lambdaold[:,:,end] .= 0.0
-
-    onarec = zeros(Bool,nx,ny,nz)
-    onarec[:,:,:] .= false
-    dtonarec = zeros(nx,ny,nz)
- 
-    #copy ttime 'cause it might be changed around src
-    tt = copy(ttime)
+    xsrc,ysrc,zsrc = srcpos[1],srcpos[2],srcpos[3]
     dh = grd.hgrid
 
-    ## Grid position
-    xinit = grd.xinit
-    yinit = grd.yinit
-    zinit = grd.zinit
-    ntx = grd.ntx
-    nty = grd.nty
-    ntz = grd.ntz
-    
-    ## source
-    ## grd.xinit-hgr because TIME array on STAGGERED grid
-    hgr = grd.hgrid/2.0
-    xsrc,ysrc,zsrc = src[1],src[2],src[3]
-    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-    rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
-    ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-    rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
-    #@show dist,src,rx,ry
-    onsrc = zeros(Bool,nx,ny,nz)
-    onsrc[:,:,:] .= false    
-    halfg = 0.0
+    if staggeredgrid==false
+        ## regular grid
+        onsrc = zeros(Bool,grd.nx,grd.ny,grd.nz)
+        onsrc[:,:,:] .= false
+        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
+        max_x = (grd.nx-1)*grd.hgrid+grd.xinit
+        max_y = (grd.ny-1)*grd.hgrid+grd.yinit
+        max_z = (grd.nz-1)*grd.hgrid+grd.zinit
+        
+    elseif staggeredgrid==true
+        ## STAGGERED grid
+        onsrc = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
+        onsrc[:,:,:] .= false
+        ## grd.xinit-hgr because TIME array on STAGGERED grid
+        hgr = grd.hgrid/2.0
+        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
+        max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
+        max_y = (grd.nty-1)*grd.hgrid+grd.yinit
+        max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
+    end
 
-    #@show xsrc,ysrc,zsrc,rx,ry,rz
-    
+    halfg = 0.0
     src_on_nodeedge = false
-    max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
-    max_y = (grd.nty-1)*grd.hgrid+grd.yinit
-    max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
+
     ## loop to make sure we don't accidentally move the src to another node/edge
     while (sqrt(rx^2+ry^2+rz^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
         src_on_nodeedge = true
@@ -218,24 +201,31 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
         end
         if zsrc < max_z-0.002*dh
             zsrc = zsrc+0.001*dh
-        else #(make sure it's not already at the bottom y)
+        else #(make sure it's not already at the bottom z)
             zsrc = zsrc-0.001*dh
         end
 
         # print("new time at src:  $(tt[ix,iy]) ")
         ## recompute parameters related to position of source
-        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
-
-        #@show xsrc,ysrc,zsrc,rx,ry,rz
+        if staggeredgrid==false
+            ## regular grid
+            ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+            rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+            ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+            rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)        
+        elseif staggeredgrid==true
+            ## STAGGERED grid
+            hgr = grd.hgrid/2.0
+            ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
+            rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+            ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+            rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)        
+        end
     end
 
-    
     ## To avoid singularities, the src can only be inside a box,
     ##  not on a grid node or edge... see above. So we need to have
-    ##  always 8 nodes (corners) where onsrc is true
+    ##  always 4 nodes where onsrc is true
     if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
         onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
     elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
@@ -255,36 +245,240 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
         onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
     end
 
+
     ## if src on node or edge, recalculate traveltimes in box
     if src_on_nodeedge==true
         ## RE-set a new ttime around source 
-        # isrc,jsrc,ksrc = ind2sub(size(onsrc),find(onsrc))
+        #isrc,jsrc = ind2sub(size(onsrc),find(onsrc))
         ijksrc = findall(onsrc)
+        # println(" set time around src $isrc  $jsrc $ksrc") 
+        #for (k,j,i) in zip(ksrc,jsrc,isrc)
         for lcart in ijksrc
+            # for j in jsrc
+            #     for i in isrc
             i = lcart[1]
             j = lcart[2]
             k = lcart[3]
-            xp = (i-1)*grd.hgrid+grd.xinit
-            yp = (j-1)*grd.hgrid+grd.yinit
-            zp = (k-1)*grd.hgrid+grd.zinit
-            ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-            jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-            kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-            #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-            ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-            ##println("$i $j $j  $xp $yp $zp")
+            if staggeredgrid==false
+                ## regular grid
+                xp = (i-1)*grd.hgrid+grd.xinit
+                yp = (j-1)*grd.hgrid+grd.yinit
+                zp = (k-1)*grd.hgrid+grd.zinit
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+                kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            elseif staggeredgrid==true
+                ## STAGGERED grid
+                xp = (i-1)*grd.hgrid+grd.xinit-hgr
+                yp = (j-1)*grd.hgrid+grd.yinit-hgr
+                zp = (k-1)*grd.hgrid+grd.zinit-hgr
+                ii = i-1 ##Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+                jj = j-1 ##Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+                kk = k-1 ##Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            end
         end
-    end
+    end#
 
-    ## init receivers
+    return onsrc
+end
+
+############################################################################
+
+function recboxlocgrad!(lambda::Array{Float64,3},ttpicks::Array{Float64,1},grd::Grid3D,
+                        rec::Array{Float64,2},pickobs::Array{Float64,1},stdobs::Float64; staggeredgrid::Bool)
+
+    ##########################
+    ## Init receivers
+    ##########################
+
+    if staggeredgrid==false
+        ## regular grid
+        onarec = zeros(Bool,grd.nx,grd.ny,grd.nz)
+        nxmax = grd.nx
+        nymax = grd.ny
+        nzmax = grd.nz
+    elseif staggeredgrid==true
+        ## STAGGERED grid
+        onarec = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
+        nxmax = grd.ntx
+        nymax = grd.nty
+        nzmax = grd.ntz
+        hgr = grd.hgrid/2.0
+    end
+    onarec[:,:,:] .= false
+    nrec=size(rec,1)
+    
+   ## init receivers
     nrec=size(rec,1)
     for r=1:nrec
-        i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,3],xinit,yinit,zinit,grd.hgrid)
+        if staggeredgrid==false
+            i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,2],grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
+        elseif staggeredgrid==true
+            i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,2],grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid)
+        end
+        if (i==1) || (i==nxmax) || (j==1) || (j==nymax) || (k==1) || (k==nzmax)
+            println(" Receiver on border of model (i==1)||(i==ntx)||(j==1)||(j==nty || (k==1) || (k==ntz))")
+            println(" Not yet implemented...")
+            return nothing
+        end
         onarec[i,j,k] = true
-        dtonarec[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
-        lambdaold[i,j,k] = dtonarec[i,j,k]
-        #@show r,i,j,k
+        lambda[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
     end
+  
+    return onarec
+end
+
+############################################################################
+
+function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
+                         src::Array{Float64,1},rec::Array{Float64,2},grd::Grid3D,
+                         pickobs::Array{Float64,1},ttpicks::Array{Float64,1},stdobs::Float64)
+
+    @assert size(src)==(3,)
+    
+    @assert size(ttime)==(size(vel).+1)
+    ##nx,ny,nz = size(ttime)
+
+    epsilon = 1e-5
+    mindistsrc = 1e-5
+    
+    ## init adjoint variable
+    lambdaold = zeros((grd.ntx,grd.nty,grd.ntz)) .+ 1e32
+    lambdaold[:,1,:]   .= 0.0
+    lambdaold[:,end,:] .= 0.0
+    lambdaold[1,:,:]   .= 0.0
+    lambdaold[end,:,:] .= 0.0
+    lambdaold[:,:,1]   .= 0.0
+    lambdaold[:,:,end] .= 0.0
+
+ 
+    #copy ttime 'cause it might be changed around src
+    tt = copy(ttime)
+    dh = grd.hgrid
+
+    ## Grid position
+    xinit = grd.xinit
+    yinit = grd.yinit
+    zinit = grd.zinit
+    ntx = grd.ntx
+    nty = grd.nty
+    ntz = grd.ntz
+    
+    ## source
+    ## STAGGERED grid
+    onsrc = sourceboxlocgrad!(tt,vel,src,grd; staggeredgrid=true )
+    # receivers
+    # lambdaold!!!!
+    onarec = recboxlocgrad!(lambdaold,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
+
+    xsrc,ysrc,zsrc = src[1],src[2],src[3]
+
+
+    # ## grd.xinit-hgr because TIME array on STAGGERED grid
+    # hgr = grd.hgrid/2.0
+    # ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
+    # rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+    # ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+    # rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
+    # #@show dist,src,rx,ry
+    # onsrc = zeros(Bool,nx,ny,nz)
+    # onsrc[:,:,:] .= false    
+    # halfg = 0.0
+
+    # #@show xsrc,ysrc,zsrc,rx,ry,rz
+    
+    # src_on_nodeedge = false
+    # max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
+    # max_y = (grd.nty-1)*grd.hgrid+grd.yinit
+    # max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
+    # ## loop to make sure we don't accidentally move the src to another node/edge
+    # while (sqrt(rx^2+ry^2+rz^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
+    #     src_on_nodeedge = true
+        
+    #     ## shift the source 
+    #     if xsrc < max_x-0.002*dh
+    #         xsrc = xsrc+0.001*dh
+    #     else #(make sure it's not already at the bottom y)
+    #         xsrc = xsrc-0.001*dh
+    #     end
+    #     if ysrc < max_y-0.002*dh
+    #         ysrc = ysrc+0.001*dh
+    #     else #(make sure it's not already at the bottom y)
+    #         ysrc = ysrc-0.001*dh
+    #     end
+    #     if zsrc < max_z-0.002*dh
+    #         zsrc = zsrc+0.001*dh
+    #     else #(make sure it's not already at the bottom y)
+    #         zsrc = zsrc-0.001*dh
+    #     end
+
+    #     # print("new time at src:  $(tt[ix,iy]) ")
+    #     ## recompute parameters related to position of source
+    #     ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+    #     rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+    #     ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+    #     rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
+
+    #     #@show xsrc,ysrc,zsrc,rx,ry,rz
+    # end
+
+    
+    # ## To avoid singularities, the src can only be inside a box,
+    # ##  not on a grid node or edge... see above. So we need to have
+    # ##  always 8 nodes (corners) where onsrc is true
+    # if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
+    #     onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
+    # elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
+    #     onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
+    # elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
+    #     onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
+    # elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
+    #     onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
+
+    # elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
+    #     onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
+    # elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
+    #     onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
+    # elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
+    #     onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
+    # elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
+    #     onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
+    # end
+
+    # ## if src on node or edge, recalculate traveltimes in box
+    # if src_on_nodeedge==true
+    #     ## RE-set a new ttime around source 
+    #     # isrc,jsrc,ksrc = ind2sub(size(onsrc),find(onsrc))
+    #     ijksrc = findall(onsrc)
+    #     for lcart in ijksrc
+    #         i = lcart[1]
+    #         j = lcart[2]
+    #         k = lcart[3]
+    #         xp = (i-1)*grd.hgrid+grd.xinit
+    #         yp = (j-1)*grd.hgrid+grd.yinit
+    #         zp = (k-1)*grd.hgrid+grd.zinit
+    #         ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+    #         jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+    #         kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+    #         #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+    #         ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+    #         ##println("$i $j $j  $xp $yp $zp")
+    #     end
+    # end
+
+    # ## init receivers
+    # nrec=size(rec,1)
+    # for r=1:nrec
+    #     i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,3],xinit,yinit,zinit,grd.hgrid)
+    #     onarec[i,j,k] = true
+    #     dtonarec[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
+    #     lambdaold[i,j,k] = dtonarec[i,j,k]
+    #     #@show r,i,j,k
+    # end
   
     ######################################################
  
@@ -391,6 +585,7 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
                         cbackminus = ( cback-abs(cback) )/2.0
                         
                         ##-------------------------------------------
+
                         numer =
                             (abackplus * lambdanew[i-1,j,k] - aforwminus * lambdanew[i+1,j,k]) / dh +
                             (bbackplus * lambdanew[i,j-1,k] - bforwminus * lambdanew[i,j+1,k]) / dh +
@@ -419,9 +614,10 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
                         
                         if onarec[i,j,k]==true                            
                             #gradT = sqrt( (tt[i+1,j]-tt[i,j])^2 + (tt[i,j+1]-tt[i,j])^2 )
-                            numer2 = numer + dtonarec[i,j,k]
-                            lambdaprop = numer2/denom 
-                            lambdanew[i,j,k] = min(lambdaold[i,j,k],lambdaprop)
+                            # numer2 = numer + dtonarec[i,j,k]
+                            # lambdaprop = numer2/denom 
+                            # lambdanew[i,j,k] = min(lambdaold[i,j,k],lambdaprop                                                   )
+                            lambdanew[i,j,k] = lambdaold[i,j,k]
                         else 
                             lambdaprop = numer/denom
                             lambdanew[i,j,k] = min(lambdaold[i,j,k],lambdaprop)
@@ -465,18 +661,13 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
 
     @assert size(src)==(3,)
     mindistsrc = 1e-5
+    epsilon = 1e-5
     
     #@assert size(src)=
     @assert size(ttime)==(size(vel).+1)
-    nx,ny,nz = size(ttime)
+    ##nx,ny,nz = size(ttime)
 
-    epsilon = 1e-5
-    
-    #println("nx,ny ",nx," ",ny)
-    lambda = zeros((nx,ny,nz)) 
-   
-    onarec = zeros(Bool,nx,ny,nz)
-    onarec[:,:,:] .= false
+    lambda = zeros((grd.ntx,grd.nty,grd.ntz)) 
  
     #copy ttime 'cause it might be changed around src
     tt=copy(ttime)
@@ -491,114 +682,124 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     zinit = grd.zinit
 
     ## source
-    xsrc,ysrc,zsrc = src[1],src[2],src[3]
-    ## grd.xinit-hgr because TIME array on STAGGERED grid
-    hgr = grd.hgrid/2.0
-    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-    rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
-    ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-    rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
-    #@show dist,src,rx,ry
-    onsrc = zeros(Bool,nx,ny,nz)
-    onsrc[:,:,:] .= false    
-    halfg = 0.0
+    ## source
+    ## STAGGERED grid
+    onsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=true )
+    ## receivers
+    onarec = recboxlocgrad!(lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
     
-    src_on_nodeedge = false
-    max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
-    max_y = (grd.nty-1)*grd.hgrid+grd.yinit
-    max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
+    
+    xsrc,ysrc,zsrc = src[1],src[2],src[3]
 
-    ## loop to make sure we don't accidentally move the src to another node/edge
-    while (sqrt(rx^2+ry^2+rz^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
-        src_on_nodeedge = true
+
+
+    # ## grd.xinit-hgr because TIME array on STAGGERED grid
+    # hgr = grd.hgrid/2.0
+    # ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
+    # rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+    # ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+    # rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
+    # #@show dist,src,rx,ry
+    # onsrc = zeros(Bool,nx,ny,nz)
+    # onsrc[:,:,:] .= false    
+    # halfg = 0.0
+    
+    # src_on_nodeedge = false
+    # max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
+    # max_y = (grd.nty-1)*grd.hgrid+grd.yinit
+    # max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
+
+    # ## loop to make sure we don't accidentally move the src to another node/edge
+    # while (sqrt(rx^2+ry^2+rz^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
+    #     src_on_nodeedge = true
         
-        ## shift the source 
-        if xsrc < max_x-0.002*dh
-            xsrc = xsrc+0.001*dh
-        else #(make sure it's not already at the bottom y)
-            xsrc = xsrc-0.001*dh
-        end
-        if ysrc < max_y-0.002*dh
-            ysrc = ysrc+0.001*dh
-        else #(make sure it's not already at the bottom y)
-            ysrc = ysrc-0.001*dh
-        end
-        if zsrc < max_z-0.002*dh
-            zsrc = zsrc+0.001*dh
-        else #(make sure it's not already at the bottom z)
-            zsrc = zsrc-0.001*dh
-        end
+    #     ## shift the source 
+    #     if xsrc < max_x-0.002*dh
+    #         xsrc = xsrc+0.001*dh
+    #     else #(make sure it's not already at the bottom y)
+    #         xsrc = xsrc-0.001*dh
+    #     end
+    #     if ysrc < max_y-0.002*dh
+    #         ysrc = ysrc+0.001*dh
+    #     else #(make sure it's not already at the bottom y)
+    #         ysrc = ysrc-0.001*dh
+    #     end
+    #     if zsrc < max_z-0.002*dh
+    #         zsrc = zsrc+0.001*dh
+    #     else #(make sure it's not already at the bottom z)
+    #         zsrc = zsrc-0.001*dh
+    #     end
 
-        # print("new time at src:  $(tt[ix,iy]) ")
-        ## recompute parameters related to position of source
-        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)        
+    #     # print("new time at src:  $(tt[ix,iy]) ")
+    #     ## recompute parameters related to position of source
+    #     ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
+    #     rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+    #     ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+    #     rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)        
 
-    end
+    # end
 
-    ## To avoid singularities, the src can only be inside a box,
-    ##  not on a grid node or edge... see above. So we need to have
-    ##  always 4 nodes where onsrc is true
-    if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-        onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-    elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-        onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-    elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-        onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-    elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-        onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
+    # ## To avoid singularities, the src can only be inside a box,
+    # ##  not on a grid node or edge... see above. So we need to have
+    # ##  always 4 nodes where onsrc is true
+    # if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
+    #     onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
+    # elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
+    #     onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
+    # elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
+    #     onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
+    # elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
+    #     onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
 
-    elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-        onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-    elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-        onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-    elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-        onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-    elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-        onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
-    end
+    # elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
+    #     onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
+    # elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
+    #     onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
+    # elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
+    #     onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
+    # elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
+    #     onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
+    # end
 
 
-    ## if src on node or edge, recalculate traveltimes in box
-    if src_on_nodeedge==true
-        ## RE-set a new ttime around source 
-        #isrc,jsrc = ind2sub(size(onsrc),find(onsrc))
-        ijksrc = findall(onsrc)
-        # println(" set time around src $isrc  $jsrc $ksrc") 
-        #for (k,j,i) in zip(ksrc,jsrc,isrc)
-        for lcart in ijksrc
-            # for j in jsrc
-            #     for i in isrc
-            i = lcart[1]
-            j = lcart[2]
-            k = lcart[3]
-            xp = (i-1)*grd.hgrid+grd.xinit-hgr
-            yp = (j-1)*grd.hgrid+grd.yinit-hgr
-            zp = (k-1)*grd.hgrid+grd.zinit-hgr
-            ii = i-1 ##Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-            jj = j-1 ##Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-            kk = k-1 ##Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-            #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-            ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-        end
-    end# 
+    # ## if src on node or edge, recalculate traveltimes in box
+    # if src_on_nodeedge==true
+    #     ## RE-set a new ttime around source 
+    #     #isrc,jsrc = ind2sub(size(onsrc),find(onsrc))
+    #     ijksrc = findall(onsrc)
+    #     # println(" set time around src $isrc  $jsrc $ksrc") 
+    #     #for (k,j,i) in zip(ksrc,jsrc,isrc)
+    #     for lcart in ijksrc
+    #         # for j in jsrc
+    #         #     for i in isrc
+    #         i = lcart[1]
+    #         j = lcart[2]
+    #         k = lcart[3]
+    #         xp = (i-1)*grd.hgrid+grd.xinit-hgr
+    #         yp = (j-1)*grd.hgrid+grd.yinit-hgr
+    #         zp = (k-1)*grd.hgrid+grd.zinit-hgr
+    #         ii = i-1 ##Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+    #         jj = j-1 ##Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+    #         kk = k-1 ##Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+    #         #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+    #         ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+    #     end
+    # end# 
         
-    ##-------------------------------------------
-    ## init receivers
-    nrec=size(rec,1)
-    for r=1:nrec
-        i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,2],grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
-        if (i==1) || (i==ntx) || (j==1) || (j==nty) || (k==1) || (k==ntz)
-            println(" Receiver on border of model (i==1)||(i==ntx)||(j==1)||(j==nty || (k==1) || (k==ntz))")
-            println(" Not yet implemented...")
-            return nothing
-        end
-        onarec[i,j,k] = true
-        ##dtonarec[i,j] = (ttpicks[r]-pickobs[r])/stdobs^2
-        lambda[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
-    end
+    # ##-------------------------------------------
+    # ## init receivers
+    # nrec=size(rec,1)
+    # for r=1:nrec
+    #     i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,2],grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
+    #     if (i==1) || (i==ntx) || (j==1) || (j==nty) || (k==1) || (k==ntz)
+    #         println(" Receiver on border of model (i==1)||(i==ntx)||(j==1)||(j==nty || (k==1) || (k==ntz))")
+    #         println(" Not yet implemented...")
+    #         return nothing
+    #     end
+    #     onarec[i,j,k] = true
+    #     ##dtonarec[i,j] = (ttpicks[r]-pickobs[r])/stdobs^2
+    #     lambda[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
+    # end
   
     ######################################################
     #-------------------------------
@@ -612,21 +813,21 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
 
     #-------------------------------
     ## init FMM 
-    status = Array{Int64}(undef,nx,ny,nz)
+    status = Array{Int64}(undef,ntx,nty,ntz)
     status[:,:,:] .= 0  ## set all to far
 
     ## LIMIT FOR DERIVATIVES... WHAT TO DO?
     status[1, :, : ] .= 2 ## set to accepted on boundary
-    status[nx,:, : ] .= 2 ## set to accepted on boundary
+    status[end,:, : ] .= 2 ## set to accepted on boundary
     status[:, 1, : ] .= 2 ## set to accepted on boundary
-    status[:, ny,: ] .= 2 ## set to accepted on boundary
+    status[:, end,: ] .= 2 ## set to accepted on boundary
     status[:, :, 1 ] .= 2 ## set to accepted on boundary
-    status[:, :, nz] .= 2 ## set to accepted on boundary
+    status[:, :, end] .= 2 ## set to accepted on boundary
     
     status[onarec] .= 2 ## set to accepted on RECS
 
     ## get the i,j acccepted
-    #irec,jrec = findn(status.==2) #ind2sub((nx,ny),find(status.==2))
+    #irec,jrec = findn(status.==2) #ind2sub((nx,nty),find(status.==2))
     ijkrec = findall(status.==2)
     irec = [x[1] for x in ijkrec]
     jrec = [x[2] for x in ijkrec]
@@ -634,13 +835,13 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     naccinit = length(irec)
 
     ## Init the max binary heap with void arrays but max size
-    Nmax=nx*ny*nz
+    Nmax=ntx*nty*ntz
     bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
 
     ## conversion cart to lin indices, old sub2ind
-    linid_nxnynz = LinearIndices((nx,ny,nz))
+    linid_ntxntyntz = LinearIndices((ntx,nty,ntz))
     ## conversion lin to cart indices, old sub2ind
-    cartid_nxnynz = CartesianIndices((nx,ny,nz))
+    cartid_ntxntyntz = CartesianIndices((ntx,nty,ntz))
 
     ## construct initial narrow band
     for l=1:naccinit 
@@ -652,15 +853,15 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
             
             ## if the point is out of bounds skip this iteration
             ## For the adjoint SKIP BORDERS!!!
-            if (i>nx-1) || (i<2) || (j>ny-1) || (j<2) || (k>nz-1) || (k<2)
+            if (i>ntx-1) || (i<2) || (j>nty-1) || (j<2) || (k>ntz-1) || (k<2)
                 continue
             end
             
             if status[i,j,k]==0 ## far
 
                 # get handle
-                #han = sub2ind((nx,ny),i,j)
-                han = linid_nxnynz[i,j,k]
+                #han = sub2ind((ntx,nty),i,j)
+                han = linid_ntxntyntz[i,j,k]
                 ## add tt of point to binary heap 
                 insert_maxheap!(bheap,tt[i,j,k],han)
                 # change status, add to narrow band
@@ -672,7 +873,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
  
     #-------------------------------
     ## main FMM loop
-    totnpts = nx*ny*nz
+    totnpts = ntx*nty*ntz
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
@@ -684,7 +885,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
         han,value = pop_maxheap!(bheap)
         
         # get 3D indices from handle
-        cijka = cartid_nxnynz[han]
+        cijka = cartid_ntxntyntz[han]
         ia,ja,ka = cijka[1],cijka[2],cijka[3]
         # set status to accepted     
         status[ia,ja,ka] = 2 # 2=accepted
@@ -701,15 +902,15 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
  
             ## if the point is out of bounds skip this iteration
             ## For the adjoint SKIP BORDERS!!!
-            if (i>nx-1) || (i<2) || (j>ny-1) || (j<2) || (k>nz-1) || (k<2)
+            if (i>ntx-1) || (i<2) || (j>nty-1) || (j<2) || (k>ntz-1) || (k<2)
                 continue
             end
             
             if status[i,j,k]==0 ## far, active
 
                 # get handle
-                #han = sub2ind((nx,ny),i,j)
-                han = linid_nxnynz[i,j,k] #i+nx*(j-1)
+                #han = sub2ind((ntx,nty),i,j)
+                han = linid_ntxntyntz[i,j,k] #i+ntx*(j-1)
                 ## add tt of point to binary heap 
                 insert_maxheap!(bheap,tt[i,j,k],han)
                 # change status, add to narrow band
@@ -849,24 +1050,20 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
 
     @assert size(src)==(3,)
     mindistsrc = 1e-5
+    epsilon = 1e-5
     
     #@assert size(src)=
     @assert size(ttime)==(size(vel)) ## SAME SIZE!!
-    nx,ny,nz = size(ttime)
+    nx,ny,nz = grd.nx,grd.ny,grd.nz  ##size(ttime)
 
-    epsilon = 1e-5
-    
-    lambda = zeros((nx,ny,nz)) 
-   
-    onarec = zeros(Bool,nx,ny,nz)
-    onarec[:,:,:] .= false
+    lambda = zeros((grd.nx,grd.ny,grd.nz)) 
  
     #copy ttime 'cause it might be changed around src
     tt=copy(ttime)
     dh = grd.hgrid
-    ntx = nx ##grd.ntx
-    nty = ny ##grd.nty
-    ntz = nz ##grd.nty
+    # ntx = nx ##grd.ntx
+    # nty = ny ##grd.nty
+    # ntz = nz ##grd.nty
     
     ## Grid position
     xinit = grd.xinit
@@ -874,112 +1071,118 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     zinit = grd.zinit
     
     ## source
+    ## regular grid
+    onsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=false )
+    ## receivers
+    onarec = recboxlocgrad!(lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=false)
+
     xsrc,ysrc,zsrc = src[1],src[2],src[3]
-    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-    rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-    ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-    rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
-    #@show dist,src,rx,ry
-    onsrc = zeros(Bool,nx,ny,nz)
-    onsrc[:,:,:] .= false    
-    halfg = 0.0
+
+    # ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+    # rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+    # ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+    # rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
+    # #@show dist,src,rx,ry
+    # onsrc = zeros(Bool,nx,ny,nz)
+    # onsrc[:,:,:] .= false    
+    # halfg = 0.0
     
-    src_on_nodeedge = false
-    max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
-    max_y = (grd.nty-1)*grd.hgrid+grd.yinit
-    max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
+    # src_on_nodeedge = false
+    # max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
+    # max_y = (grd.nty-1)*grd.hgrid+grd.yinit
+    # max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
 
-    ## loop to make sure we don't accidentally move the src to another node/edge
-    while (sqrt(rx^2+ry^2+rz^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
-        src_on_nodeedge = true
+    # ## loop to make sure we don't accidentally move the src to another node/edge
+    # while (sqrt(rx^2+ry^2+rz^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
+    #     src_on_nodeedge = true
         
-        ## shift the source 
-        if xsrc < max_x-0.002*dh
-            xsrc = xsrc+0.001*dh
-        else #(make sure it's not already at the bottom y)
-            xsrc = xsrc-0.001*dh
-        end
-        if ysrc < max_y-0.002*dh
-            ysrc = ysrc+0.001*dh
-        else #(make sure it's not already at the bottom y)
-            ysrc = ysrc-0.001*dh
-        end
-        if zsrc < max_z-0.002*dh
-            zsrc = zsrc+0.001*dh
-        else #(make sure it's not already at the bottom z)
-            zsrc = zsrc-0.001*dh
-        end
+    #     ## shift the source 
+    #     if xsrc < max_x-0.002*dh
+    #         xsrc = xsrc+0.001*dh
+    #     else #(make sure it's not already at the bottom y)
+    #         xsrc = xsrc-0.001*dh
+    #     end
+    #     if ysrc < max_y-0.002*dh
+    #         ysrc = ysrc+0.001*dh
+    #     else #(make sure it's not already at the bottom y)
+    #         ysrc = ysrc-0.001*dh
+    #     end
+    #     if zsrc < max_z-0.002*dh
+    #         zsrc = zsrc+0.001*dh
+    #     else #(make sure it's not already at the bottom z)
+    #         zsrc = zsrc-0.001*dh
+    #     end
 
-        # print("new time at src:  $(tt[ix,iy]) ")
-        ## recompute parameters related to position of source
-        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)        
+    #     # print("new time at src:  $(tt[ix,iy]) ")
+    #     ## recompute parameters related to position of source
+    #     ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+    #     rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+    #     ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+    #     rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)        
 
-    end
+    # end
 
-    ## To avoid singularities, the src can only be inside a box,
-    ##  not on a grid node or edge... see above. So we need to have
-    ##  always 4 nodes where onsrc is true
-    if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-        onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-    elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-        onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-    elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-        onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-    elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-        onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
+    # ## To avoid singularities, the src can only be inside a box,
+    # ##  not on a grid node or edge... see above. So we need to have
+    # ##  always 4 nodes where onsrc is true
+    # if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
+    #     onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
+    # elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
+    #     onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
+    # elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
+    #     onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
+    # elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
+    #     onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
 
-    elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-        onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-    elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-        onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-    elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-        onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-    elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-        onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
-    end
+    # elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
+    #     onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
+    # elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
+    #     onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
+    # elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
+    #     onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
+    # elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
+    #     onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
+    # end
 
 
-    ## if src on node or edge, recalculate traveltimes in box
-    if src_on_nodeedge==true
-        ## RE-set a new ttime around source 
-        #isrc,jsrc = ind2sub(size(onsrc),find(onsrc))
-        ijksrc = findall(onsrc)
-        # println(" set time around src $isrc  $jsrc $ksrc") 
-        #for (k,j,i) in zip(ksrc,jsrc,isrc)
-        for lcart in ijksrc
-            # for j in jsrc
-            #     for i in isrc
-            i = lcart[1]
-            j = lcart[2]
-            k = lcart[3]
-            xp = (i-1)*grd.hgrid+grd.xinit
-            yp = (j-1)*grd.hgrid+grd.yinit
-            zp = (k-1)*grd.hgrid+grd.zinit
-            ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-            jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-            kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-            #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-            ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-        end
-    end# 
+    # ## if src on node or edge, recalculate traveltimes in box
+    # if src_on_nodeedge==true
+    #     ## RE-set a new ttime around source 
+    #     #isrc,jsrc = ind2sub(size(onsrc),find(onsrc))
+    #     ijksrc = findall(onsrc)
+    #     # println(" set time around src $isrc  $jsrc $ksrc") 
+    #     #for (k,j,i) in zip(ksrc,jsrc,isrc)
+    #     for lcart in ijksrc
+    #         # for j in jsrc
+    #         #     for i in isrc
+    #         i = lcart[1]
+    #         j = lcart[2]
+    #         k = lcart[3]
+    #         xp = (i-1)*grd.hgrid+grd.xinit
+    #         yp = (j-1)*grd.hgrid+grd.yinit
+    #         zp = (k-1)*grd.hgrid+grd.zinit
+    #         ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+    #         jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+    #         kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+    #         #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+    #         ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+    #     end
+    # end# 
         
-    ##-------------------------------------------
-    ## init receivers
-    nrec=size(rec,1)
-    for r=1:nrec
-        i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,2],grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
-        if (i==1) || (i==ntx) || (j==1) || (j==nty) || (k==1) || (k==ntz)
-            println(" Receiver on border of model (i==1)||(i==ntx)||(j==1)||(j==nty || (k==1) || (k==ntz))")
-            println(" Not yet implemented...")
-            return nothing
-        end
-        onarec[i,j,k] = true
-        ##dtonarec[i,j] = (ttpicks[r]-pickobs[r])/stdobs^2
-        lambda[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
-    end
+    # ##-------------------------------------------
+    # ## init receivers
+    # nrec=size(rec,1)
+    # for r=1:nrec
+    #     i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,2],grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
+    #     if (i==1) || (i==ntx) || (j==1) || (j==nty) || (k==1) || (k==ntz)
+    #         println(" Receiver on border of model (i==1)||(i==ntx)||(j==1)||(j==nty || (k==1) || (k==ntz))")
+    #         println(" Not yet implemented...")
+    #         return nothing
+    #     end
+    #     onarec[i,j,k] = true
+    #     ##dtonarec[i,j] = (ttpicks[r]-pickobs[r])/stdobs^2
+    #     lambda[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
+    # end
   
     ######################################################
     #-------------------------------

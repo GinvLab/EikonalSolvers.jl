@@ -33,6 +33,8 @@ The eikonal equation is given by:
 
 In the numerical solution to the eikonal equation, there are two major components, the global scheme, which defines the strategy to update to the traveltime on the grid, i.e., fast sweeping or fast marching method and the local scheme, providing the finite difference stencils.
 
+The gradient computations are based on the adjoint state method Leung ...
+
 ## Numerical implementation
 
 Three different implementations of the solver for the eikonal equation and the related  are provided, explained in the following.

@@ -21,7 +21,7 @@ nwor = nworkers()
     println("\n Number of workers available: $nwor")
     for (tn,fun) in zip(testname,testfun)
         println()
-        printstyled("Testing $tn \n", color=:green)
+        printstyled("Testing $tn \n", bold=true,color=:cyan)
         @test fun()
     end
     println()

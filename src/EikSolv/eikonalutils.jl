@@ -38,7 +38,7 @@ The fields are:
 - `hgrid`: spacing of the grid nodes (same for x and y)
 - `xinit, yinit`: origin of the coordinates of the grid
 - `nx, ny`: number of nodes along x and y for the velocity array
-- `ntx, nty`: number of nodes along x and y for the time array, meaningful *only* when using a staggered grid (Podvin and Lecomte stencils)
+- `ntx, nty`: number of nodes along x and y for the time array when using a staggered grid, meaningful and used *only* for Podvin and Lecomte stencils
 
 
 # Example
@@ -77,7 +77,7 @@ The fields are:
 - `hgrid`: spacing of the grid nodes (same for x, y and z)
 - `xinit, yinit, zinit`: origin of the coordinates of the grid
 - `nx, ny, nz`: number of nodes along x and y for the velocity array
-- `ntx, nty, ntz`: number of nodes along x and y for the time array, meaningful *only* when using a staggered grid (Podvin and Lecomte stencils)
+- `ntx, nty, ntz`: number of nodes along x and y for the time array when using a staggered grid, meaningful and used *only* for Podvin and Lecomte stencils
 
 
 # Example
