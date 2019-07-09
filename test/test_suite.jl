@@ -138,11 +138,8 @@ function test_fwdtt_2D()
     coordsrc=[31.0 0.0;]
     # @show coordsrc
     ansol2d,velanaly = analyticalsollingrad2D(grd,coordsrc[1,1],coordsrc[1,2])
-
     ## contour(permutedims(ansol2d),colors="black")
 
-    ## why ??
-    #coordsrc[1,2]+=1e-5
     ## Numerical traveltime
     mae = Dict()
     colors = ["red","blue","green"]
