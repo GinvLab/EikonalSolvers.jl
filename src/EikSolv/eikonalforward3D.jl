@@ -56,9 +56,9 @@ function traveltime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,
     @assert size(coordsrc,2)==3
     @assert size(coordrec,2)==3
     @assert all(vel.>=0.0)
-    @assert all(grd.xinit.<coordsrc[:,1].<((grd.nx-1)*grd.hgrid+grd.xinit))
-    @assert all(grd.yinit.<coordsrc[:,2].<((grd.ny-1)*grd.hgrid+grd.yinit))
-    @assert all(grd.zinit.<coordsrc[:,3].<((grd.nz-1)*grd.hgrid+grd.zinit))
+    @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
+    @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
+    @assert all(grd.zinit.<=coordsrc[:,3].<=((grd.nz-1)*grd.hgrid+grd.zinit))
     
     ##------------------
     ## parallel version
@@ -174,7 +174,7 @@ end
 
 ###############################################################################
 
-function sourceboxloctt!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Array{Float64,1},grd::Grid3D; staggeredgrid::Bool )
+function sourceboxloctt!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},grd::Grid3D; staggeredgrid::Bool )
     ## staggeredgrid keyword required!
 
     mindistsrc = 1e-5
@@ -264,7 +264,7 @@ end
 ###############################################################################
 
 
-function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D) 
+function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D) 
 
     epsilon = 1e-5
 
@@ -306,15 +306,15 @@ function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
 
     ##===========================================================================================    
 
-    tdiff_cor  = Array{Float64,1}(undef,8)   # 8 diff from corners
-    tdiff_edge = Array{Float64,1}(undef,24)  # 8+24=32  3D diffracted
-    ttra_cel   = Array{Float64,1}(undef,24)  # 24x4=96  3D transmitted
-    tdiff_fac  = Array{Float64,1}(undef,12)  # 12  2D diffracted
-    ttra_fac   = Array{Float64,1}(undef,24)  # 24  2D transmitted
-    ttra_lin   = Array{Float64,1}(undef,6)   #  6  1D transmitted
+    tdiff_cor  = Vector{Float64}(undef,8)   # 8 diff from corners
+    tdiff_edge = Vector{Float64}(undef,24)  # 8+24=32  3D diffracted
+    ttra_cel   = Vector{Float64}(undef,24)  # 24x4=96  3D transmitted
+    tdiff_fac  = Vector{Float64}(undef,12)  # 12  2D diffracted
+    ttra_fac   = Vector{Float64}(undef,24)  # 24  2D transmitted
+    ttra_lin   = Vector{Float64}(undef,6)   #  6  1D transmitted
     
     #slowli = MVector{4,Float64}() # = zeros(Float64,4)
-    slowli = Array{Float64,1}(undef,4)
+    slowli = Vector{Float64}(undef,4)
         
     N = Array{Int64,1}(undef,3)
     M = Array{Int64,1}(undef,3)
@@ -324,7 +324,7 @@ function ttFS_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D)
     sloadj = Array{Int64,1}(undef,3)
     sloptli= Array{Int64,1}(undef,3)
 
-    tmin = Array{Float64,1}(undef,6)
+    tmin = Vector{Float64}(undef,6)
  
     NXYZ = size(ttime)
     SLOWNXYZ = size(slowness)
@@ -737,7 +737,7 @@ end
 #################################################################
 
 
-function ttFMM_podlec(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D) 
+function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D) 
 
     epsilon = 1e-5
     
@@ -900,15 +900,15 @@ function calcttpt(ttime::Array{Float64,3},rotste::RotoStencils,
 
     ntx,nty,ntz = grd.ntx,grd.nty,grd.ntz
     
-    tdiff_cor  = Array{Float64,1}(undef,8)   # 8 diff from corners
-    tdiff_edge = Array{Float64,1}(undef,24)  # 8+24=32  3D diffracted
-    ttra_cel   = Array{Float64,1}(undef,24)  # 24x4=96  3D transmitted
-    tdiff_fac  = Array{Float64,1}(undef,12)  # 12  2D diffracted
-    ttra_fac   = Array{Float64,1}(undef,24)  # 24  2D transmitted
-    ttra_lin   = Array{Float64,1}(undef,6)   #  6  1D transmitted
+    tdiff_cor  = Vector{Float64}(undef,8)   # 8 diff from corners
+    tdiff_edge = Vector{Float64}(undef,24)  # 8+24=32  3D diffracted
+    ttra_cel   = Vector{Float64}(undef,24)  # 24x4=96  3D transmitted
+    tdiff_fac  = Vector{Float64}(undef,12)  # 12  2D diffracted
+    ttra_fac   = Vector{Float64}(undef,24)  # 24  2D transmitted
+    ttra_lin   = Vector{Float64}(undef,6)   #  6  1D transmitted
     
     #slowli = MVector{4,Float64}() # = zeros(Float64,4)
-    slowli = Array{Float64,1}(undef,4)
+    slowli = Vector{Float64}(undef,4)
     
     N = Array{Int64,1}(undef,3)
     M = Array{Int64,1}(undef,3)
@@ -918,7 +918,7 @@ function calcttpt(ttime::Array{Float64,3},rotste::RotoStencils,
     sloadj = Array{Int64,1}(undef,3)
     sloptli= Array{Int64,1}(undef,3)
     
-    tmin = Array{Float64,1}(undef,6)
+    tmin = Vector{Float64}(undef,6)
     
     NXYZ = size(ttime)
     SLOWNXYZ = size(slowness)
@@ -1184,7 +1184,7 @@ end
 ##=========================================================================##
 
 
-function ttFMM_hiord(vel::Array{Float64,3},src::Array{Float64,1},grd::Grid3D) 
+function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D) 
 
     ## Sizes
     nx,ny,nz=grd.nx,grd.ny,grd.nz #size(vel)  ## NOT A STAGGERED GRID!!!
@@ -1548,7 +1548,7 @@ end
     and then passed on to coarser grid
 """
 function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3},
-    vel::Array{Float64,3},src::Array{Float64,1},grdcoarse::Grid3D,inittt::Float64)
+    vel::Array{Float64,3},src::Vector{Float64},grdcoarse::Grid3D,inittt::Float64)
       
     ##
     ## 2x10 nodes -> 2x50 nodes

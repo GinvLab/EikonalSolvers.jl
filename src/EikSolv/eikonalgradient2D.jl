@@ -10,7 +10,7 @@
 ## @doc raw because of some backslashes in the string...
 @doc raw"""
     gradttime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                pickobs::Array{Float64,2},stdobs::Float64 ; gradttalgo::String="gradFMM_hiord")
+                pickobs::Array{Float64,2},stdobs::Vector{Float64} ; gradttalgo::String="gradFMM_hiord")
 
 Calculate the gradient using the adjoint state method for 2D velocity models. 
 Returns the gradient of the misfit function with respect to velocity calculated at the given point (velocity model). 
@@ -23,7 +23,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array 
 - `coordrec`: the coordinates of the receiver(s) (x,y), a 2-column array 
 - `pickobs`: observed traveltime picks
-- `stdobs`: standard deviation of error on observed traveltime picks
+- `stdobs`: standard deviation of error on observed traveltime picks, a vector
 - `gradttalgo`: the algorithm to use to compute the forward and gradient, one amongst the following
     * "gradFS\_podlec", fast sweeping method using Podvin-Lecomte stencils for forward, fast sweeping method for adjoint   
     * "gradFMM\_podlec," fast marching method using Podvin-Lecomte stencils for forward, fast marching method for adjoint 
@@ -34,13 +34,13 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                    pickobs::Array{Float64,2},stdobs::Float64 ; gradttalgo::String="gradFMM_hiord")
+                    pickobs::Array{Float64,2},stdobs::Vector{Float64} ; gradttalgo::String="gradFMM_hiord")
 
     @assert size(coordsrc,2)==2
     @assert size(coordrec,2)==2
     @assert all(vel.>=0.0)
-    @assert all(grd.xinit.<coordsrc[:,1].<((grd.nx-1)*grd.hgrid+grd.xinit))
-    @assert all(grd.yinit.<coordsrc[:,2].<((grd.ny-1)*grd.hgrid+grd.yinit))
+    @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
+    @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
 
     nsrc=size(coordsrc,1)
     nw = nworkers()
@@ -74,7 +74,7 @@ Calculate the gradient for some requested sources
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
                          coordrec::Array{Float64,2},
                          grd::Grid2D,
-                         stdobs::Float64,pickobs1::Array{Float64,2},
+                         stdobs::Vector{Float64},pickobs1::Array{Float64,2},
                          adjalgo::String)
 
     nx,ny=size(vel)
@@ -148,7 +148,7 @@ end
 
 #############################################################################
 
-function sourceboxlocgrad!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Array{Float64,1},
+function sourceboxlocgrad!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
                            grd::Grid2D; staggeredgrid::Bool )
     
     ##########################
@@ -263,8 +263,8 @@ end
 
 ##############################################################################
 
-function recboxlocgrad!(lambda::Array{Float64,2},ttpicks::Array{Float64,1},grd::Grid2D,
-                        rec::Array{Float64,2},pickobs::Array{Float64,1},stdobs::Float64; staggeredgrid::Bool)
+function recboxlocgrad!(ttime::Array{Float64,2},lambda::Array{Float64,2},ttpicks::Vector{Float64},grd::Grid2D,
+                        rec::Array{Float64,2},pickobs::Vector{Float64},stdobs::Vector{Float64}; staggeredgrid::Bool)
 
     ##########################
     ## Init receivers
@@ -292,12 +292,31 @@ function recboxlocgrad!(lambda::Array{Float64,2},ttpicks::Array{Float64,1},grd::
             i,j = findclosestnode(rec[r,1],rec[r,2],grd.xinit-hgr,grd.yinit-hgr,grd.hgrid)
         end
         if (i==1) || (i==nxmax) || (j==1) || (j==nymax)
-            println(" Receiver on border of model (i==1)||(i==nx)||(j==1)||(j==ny)")
-            println(" Not yet implemented...")
-            return []
+            ## Receivers on the boundary of model
+            ## (n⋅∇T)γ = Tcalc - Tobs
+            if i==1
+                # forward diff
+                n∇T = - (ttime[2,j]-ttime[1,j])/grd.hgrid 
+            elseif i==nxmax
+                # backward diff
+                n∇T = (ttime[end,j]-ttime[end-1,j])/grd.hgrid 
+            elseif j==1
+                # forward diff
+                n∇T = - (ttime[i,2]-ttime[i,1])/grd.hgrid 
+            elseif j==nymax
+                # backward diff
+                n∇T = (ttime[i,end]-ttime[i,end-1])/grd.hgrid 
+            end
+            onarec[i,j] = true
+            lambda[i,j] = (ttpicks[r]-pickobs[r])/(n∇T * stdobs[r]^2)
+            # println(" Receiver on border of model (i==1)||(i==nx)||(j==1)||(j==ny)")
+            # println(" Not yet implemented...")
+            # return []
+        else
+            ## Receivers within the model
+            onarec[i,j] = true
+            lambda[i,j] = (ttpicks[r]-pickobs[r])/stdobs[r]^2
         end
-        onarec[i,j] = true
-        lambda[i,j] = (ttpicks[r]-pickobs[r])/stdobs^2
     end
     
     return onarec
@@ -306,9 +325,9 @@ end
 #############################################################################
 
 function eikgrad_FS_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
-                         src::Array{Float64,1},rec::Array{Float64,2},
-                         grd::Grid2D,pickobs::Array{Float64,1},
-                         ttpicks::Array{Float64,1},stdobs::Float64)
+                         src::Vector{Float64},rec::Array{Float64,2},
+                         grd::Grid2D,pickobs::Vector{Float64},
+                         ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(2,)
     mindistsrc = 1e-5
@@ -341,7 +360,7 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
     onsrc = sourceboxlocgrad!(tt,vel,src,grd; staggeredgrid=true )
     # receivers
     # lambdaold!!!!
-    onarec = recboxlocgrad!(lambdaold,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
+    onarec = recboxlocgrad!(tt,lambdaold,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
 
     xsrc,ysrc = src[1],src[2]
  
@@ -461,9 +480,9 @@ end
 ###############################################################################
 
 function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
-                         src::Array{Float64,1},rec::Array{Float64,2},
-                         grd::Grid2D,pickobs::Array{Float64,1},
-                         ttpicks::Array{Float64,1},stdobs::Float64)
+                         src::Vector{Float64},rec::Array{Float64,2},
+                         grd::Grid2D,pickobs::Vector{Float64},
+                         ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(2,)
     mindistsrc = 1e-5
@@ -489,7 +508,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
     ## STAGGERED grid
     onsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=true )
     ## receivers
-    onarec = recboxlocgrad!(lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
+    onarec = recboxlocgrad!(tt,lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
     
     xsrc,ysrc = src[1],src[2]
 
@@ -703,9 +722,9 @@ end
 ###############################################################################
 
 function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
-                         src::Array{Float64,1},rec::Array{Float64,2},
-                         grd::Grid2D,pickobs::Array{Float64,1},
-                         ttpicks::Array{Float64,1},stdobs::Float64)
+                         src::Vector{Float64},rec::Array{Float64,2},
+                         grd::Grid2D,pickobs::Vector{Float64},
+                         ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(2,)
     mindistsrc = 1e-5
@@ -732,7 +751,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
     ## regular grid
     onsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=false )
     ## receivers
-    onarec = recboxlocgrad!(lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=false)
+    onarec = recboxlocgrad!(tt,lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=false)
 
     xsrc,ysrc = src[1],src[2]
 
@@ -858,7 +877,7 @@ end # eikadj_FMM_hiord_SINGLESRC
 
 ##====================================================================##
 
-function isooutrange(ib::Int64,jb::Int64,nx::Int64,ny::Int64)
+function isoutrange(ib::Int64,jb::Int64,nx::Int64,ny::Int64)
     isoutb1st = false
     isoutb2nd = false
     ## check if the point is outside ranges for 1st order
@@ -917,7 +936,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
     else # not on src
 
         nx,ny = size(lambda)
-        isout1st,isout2nd = isooutrange(i,j,nx,ny)
+        isout1st,isout2nd = isoutrange(i,j,nx,ny)
 
         ##
         ## Central differences in Leung & Qian, 2006 scheme!

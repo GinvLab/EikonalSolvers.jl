@@ -39,8 +39,8 @@ function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64
     @assert size(coordsrc,2)==2
     @assert size(coordrec,2)==2
     @assert all(vel.>=0.0)
-    @assert all(grd.xinit.<coordsrc[:,1].<((grd.nx-1)*grd.hgrid+grd.xinit))
-    @assert all(grd.yinit.<coordsrc[:,2].<((grd.ny-1)*grd.hgrid+grd.yinit))
+    @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
+    @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
     
 
     nsrc = size(coordsrc,1)
@@ -150,7 +150,7 @@ end
 
 #################################################################################
 
-function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Array{Float64,1},grd::Grid2D; staggeredgrid::Bool )
+function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},grd::Grid2D; staggeredgrid::Bool )
     ## staggeredgrid keyword required!
     
     ## source location, etc.      
@@ -211,8 +211,8 @@ function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::A
                 ## grd.xinit-hgr because TIME array on STAGGERED grid
                 xp = (i-1)*grd.hgrid+grd.xinit-hgr
                 yp = (j-1)*grd.hgrid+grd.yinit-hgr
-                ii = i-1 #Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
-                jj = j-1 #Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1 # i-1
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1 # j-1            
                 #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
                 ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
             end
@@ -224,7 +224,7 @@ end
 
 #################################################################################
 
-function ttFS_podlec(vel::Array{Float64,2},src::Array{Float64,1},grd::Grid2D) 
+function ttFS_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
 
     epsilon = 1e-6
       
@@ -400,7 +400,7 @@ end ## ttFS_podlec
 
 ###############################################################################
 
-function ttFMM_podlec(vel::Array{Float64,2},src::Array{Float64,1},grd::Grid2D) 
+function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
  
     epsilon = 1e-6
       
@@ -582,7 +582,7 @@ end
 
 ##====================================================================##
 
-function calcttpt!(ttime::Array{Float64,2},ttlocmin::Array{Float64,1},inittt::Float64,
+function calcttpt!(ttime::Array{Float64,2},ttlocmin::Vector{Float64},inittt::Float64,
                   slowness::Array{Float64,2},grd::Grid2D,
                   cooa::Array{Int64,2},coob::Array{Int64,2},
                   coovin::Array{Int64,2},coovadj::Array{Int64,2},
@@ -666,7 +666,7 @@ end
 
 #########################################################################
 
-function ttFMM_hiord(vel::Array{Float64,2},src::Array{Float64,1},
+function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},
                        grd::Grid2D) 
  
     ## Sizes
@@ -1086,7 +1086,7 @@ end
     and then passed on to coarser grid
 """
 function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2},
-    vel::Array{Float64,2},src::Array{Float64,1},grdcoarse::Grid2D,inittt::Float64)
+    vel::Array{Float64,2},src::Vector{Float64},grdcoarse::Grid2D,inittt::Float64)
       
     ##
     ## 2x10 nodes -> 2x50 nodes
