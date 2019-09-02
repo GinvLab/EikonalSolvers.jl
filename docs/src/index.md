@@ -80,22 +80,17 @@ To get more than one processor, Julia can either be started with `julia -p <N>` 
 ## Example of forward calculations
 As an illustration in the following it is shown how to calculate traveltimes at receivers in 2D. 
 Let's start with a complete example:
+
 ```@example full
 using EikonalSolvers
-# grid spacing
-hgrid = 5.0
-# grid origin coordinates
-xinit,yinit = 0.0, 0.0 
-# grid size
-nx,ny = 300, 250
-# create the Grid2D struct
-grd = Grid2D(hgrid,xinit,yinit,nx,ny) 
-# coordinates of the sources (4 sources)
-coordsrc = [LinRange(10.0,200.0,4)  LinRange(200.0,250.0,4)]
-# coordinates of the receivers (10 receivers)
-coordrec = [LinRange(10.0,200.0,10)  LinRange(200.0,250.0,10)]
-# velocity model
-velmod = 2.5 .* ones(grd.nx,grd.ny) 
+hgrid = 5.0                   # grid spacing
+xinit,yinit = 0.0, 0.0        # grid origin coordinates
+nx,ny = 300, 250              # grid size
+grd = Grid2D(hgrid,xinit,yinit,nx,ny)                          # create the Grid2D struct
+coordsrc = [LinRange(10.0,200.0,4)  LinRange(200.0,250.0,4)]   # coordinates of the sources (4 sources)
+coordrec = [LinRange(10.0,200.0,10)  LinRange(200.0,250.0,10)] # coordinates of the receivers (10 receivers)
+velmod = 2.5 .* ones(grd.nx,grd.ny)                            # velocity model
+
 # run the traveltime computation with default algorithm ("ttFMM_hiord")
 ttimepicks = traveltime2D(velmod,grd,coordsrc,coordrec)
 nothing # hide
