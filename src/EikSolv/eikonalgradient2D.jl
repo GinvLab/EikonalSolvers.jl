@@ -950,27 +950,6 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
     
     lambda[i,j] = numer/denom
 
-    ###=================================================================================================================>>>>>>>>>>>>>
-    if isnan(lambda[i,j])
-        println("--------------------")
-        println("lambda contains a NaN")
-        @show i,j,onsrc[i,j]
-        @show thx,distHPx
-        @show xp,xsrc
-        @show dh
-        @show numer,denom
-        @show aforw,aback
-        @show bforw,bback
-        @show aforwplus,aforwminus
-        @show abackplus,abackminus
-        @show bforwplus,bforwminus
-        @show bbackplus,bbackminus
-        @show any(isnan.(tt))
-        println("--------------------")
-        #error("NaN in gradient ")
-    end
-    ###=================================================================================================================>>>>>>>>>>>>>
-
     return #lambda
 end
 
