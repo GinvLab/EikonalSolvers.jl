@@ -1,6 +1,8 @@
 # EikonalSolvers.jl
 
-A library to perform *seismic* traveltime computations by solving the eikonal equation in two (2D) and three dimensions (3D) with the possibility of computing the gradient of a misfit function with respect to the velocity model.
+Docs: <https://inverseproblem.github.io/EikonalSolvers.jl/latest>
+
+A library to perform __seismic traveltime__ computations by solving the eikonal equation in two (__2D__) and three dimensions (__3D__) with the possibility of computing the __gradient of a misfit function__ with respect to the velocity model.
 Different eikonal solvers are available, based either on the fast marching (FMM) method (1st and 2nd order) or the fast sweeping (FS) method for global updates with different local stencils. 
 
 Both forward and gradient (adjoint) computations are parallelised using Julia's distributed computing functions. The  parallelisation is "by source", distributing calculations for different seismic sources to different processors.
@@ -27,8 +29,7 @@ ttimepicks = traveltime2D(velmod,grd,coordsrc,coordrec)
 
 Optionally it is possible to retrieve also the traveltime at all grid points.
 ```
-ttalgo = "ttFMM_podlec"
-ttimepicks,ttimegrid = traveltime2D(velmod,grd,coordsrc,coordrec,algo=ttalgo,returntt=true)
+ttimepicks,ttimegrid = traveltime2D(velmod,grd,coordsrc,coordrec,returntt=true)
 ```
 ![ttarrays](docs/src/images/ttime-arrays.png)
 
