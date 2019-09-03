@@ -142,7 +142,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
         end
         
     end
-    
+
     return grad1
 end 
 
@@ -324,6 +324,62 @@ end
 
 #############################################################################
 
+function adjderivonsource(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64,j::Int64,
+                          xinit::Float64,yinit::Float64,dh::Float64,xsrc::Float64,ysrc::Float64)        
+
+        ## If we are in the square containing the source,
+        ## use real position of source for the derivatives.
+        ## Calculate tt on x and y on the edges of the square
+        ##  H is the projection of the point src onto X and Y
+        xp = Float64(i-1)*dh+xinit
+        yp = Float64(j-1)*dh+yinit
+        dist2src = dist2src = sqrt( (xp-xsrc)^2+(yp-ysrc)^2 )
+        ## distances P to src
+        distHPx = abs(xp-xsrc)
+        distHPy = abs(yp-ysrc)
+        ## Calculate the traveltime to hit the x side
+        ## time at H along x
+        thx = tt[i,j]*distHPy/dist2src
+        ## Calculate the traveltime to hit the y side
+        ## time at H along y
+        thy = tt[i,j]*distHPx/dist2src
+        
+        if onsrc[i+1,j]==true                            
+            aback = -(tt[i,j]-tt[i-1,j])/dh
+            if distHPx==0.0
+                aforw = 0.0 # point exactly on source
+            else
+                aforw = -(thx-tt[i,j])/distHPx # dist along x
+            end
+        elseif onsrc[i-1,j]==true
+            if distHPx==0.0
+                aback = 0.0 # point exactly on source
+            else
+                aback = -(tt[i,j]-thx)/distHPx # dist along x
+            end
+            aforw = -(tt[i+1,j]-tt[i,j])/dh
+        end
+        if onsrc[i,j+1]==true
+            bback = -(tt[i,j]-tt[i,j-1])/dh
+            if distHPy==0.0
+                bforw = 0.0 # point exactly on source
+            else
+                bforw = -(thy-tt[i,j])/distHPy # dist along y
+            end
+        else onsrc[i,j-1]==true
+            if distHPy==0.0
+                bback = 0.0 # point exactly on source
+            else
+                bback = -(tt[i,j]-thy)/distHPy # dist along y
+            end
+            bforw = -(tt[i,j+1]-tt[i,j])/dh
+        end
+
+    return aback,aforw,bback,bforw
+end
+
+#############################################################################
+
 function eikgrad_FS_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                          src::Vector{Float64},rec::Array{Float64,2},
                          grd::Grid2D,pickobs::Vector{Float64},
@@ -382,39 +438,9 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
             for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
                 for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
                                      
-                    if onsrc[i,j]==true 
+                    if onsrc[i,j]==true # in the box containing the src
 
-                        ## If we are in the square containing the source,
-                        ## use real position of source for the derivatives.
-                        ## Calculate tt on x and y on the edges of the square
-                        ##  H is the projection of the point src onto X and Y
-                        xp = Float64(i-1)*dh+xinit
-                        yp = Float64(j-1)*dh+yinit
-                        dist2src = dist2src = sqrt( (xp-xsrc)^2+(yp-ysrc)^2 )
-                        ## distances P to src
-                        distHPx = abs(xp-xsrc)
-                        distHPy = abs(yp-ysrc)
-                        ## Calculate the traveltime to hit the x side
-                        ## time at H along x
-                        thx = tt[i,j]*distHPy/dist2src
-                        ## Calculate the traveltime to hit the y side
-                        ## time at H along y
-                        thy = tt[i,j]*distHPx/dist2src
-                                                
-                        if onsrc[i+1,j]==true                            
-                            aback = -(tt[i,j] -tt[i-1,j])/dh
-                            aforw = -(thx     -tt[i,j])/distHPx # dist along x
-                        elseif onsrc[i-1,j]==true
-                            aback = -(tt[i,j]  -thx)/distHPx # dist along x
-                            aforw = -(tt[i+1,j]-tt[i,j])/dh
-                        end
-                        if onsrc[i,j+1]==true
-                            bback = -(tt[i,j] -tt[i,j-1])/dh
-                            bforw = -(thy     -tt[i,j])/distHPy # dist along y
-                        else onsrc[i,j-1]==true
-                            bback = -(tt[i,j]  -thy)/distHPy # dist along y
-                            bforw = -(tt[i,j+1]-tt[i,j])/dh
-                        end
+                        aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc)
                         
                     else # not on src
                         ## Leung & Qian, 2006 ( -deriv...)
@@ -642,41 +668,10 @@ function calcLAMBDA!(tt::Array{Float64,2},status::Array{Int64,2},onsrc::Array{Bo
                      onarec::Array{Bool,2},dh::Float64,xinit::Float64,yinit::Float64,
                      xsrc::Float64,ysrc::Float64,lambda::Array{Float64,2},i::Int64,j::Int64)
     
-    if onsrc[i,j]==true 
+    if onsrc[i,j]==true # in the box containing the src
 
-        ## If we are in the square containing the source,
-        ## use real position of source for the derivatives.
-        ## Calculate tt on x and y on the edges of the square
-        ##  H is the projection of the point src onto X and Y
-        xp = Float64(i-1)*dh+xinit
-        yp = Float64(j-1)*dh+yinit
-        dist2src = dist2src = sqrt( (xp-xsrc)^2+(yp-ysrc)^2 )
-        ## distances P to src
-        distHPx = abs(xp-xsrc)
-        distHPy = abs(yp-ysrc)
-        ## Calculate the traveltime to hit the x side
-        ## time at H along x
-        thx = tt[i,j]*distHPy/dist2src
-        ## Calculate the traveltime to hit the y side
-        ## time at H along y
-        thy = tt[i,j]*distHPx/dist2src
+        aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc)
         
-        if onsrc[i+1,j]==true                            
-            aback = -(tt[i,j] -tt[i-1,j])/dh
-            aforw = -(thx     -tt[i,j])/distHPx # dist along x
-        elseif onsrc[i-1,j]==true
-            aback = -(tt[i,j]  -thx)/distHPx # dist along x
-            aforw = -(tt[i+1,j]-tt[i,j])/dh
-        end
-        if onsrc[i,j+1]==true
-            bback = -(tt[i,j] -tt[i,j-1])/dh
-            bforw = -(thy     -tt[i,j])/distHPy # dist along y
-        else onsrc[i,j-1]==true
-            bback = -(tt[i,j]  -thy)/distHPy # dist along y
-            bforw = -(tt[i,j+1]-tt[i,j])/dh
-        end
-
-
     else # not on src
         aback = -(tt[i,j]  -tt[i-1,j])/dh
         aforw = -(tt[i+1,j]-tt[i,j])/dh
@@ -840,7 +835,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
         # set lambda of the new accepted point
         calcLAMBDA_hiord!(tt,status,onsrc,onarec,dh,
                             xinit,yinit,xsrc,ysrc,lambda,ia,ja)
-        
+
         ## try all neighbors of newly accepted point
         for ne=1:4 
             i = ia + neigh[ne,1]
@@ -870,7 +865,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
                                
     ## *NOT* a staggered grid, so no interpolation...
     gradadj = -lambda./vel.^3
-        
+
     return gradadj
 end # eikadj_FMM_hiord_SINGLESRC  
 
@@ -898,40 +893,9 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
                              dh::Float64,xinit::Float64,yinit::Float64,
                              xsrc::Float64,ysrc::Float64,lambda::Array{Float64,2},i::Int64,j::Int64)
 
-    if onsrc[i,j]==true 
+    if onsrc[i,j]==true #  in the box containing the src
 
-        ## If we are in the square containing the source,
-        ## use real position of source for the derivatives.
-        ## Calculate tt on x and y on the edges of the square
-        ##  H is the projection of the point src onto X and Y
-        xp = Float64(i-1)*dh+xinit
-        yp = Float64(j-1)*dh+yinit
-        dist2src = dist2src = sqrt( (xp-xsrc)^2+(yp-ysrc)^2 )
-        ## distances P to src
-        distHPx = abs(xp-xsrc)
-        distHPy = abs(yp-ysrc)
-        ## Calculate the traveltime to hit the x side
-        ## time at H along x
-        thx = tt[i,j]*distHPy/dist2src
-        ## Calculate the traveltime to hit the y side
-        ## time at H along y
-        thy = tt[i,j]*distHPx/dist2src
-        
-        if onsrc[i+1,j]==true                            
-            aback = -(tt[i,j] -tt[i-1,j])/dh
-            aforw = -(thx     -tt[i,j])/distHPx # dist along x
-        elseif onsrc[i-1,j]==true
-            aback = -(tt[i,j]  -thx)/distHPx # dist along x
-            aforw = -(tt[i+1,j]-tt[i,j])/dh
-        end
-        if onsrc[i,j+1]==true
-            bback = -(tt[i,j] -tt[i,j-1])/dh
-            bforw = -(thy     -tt[i,j])/distHPy # dist along y
-        else onsrc[i,j-1]==true
-            bback = -(tt[i,j]  -thy)/distHPy # dist along y
-            bforw = -(tt[i,j+1]-tt[i,j])/dh
-        end
-
+        aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc)
 
     else # not on src
 
@@ -985,6 +949,28 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
     ##================================================
     
     lambda[i,j] = numer/denom
+
+    ###=================================================================================================================>>>>>>>>>>>>>
+    if isnan(lambda[i,j])
+        println("--------------------")
+        println("lambda contains a NaN")
+        @show i,j,onsrc[i,j]
+        @show thx,distHPx
+        @show xp,xsrc
+        @show dh
+        @show numer,denom
+        @show aforw,aback
+        @show bforw,bback
+        @show aforwplus,aforwminus
+        @show abackplus,abackminus
+        @show bforwplus,bforwminus
+        @show bbackplus,bbackminus
+        @show any(isnan.(tt))
+        println("--------------------")
+        #error("NaN in gradient ")
+    end
+    ###=================================================================================================================>>>>>>>>>>>>>
+
     return #lambda
 end
 

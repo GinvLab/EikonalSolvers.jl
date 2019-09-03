@@ -357,6 +357,84 @@ function recboxlocgrad!(ttime::Array{Float64,3},lambda::Array{Float64,3},ttpicks
     return onarec
 end
 
+###################################################################################################
+
+function adjderivonsource(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64,j::Int64,k::Int64,
+                          xinit::Float64,yinit::Float64,zinit::Float64,
+                          dh::Float64,xsrc::Float64,ysrc::Float64,zsrc::Float64)
+
+    ## If we are in the square containing the source,
+    ## use real position of source for the derivatives.
+    ## Calculate tt on x and y on the edges of the square
+    ##  H is the projection of the point src onto X, Y and Z edges
+    xp = Float64(i-1)*dh+xinit
+    yp = Float64(j-1)*dh+yinit
+    zp = Float64(k-1)*dh+zinit
+
+    distPSx = abs(xp-xsrc) ## abs needed for later...
+    distPSy = abs(yp-ysrc)
+    distPSz = abs(zp-zsrc)
+    dist2src = sqrt(distPSx^2+distPSy^2+distPSz^2)
+
+    ## Calculate the traveltime to hit the x edge
+    ## time at H along x
+    thx = tt[i,j,k]*(sqrt(distPSy^2+distPSz^2))/dist2src
+    ## Calculate the traveltime to hit the y edge
+    ## time at H along y
+    thy = tt[i,j,k]*(sqrt(distPSx^2+distPSz^2))/dist2src
+    ## Calculate the traveltime to hit the z edge
+    ## time at H along z
+    thz = tt[i,j,k]*(sqrt(distPSx^2+distPSy^2))/dist2src
+    
+    if onsrc[i+1,j,k]==true              
+        aback = -(tt[i,j,k]-tt[i-1,j,k])/dh
+        if distPSx==0.0
+            aforw = 0.0 # point exactly on source
+        else
+            aforw = -(thx-tt[i,j,k])/distPSx # dist along x
+        end
+    elseif onsrc[i-1,j,k]==true
+        if distPSx==0.0
+            aback = 0.0 # point exactly on source
+        else
+            aback = -(tt[i,j,k]-thx)/distPSx # dist along x
+        end
+        aforw = -(tt[i+1,j,k]-tt[i,j,k])/dh
+    end
+    if onsrc[i,j+1,k]==true
+        bback = -(tt[i,j,k]-tt[i,j-1,k])/dh
+        if distPSy==0.0
+            bforw = 0.0 # point exactly on source
+        else
+            bforw = -(thy-tt[i,j,k])/distPSy # dist along y
+        end
+    else onsrc[i,j-1,k]==true
+        if distPSy==0.0
+            bback = 0.0 # point exactly on source
+        else        
+            bback = -(tt[i,j,k]-thy)/distPSy # dist along y
+        end
+        bforw = -(tt[i,j+1,k]-tt[i,j,k])/dh
+    end
+    if onsrc[i,j,k+1]==true     
+        cback = -(tt[i,j,k]-tt[i,j,k-1])/dh
+        if distPSz==0.0
+            cforw = 0.0 # point exactly on source
+        else        
+            cforw = -(thz-tt[i,j,k])/distPSz # dist along z
+        end
+    elseif onsrc[i,j,k-1]==true
+        if distPSz==0.0
+            cback = 0.0 # point exactly on source
+        else        
+            cback = -(tt[i,j,k]-thz)/distPSz # dist along z
+        end
+        cforw = -(tt[i,j,k+1]-tt[i,j,k])/dh
+    end
+
+    return  aback,aforw,bback,bforw,cback,cforw
+end
+
 ############################################################################
 
 function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
@@ -401,111 +479,6 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     onarec = recboxlocgrad!(tt,lambdaold,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
 
     xsrc,ysrc,zsrc = src[1],src[2],src[3]
-
-
-    # ## grd.xinit-hgr because TIME array on STAGGERED grid
-    # hgr = grd.hgrid/2.0
-    # ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-    # rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
-    # ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-    # rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
-    # #@show dist,src,rx,ry
-    # onsrc = zeros(Bool,nx,ny,nz)
-    # onsrc[:,:,:] .= false    
-    # halfg = 0.0
-
-    # #@show xsrc,ysrc,zsrc,rx,ry,rz
-    
-    # src_on_nodeedge = false
-    # max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
-    # max_y = (grd.nty-1)*grd.hgrid+grd.yinit
-    # max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
-    # ## loop to make sure we don't accidentally move the src to another node/edge
-    # while (sqrt(rx^2+ry^2+rz^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
-    #     src_on_nodeedge = true
-        
-    #     ## shift the source 
-    #     if xsrc < max_x-0.002*dh
-    #         xsrc = xsrc+0.001*dh
-    #     else #(make sure it's not already at the bottom y)
-    #         xsrc = xsrc-0.001*dh
-    #     end
-    #     if ysrc < max_y-0.002*dh
-    #         ysrc = ysrc+0.001*dh
-    #     else #(make sure it's not already at the bottom y)
-    #         ysrc = ysrc-0.001*dh
-    #     end
-    #     if zsrc < max_z-0.002*dh
-    #         zsrc = zsrc+0.001*dh
-    #     else #(make sure it's not already at the bottom y)
-    #         zsrc = zsrc-0.001*dh
-    #     end
-
-    #     # print("new time at src:  $(tt[ix,iy]) ")
-    #     ## recompute parameters related to position of source
-    #     ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-    #     rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-    #     ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-    #     rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
-
-    #     #@show xsrc,ysrc,zsrc,rx,ry,rz
-    # end
-
-    
-    # ## To avoid singularities, the src can only be inside a box,
-    # ##  not on a grid node or edge... see above. So we need to have
-    # ##  always 8 nodes (corners) where onsrc is true
-    # if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-    #     onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-    # elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-    #     onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-    # elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-    #     onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-    # elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-    #     onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
-
-    # elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-    #     onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-    # elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-    #     onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-    # elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-    #     onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-    # elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-    #     onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
-    # end
-
-    # ## if src on node or edge, recalculate traveltimes in box
-    # if src_on_nodeedge==true
-    #     ## RE-set a new ttime around source 
-    #     # isrc,jsrc,ksrc = ind2sub(size(onsrc),find(onsrc))
-    #     ijksrc = findall(onsrc)
-    #     for lcart in ijksrc
-    #         i = lcart[1]
-    #         j = lcart[2]
-    #         k = lcart[3]
-    #         xp = (i-1)*grd.hgrid+grd.xinit
-    #         yp = (j-1)*grd.hgrid+grd.yinit
-    #         zp = (k-1)*grd.hgrid+grd.zinit
-    #         ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-    #         jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-    #         kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-    #         #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-    #         ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-    #         ##println("$i $j $j  $xp $yp $zp")
-    #     end
-    # end
-
-    # ## init receivers
-    # nrec=size(rec,1)
-    # for r=1:nrec
-    #     i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,3],xinit,yinit,zinit,grd.hgrid)
-    #     onarec[i,j,k] = true
-    #     dtonarec[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
-    #     lambdaold[i,j,k] = dtonarec[i,j,k]
-    #     #@show r,i,j,k
-    # end
-  
-    ######################################################
  
     ##============================================================================
 
@@ -533,55 +506,12 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
                 for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
                     for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
                         
-                        if onsrc[i,j,k]==true
+                        if onsrc[i,j,k]==true # in the box containing the src
 
-                                                        
-                            ## If we are in the square containing the source,
-                            ## use real position of source for the derivatives.
-                            ## Calculate tt on x and y on the edges of the square
-                            ##  H is the projection of the point src onto X, Y and Z edges
-                            xp = Float64(i-1)*dh+xinit
-                            yp = Float64(j-1)*dh+yinit
-                            zp = Float64(k-1)*dh+zinit
-
-                            distPSx = abs(xp-xsrc) ## abs needed for later...
-                            distPSy = abs(yp-ysrc)
-                            distPSz = abs(zp-zsrc)
-                            dist2src = sqrt(distPSx^2+distPSy^2+distPSz^2)
-
-                            ## Calculate the traveltime to hit the x edge
-                            ## time at H along x
-                            thx = tt[i,j,k]*(sqrt(distPSy^2+distPSz^2))/dist2src
-                            ## Calculate the traveltime to hit the y edge
-                            ## time at H along y
-                            thy = tt[i,j,k]*(sqrt(distPSx^2+distPSz^2))/dist2src
-                            ## Calculate the traveltime to hit the z edge
-                            ## time at H along z
-                            thz = tt[i,j,k]*(sqrt(distPSx^2+distPSy^2))/dist2src
-                            
-                            if onsrc[i+1,j,k]==true              
-                                aback = -(tt[i,j,k]  -tt[i-1,j,k])/dh
-                                aforw = -(thx     -tt[i,j,k])/distPSx
-                            elseif onsrc[i-1,j,k]==true
-                                aback = -(tt[i,j,k]  -thx)/distPSx
-                                aforw = -(tt[i+1,j,k]-tt[i,j,k])/dh
-                            end
-                            if onsrc[i,j+1,k]==true
-                                bback = -(tt[i,j,k]  -tt[i,j-1,k])/dh
-                                bforw = -(thy     -tt[i,j,k])/distPSy
-                            else onsrc[i,j-1,k]==true
-                                bback = -(tt[i,j,k]  -thy)/distPSy 
-                                bforw = -(tt[i,j+1,k]-tt[i,j,k])/dh
-                            end
-                            if onsrc[i,j,k+1]==true     
-                                cback = -(tt[i,j,k]  -tt[i,j,k-1])/dh
-                                cforw = -(thz      -tt[i,j,k])/distPSz
-                            elseif onsrc[i,j,k-1]==true
-                                cback = -(tt[i,j,k]  -thz)/distPSz
-                                cforw = -(tt[i,j,k+1]-tt[i,j,k])/dh
-                            end
+                            aback,aforw,bback,bforw,cback,cforw = adjderivonsource(tt,onsrc,i,j,k,xinit,yinit,zinit,dh,xsrc,ysrc,zsrc)
                             
                         else
+
                             ## along x
                             aback = -(tt[i,j,k]  -tt[i-1,j,k])/dh
                             aforw = -(tt[i+1,j,k]-tt[i,j,k])/dh
@@ -860,54 +790,10 @@ function calcLAMBDA!(tt::Array{Float64,3},status::Array{Int64,3},onsrc::Array{Bo
                      lambda::Array{Float64,3},i::Int64,j::Int64,k::Int64)
 
     
-    if onsrc[i,j,k]==true 
+    if onsrc[i,j,k]==true # in the box containing the src
 
-        
-        ## If we are in the square containing the source,
-        ## use real position of source for the derivatives.
-        ## Calculate tt on x and y on the edges of the square
-        ##  H is the projection of the point src onto X, Y and Z edges
-        xp = Float64(i-1)*dh+xinit
-        yp = Float64(j-1)*dh+yinit
-        zp = Float64(k-1)*dh+zinit
+        aback,aforw,bback,bforw,cback,cforw = adjderivonsource(tt,onsrc,i,j,k,xinit,yinit,zinit,dh,xsrc,ysrc,zsrc)
 
-        distPSx = abs(xp-xsrc) ## abs needed for later...
-        distPSy = abs(yp-ysrc)
-        distPSz = abs(zp-zsrc)
-        dist2src = sqrt(distPSx^2+distPSy^2+distPSz^2)
-
-        ## Calculate the traveltime to hit the x edge
-        ## time at H along x
-        thx = tt[i,j,k]*(sqrt(distPSy^2+distPSz^2))/dist2src
-        ## Calculate the traveltime to hit the y edge
-        ## time at H along y
-        thy = tt[i,j,k]*(sqrt(distPSx^2+distPSz^2))/dist2src
-        ## Calculate the traveltime to hit the z edge
-        ## time at H along z
-        thz = tt[i,j,k]*(sqrt(distPSx^2+distPSy^2))/dist2src
-        
-        if onsrc[i+1,j,k]==true              
-            aback = -(tt[i,j,k]  -tt[i-1,j,k])/dh
-            aforw = -(thx     -tt[i,j,k])/distPSx # dist along x
-        elseif onsrc[i-1,j,k]==true
-            aback = -(tt[i,j,k]  -thx)/distPSx # dist along x
-            aforw = -(tt[i+1,j,k]-tt[i,j,k])/dh
-        end
-        if onsrc[i,j+1,k]==true
-            bback = -(tt[i,j,k]  -tt[i,j-1,k])/dh
-            bforw = -(thy     -tt[i,j,k])/distPSy # dist along y
-        else onsrc[i,j-1,k]==true
-            bback = -(tt[i,j,k]  -thy)/distPSy # dist along y
-            bforw = -(tt[i,j+1,k]-tt[i,j,k])/dh
-        end
-        if onsrc[i,j,k+1]==true     
-            cback = -(tt[i,j,k]  -tt[i,j,k-1])/dh
-            cforw = -(thz      -tt[i,j,k])/distPSz # dist along z
-        elseif onsrc[i,j,k-1]==true
-            cback = -(tt[i,j,k]  -thz)/distPSz # dist along z
-            cforw = -(tt[i,j,k+1]-tt[i,j,k])/dh
-        end
-        
     else # not on src
         
         ## along x
@@ -992,112 +878,6 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
 
     xsrc,ysrc,zsrc = src[1],src[2],src[3]
 
-    # ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-    # rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-    # ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-    # rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
-    # #@show dist,src,rx,ry
-    # onsrc = zeros(Bool,nx,ny,nz)
-    # onsrc[:,:,:] .= false    
-    # halfg = 0.0
-    
-    # src_on_nodeedge = false
-    # max_x = (grd.ntx-1)*grd.hgrid+grd.xinit
-    # max_y = (grd.nty-1)*grd.hgrid+grd.yinit
-    # max_z = (grd.ntz-1)*grd.hgrid+grd.zinit
-
-    # ## loop to make sure we don't accidentally move the src to another node/edge
-    # while (sqrt(rx^2+ry^2+rz^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
-    #     src_on_nodeedge = true
-        
-    #     ## shift the source 
-    #     if xsrc < max_x-0.002*dh
-    #         xsrc = xsrc+0.001*dh
-    #     else #(make sure it's not already at the bottom y)
-    #         xsrc = xsrc-0.001*dh
-    #     end
-    #     if ysrc < max_y-0.002*dh
-    #         ysrc = ysrc+0.001*dh
-    #     else #(make sure it's not already at the bottom y)
-    #         ysrc = ysrc-0.001*dh
-    #     end
-    #     if zsrc < max_z-0.002*dh
-    #         zsrc = zsrc+0.001*dh
-    #     else #(make sure it's not already at the bottom z)
-    #         zsrc = zsrc-0.001*dh
-    #     end
-
-    #     # print("new time at src:  $(tt[ix,iy]) ")
-    #     ## recompute parameters related to position of source
-    #     ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-    #     rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-    #     ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-    #     rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)        
-
-    # end
-
-    # ## To avoid singularities, the src can only be inside a box,
-    # ##  not on a grid node or edge... see above. So we need to have
-    # ##  always 4 nodes where onsrc is true
-    # if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-    #     onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-    # elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-    #     onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-    # elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-    #     onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-    # elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-    #     onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
-
-    # elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-    #     onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-    # elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-    #     onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-    # elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-    #     onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-    # elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-    #     onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
-    # end
-
-
-    # ## if src on node or edge, recalculate traveltimes in box
-    # if src_on_nodeedge==true
-    #     ## RE-set a new ttime around source 
-    #     #isrc,jsrc = ind2sub(size(onsrc),find(onsrc))
-    #     ijksrc = findall(onsrc)
-    #     # println(" set time around src $isrc  $jsrc $ksrc") 
-    #     #for (k,j,i) in zip(ksrc,jsrc,isrc)
-    #     for lcart in ijksrc
-    #         # for j in jsrc
-    #         #     for i in isrc
-    #         i = lcart[1]
-    #         j = lcart[2]
-    #         k = lcart[3]
-    #         xp = (i-1)*grd.hgrid+grd.xinit
-    #         yp = (j-1)*grd.hgrid+grd.yinit
-    #         zp = (k-1)*grd.hgrid+grd.zinit
-    #         ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-    #         jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-    #         kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-    #         #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-    #         ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-    #     end
-    # end# 
-        
-    # ##-------------------------------------------
-    # ## init receivers
-    # nrec=size(rec,1)
-    # for r=1:nrec
-    #     i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,2],grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
-    #     if (i==1) || (i==ntx) || (j==1) || (j==nty) || (k==1) || (k==ntz)
-    #         println(" Receiver on border of model (i==1)||(i==ntx)||(j==1)||(j==nty || (k==1) || (k==ntz))")
-    #         println(" Not yet implemented...")
-    #         return nothing
-    #     end
-    #     onarec[i,j,k] = true
-    #     ##dtonarec[i,j] = (ttpicks[r]-pickobs[r])/stdobs^2
-    #     lambda[i,j,k] = (ttpicks[r]-pickobs[r])/stdobs^2
-    # end
-  
     ######################################################
     #-------------------------------
     ## init FMM 
@@ -1251,53 +1031,10 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},
                            xsrc::Float64,ysrc::Float64,zsrc::Float64,lambda::Array{Float64,3},
                            i::Int64,j::Int64,k::Int64)
 
-    if onsrc[i,j,k]==true 
-        
-        ## If we are in the square containing the source,
-        ## use real position of source for the derivatives.
-        ## Calculate tt on x and y on the edges of the square
-        ##  H is the projection of the point src onto X, Y and Z edges
-        xp = Float64(i-1)*dh+xinit
-        yp = Float64(j-1)*dh+yinit
-        zp = Float64(k-1)*dh+zinit
+    if onsrc[i,j,k]==true # in the box containing the src
 
-        distPSx = abs(xp-xsrc) ## abs needed for later...
-        distPSy = abs(yp-ysrc)
-        distPSz = abs(zp-zsrc)
-        dist2src = sqrt(distPSx^2+distPSy^2+distPSz^2)
+        aback,aforw,bback,bforw,cback,cforw = adjderivonsource(tt,onsrc,i,j,k,xinit,yinit,zinit,dh,xsrc,ysrc,zsrc)
 
-        ## Calculate the traveltime to hit the x edge
-        ## time at H along x
-        thx = tt[i,j,k]*(sqrt(distPSy^2+distPSz^2))/dist2src
-        ## Calculate the traveltime to hit the y edge
-        ## time at H along y
-        thy = tt[i,j,k]*(sqrt(distPSx^2+distPSz^2))/dist2src
-        ## Calculate the traveltime to hit the z edge
-        ## time at H along z
-        thz = tt[i,j,k]*(sqrt(distPSx^2+distPSy^2))/dist2src
-        
-        if onsrc[i+1,j,k]==true              
-            aback = -(tt[i,j,k]  -tt[i-1,j,k])/dh
-            aforw = -(thx     -tt[i,j,k])/distPSx # dist along x
-        elseif onsrc[i-1,j,k]==true
-            aback = -(tt[i,j,k]  -thx)/distPSx # dist along x
-            aforw = -(tt[i+1,j,k]-tt[i,j,k])/dh
-        end
-        if onsrc[i,j+1,k]==true
-            bback = -(tt[i,j,k]  -tt[i,j-1,k])/dh
-            bforw = -(thy     -tt[i,j,k])/distPSy # dist along y
-        else onsrc[i,j-1,k]==true
-            bback = -(tt[i,j,k]  -thy)/distPSy # dist along y
-            bforw = -(tt[i,j+1,k]-tt[i,j,k])/dh
-        end
-        if onsrc[i,j,k+1]==true     
-            cback = -(tt[i,j,k]  -tt[i,j,k-1])/dh
-            cforw = -(thz      -tt[i,j,k])/distPSz # dist along z
-        elseif onsrc[i,j,k-1]==true
-            cback = -(tt[i,j,k]  -thz)/distPSz # dist along z
-            cforw = -(tt[i,j,k+1]-tt[i,j,k])/dh
-        end
-        
     else # not on src
 
         nx,ny,nz = size(lambda)
