@@ -8,6 +8,7 @@ Both forward and gradient (adjoint) computations are parallelised using Julia's 
 
 ## Example of forward calculations in 2D
 
+Here below an example of how to calculate traveltimes at receiver stations in 2D, given a grid geometry and positions of sources and receivers.
 ```
 using EikonalSolvers
 hgrid = 5.0                   # grid spacing
@@ -21,3 +22,22 @@ velmod = 2.5 .* ones(grd.nx,grd.ny)                            # velocity model
 # run the traveltime computation with default algorithm ("ttFMM_hiord")
 ttimepicks = traveltime2D(velmod,grd,coordsrc,coordrec)
 ```
+
+![velmodttpicks](docs/src/images/velmod-ttpicks.png)
+
+Optionally it is possible to retrieve also the traveltime at all grid points.
+```
+ttalgo = "ttFMM_podlec"
+ttimepicks,ttimegrid = traveltime2D(velmod,grd,coordsrc,coordrec,algo=ttalgo,returntt=true)
+```
+![ttarrays](docs/src/images/ttime-arrays.png)
+
+
+## Example of gradient calculations in 2D
+
+The gradient of the misfit functional (see documentation) with respect to velocity can be calculated as following. A set of observed traveltimes, error on the measuraments and a reference velocity model are also required.
+```
+# calculate the gradient of the misfit function
+grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs)
+```
+![ttarrays](docs/src/images/gradient.png)

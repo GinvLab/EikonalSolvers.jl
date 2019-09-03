@@ -192,7 +192,11 @@ nothing # hide
 Now we can finally compute the gradient of the misfit functional (see above) at a given point, i.e., the gradient is computed at a given velocity model: ``\dfrac{\partial S}{\partial \mathbf{v}} \Big|_{\mathbf{v}_0}``.
 ```@example grad1
 # create a guess/"current" model 
-vel0 = 2.8 .+ zeros(grd.nx,grd.ny) 
+vel0 = 2.3 .* ones(grd.nx,grd.ny) 
+# increasing velocity with depth...
+for i=1:ny
+   vel0[:,i] = 0.015 * i .+ vel0[:,i]
+end
     
 # calculate the gradient of the misfit function
 grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs)
