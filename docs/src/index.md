@@ -93,13 +93,13 @@ Let's start with a complete example:
 
 ```@example full
 using EikonalSolvers
-hgrid = 5.0                   # grid spacing
+hgrid = 0.5                   # grid spacing
 xinit,yinit = 0.0, 0.0        # grid origin coordinates
-nx,ny = 300, 250              # grid size
-grd = Grid2D(hgrid,xinit,yinit,nx,ny)                          # create the Grid2D struct
-coordsrc = [LinRange(10.0,200.0,4)  LinRange(200.0,250.0,4)]   # coordinates of the sources (4 sources)
-coordrec = [LinRange(10.0,200.0,10)  LinRange(200.0,250.0,10)] # coordinates of the receivers (10 receivers)
-velmod = 2.5 .* ones(grd.nx,grd.ny)                            # velocity model
+nx,ny = 300, 220              # grid size
+grd = Grid2D(hgrid,xinit,yinit,nx,ny)                              # create the Grid2D struct
+coordsrc = [hgrid.*LinRange(10.0,290.0,4)   hgrid.*200.0.*ones(4)] # coordinates of the sources (4 sources)
+coordrec = [hgrid.*LinRange(8.0,200.0,10)  hgrid.*20.0.*ones(10)] # coordinates of the receivers (10 receivers)
+velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
 
 # run the traveltime computation with default algorithm ("ttFMM_hiord")
 ttimepicks = traveltime2D(velmod,grd,coordsrc,coordrec)
@@ -114,30 +114,34 @@ First of we have to import the module and define the parameters of the grid usin
 ```@example parts
 using EikonalSolvers
 
-hgrid = 5.0            # grid spacing
+hgrid = 0.5            # grid spacing
 xinit,yinit = 0.0, 0.0 # grid origin coordinates
-nx,ny = 300, 250       # grid size
+nx,ny = 300, 220       # grid size
 grd = Grid2D(hgrid,xinit,yinit,nx,ny) # create the Grid2D struct
 ```
 Then define the coordinates of the sources, a two-column array (since we are in 2D) representing the \$x\$ and \$y\$ coordinates
 ```@example parts
-coordsrc = [LinRange(10.0,200.0,4)  LinRange(200.0,250.0,4)]
+coordsrc = [hgrid.*LinRange(10.0,290.0,4)   hgrid.*200.0.*ones(4)] 
 ```
 and the receivers, again a two-column array (since we are in 2D) representing the \$x\$ and \$y\$ coordinates
 ```@example parts
-coordrec = [LinRange(10.0,200.0,10)  LinRange(200.0,250.0,10)]
+coordrec = [hgrid.*LinRange(8.0,200.0,10)  hgrid.*20.0.*ones(10)] 
 ```
 The velocity model is defined as a 2D array with size (`grd.nx` \$\times\$ `grd.ny`)
 ```@example parts
 velmod = 2.5 .* ones(grd.nx,grd.ny) 
 # increasing velocity with depth...
-for i=1:nx 
-  velmod[i,:] = 0.034 * i .+ velmod[i,:] 
+for i=1:ny 
+  velmod[:,i] = 0.034 * i .+ velmod[:,i] 
 end
 ```
 Finally, the traveltime at receivers is computed, where the default algorithm is used ("ttFMM\_hiord")
 ```@example parts
 ttimepicks = traveltime2D(velmod,grd,coordsrc,coordrec)
+nothing # hide
+```
+![velmodttpicks](./images/velmod-ttpicks.png)
+```@example parts
 ttimepicks
 ```
 To use a diffent algorithm and to additionally return the traveltime everywhere on the grid do
@@ -146,6 +150,7 @@ ttalgo = "ttFMM_podlec"
 ttimepicks,ttimegrid = traveltime2D(velmod,grd,coordsrc,coordrec,algo=ttalgo,returntt=true)
 nothing # hide
 ```
+![ttarrays](./images/ttime-arrays.png)
 The resulting traveltime array on the grid is returned as a three-dimensional array, containing a set of two-dimensional arrays, one for each source.
 ```@example parts
 ttimegrid
@@ -157,13 +162,17 @@ ttimegrid
 Here a synthetic example of 2D gradient computations is illustrated. In reality, traveltime data are "measured" from recorded seismograms, however, here we first create some synthetic "observed" traveltimes using a synthetic velocity model. First the grid and velocity model are set up, then forward calculations are performed, as in the section above [Example of forward calculations](@ref).
 ```@example grad1
 using EikonalSolvers
-hgrid = 5.0                   # grid spacing
+hgrid = 0.5                   # grid spacing
 xinit,yinit = 0.0, 0.0        # grid origin coordinates
-nx,ny = 300, 250              # grid size
-grd = Grid2D(hgrid,xinit,yinit,nx,ny)                          # create the Grid2D struct
-coordsrc = [LinRange(10.0,200.0,4)  LinRange(200.0,250.0,4)]   # coordinates of the sources (4 sources)
-coordrec = [LinRange(10.0,200.0,10)  LinRange(200.0,250.0,10)] # coordinates of the receivers (10 receivers)
-velmod = 2.5 .* ones(grd.nx,grd.ny)                            # velocity model
+nx,ny = 300, 220              # grid size
+grd = Grid2D(hgrid,xinit,yinit,nx,ny)                              # create the Grid2D struct
+coordsrc = [hgrid.*LinRange(10.0,290.0,4)   hgrid.*200.0.*ones(4)] # coordinates of the sources (4 sources)
+coordrec = [hgrid.*LinRange(8.0,200.0,10)  hgrid.*20.0.*ones(10)] # coordinates of the receivers (10 receivers)
+velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
+# increasing velocity with depth...
+for i=1:ny 
+  velmod[:,i] = 0.034 * i .+ velmod[:,i] 
+end
 
 # run the traveltime computation with default algorithm ("ttFMM_hiord")
 ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
@@ -189,6 +198,7 @@ vel0 = 2.8 .+ zeros(grd.nx,grd.ny)
 grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs)
 nothing # hide
 ```	
+![ttarrays](./images/gradient.png)
 The calculated gradient is an array with the same shape than the velocity model.
 ```@example grad1
 grad

@@ -1,19 +1,19 @@
 
 
-#push!(LOAD_PATH,"../src/")
-
 using Documenter, EikonalSolvers 
 
 #modules = [EikonalSolvers],
 makedocs(modules = [EikonalSolvers],
-         repo = "../../{path}",
+         #repo = "../../{path}",
          sitename="EikonalSolvers.jl",
          authors = "Andrea Zunino",
          format = Documenter.HTML(prettyurls=get(ENV,"CI",nothing)=="true"),
          pages = [
-             "User guide" => "index.md",
+             "Home" => "index.md",
              "API" => "publicapi.md"
          ]
          )
 
-#deploydocs(repo="github.com/inverseproblem/EikonalSolvers.jl.git",target="build")
+deploydocs(
+    repo="github.com/inverseproblem/EikonalSolvers.jl.git",
+)
