@@ -3,12 +3,16 @@
 language: julia
 os:
   - linux
+  - osx
   
 julia:
   - nightly
   - 1.2
   - 1.0
-  
+    
+after_success:
+  - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
+
 jobs:
   include:
     - stage: "Documentation"
