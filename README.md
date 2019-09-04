@@ -52,6 +52,6 @@ grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs)
 
 Calculations in 3D are analogous to the 2D function, see the documentation at <https://inverseproblem.github.io/EikonalSolvers.jl/stable>.
 
-<img src="docs/src/images/examplegrad3D.png" alt="Example gradient 3D" width="550"/>
+<img src="docs/src/images/examplegrad3D.png" alt="Example gradient 3D" width="400"/>
 
 <!-- ![examplegrad3D](docs/src/images/examplegrad3D.png) -->
