@@ -47,3 +47,11 @@ The gradient of the misfit functional (see documentation) with respect to veloci
 grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs)
 ```
 ![ttarrays](docs/src/images/gradient.png)
+
+# Calculations in 3D 
+
+Calculations in 3D are analogous to the 2D function, see the documentation at <https://inverseproblem.github.io/EikonalSolvers.jl/stable>.
+
+<img src="docs/src/images/examplegrad3D.png" alt="Example gradient 3D" width="550"/>
+
+<!-- ![examplegrad3D](docs/src/images/examplegrad3D.png) -->
