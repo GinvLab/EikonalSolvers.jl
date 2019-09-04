@@ -1,5 +1,8 @@
 # EikonalSolvers.jl
 
+[![Build Status](https://travis-ci.com/inverseproblem/EikonalSolvers.jl.svg?branch=master)](https://travis-ci.com/inverseproblem/EikonalSolvers.jl)
+
+
 Docs: <https://inverseproblem.github.io/EikonalSolvers.jl/latest>
 
 A library to perform __seismic traveltime__ computations by solving the eikonal equation in two (__2D__) and three dimensions (__3D__) with the possibility of computing the __gradient of a misfit function__ with respect to the velocity model.
