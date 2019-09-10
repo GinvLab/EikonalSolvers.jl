@@ -21,10 +21,10 @@ Calculate the misfit functional
 function misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},
                     stdobs::Vector{Float64})
 
-    if ndims(velmod==2)
+    if ndims(velmod)==2
         # compute the forward response
         ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
-    elseif ndims(velmod==3)
+    elseif ndims(velmod)==3
         # compute the forward response
         ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
     else
