@@ -2,7 +2,7 @@
 #######################################################
 ##        Eikonal utilities                          ## 
 #######################################################
-"""
+@doc raw"""
      misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},stdobs::Vector{Float64})
 
 Calculate the misfit functional 
