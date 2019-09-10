@@ -29,7 +29,6 @@ using Distributed
 include("BinHeap/BinHeaps.jl")
 using .BinHeaps
 
-
 ## general utils
 include("EikSolv/eikonalutils.jl")
 

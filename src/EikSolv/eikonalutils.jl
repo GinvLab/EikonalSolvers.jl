@@ -2,48 +2,8 @@
 #######################################################
 ##        Eikonal utilities                          ## 
 #######################################################
-@doc raw"""
-     misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},stdobs::Vector{Float64})
-
-Calculate the misfit functional 
-```math
-    S = \dfrac{1}{2} \sum_i \dfrac{\left( \mathbf{\tau}_i^{\rm{calc}}(\mathbf{v})-\mathbf{\tau}_i^{\rm{obs}} \right)^2}{\sigma_i^2} \, .
-```
-# Arguments
-    * `velmod`: velocity model, either a 2D or 3D array.
-    * `ttpicksobs`: the traveltimes at the receivers.
-    * `stdobs`: a vector of standard deviations representing the error on the measured traveltimes.
-
-# Returns
-    The value of the misfit functional (L2-norm).
-
-"""
-function misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},
-                    stdobs::Vector{Float64},grd::Union{Grid2D,Grid3D})
-
-    if ndims(velmod)==2
-        # compute the forward response
-        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
-    elseif ndims(velmod)==3
-        # compute the forward response
-        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
-    else
-        error("Input velocity model has wrong dimensions.")
-    end
-
-    # flatten traveltime array
-    dcalc = ttpicks[:]
-    dobs = ttpicksobs[:]
-
-    ## L2 norm
-    diffcalobs = dcalc .- dobs
-    misf = 0.5 .* sum( diffcalobs.^2 ./ stdobs  )
-    
-    return misf
-end
 
 ######################################################
-
 """
     distribsrcs(nsrc::Integer,nw::Integer)
 
@@ -337,6 +297,46 @@ function trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
 end
 
 ###################################################################
+
+@doc raw"""
+     misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},stdobs::Vector{Float64},grd::Union{Grid2D,Grid3D})
+
+Calculate the misfit functional 
+```math
+    S = \dfrac{1}{2} \sum_i \dfrac{\left( \mathbf{\tau}_i^{\rm{calc}}(\mathbf{v})-\mathbf{\tau}_i^{\rm{obs}} \right)^2}{\sigma_i^2} \, .
+```
+# Arguments
+    * `velmod`: velocity model, either a 2D or 3D array.
+    * `ttpicksobs`: the traveltimes at the receivers.
+    * `stdobs`: a vector of standard deviations representing the error on the measured traveltimes.
+
+# Returns
+    The value of the misfit functional (L2-norm).
+
+"""
+function misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},
+                    stdobs::Vector{Float64},grd::Union{Grid2D,Grid3D})
+
+    if ndims(velmod)==2
+        # compute the forward response
+        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
+    elseif ndims(velmod)==3
+        # compute the forward response
+        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
+    else
+        error("Input velocity model has wrong dimensions.")
+    end
+
+    # flatten traveltime array
+    dcalc = ttpicks[:]
+    dobs = ttpicksobs[:]
+
+    ## L2 norm
+    diffcalobs = dcalc .- dobs
+    misf = 0.5 .* sum( diffcalobs.^2 ./ stdobs  )
+    
+    return misf
+end
 
 ###################################################
 #end # module EikUtils                           ##
