@@ -38,7 +38,7 @@ where ``\tau`` is the travel time, ``x,y,z`` the spatial coordinates and ```v```
 
 In the numerical solution to the eikonal equation, there are two major components, the global scheme, which defines the strategy to update to the traveltime on the grid, i.e., fast sweeping or fast marching method and the local scheme, providing the finite difference stencils.
 
-The gradient computations are based on the adjoint state method Leung ...
+The gradient computations are based on the adjoint state method (see below).
 
 ## Numerical implementation
 
@@ -93,12 +93,9 @@ Let's start with a complete example:
 
 ```@example full
 using EikonalSolvers
-hgrid = 0.5                   # grid spacing
-xinit,yinit = 0.0, 0.0        # grid origin coordinates
-nx,ny = 300, 220              # grid size
-grd = Grid2D(hgrid,xinit,yinit,nx,ny)                              # create the Grid2D struct
-coordsrc = [hgrid.*LinRange(10.0,290.0,4)   hgrid.*200.0.*ones(4)] # coordinates of the sources (4 sources)
-coordrec = [hgrid.*LinRange(8.0,200.0,10)  hgrid.*20.0.*ones(10)] # coordinates of the receivers (10 receivers)
+grd = Grid2D(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)         # create the Grid2D struct
+coordsrc = [grd.hgrid.*LinRange(10.0,290.0,4)  grd.hgrid.*200.0.*ones(4)] # coordinates of the sources (4 sources)
+coordrec = [grd.hgrid.*LinRange(8.0,200.0,10)  grd.hgrid.*20.0.*ones(10)] # coordinates of the receivers (10 receivers)
 velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
 
 # run the traveltime computation with default algorithm ("ttFMM_hiord")
@@ -113,25 +110,24 @@ Now let's analyse more in details the various components.
 First of we have to import the module and define the parameters of the grid using the struct `Grid2D`:
 ```@example parts
 using EikonalSolvers
-
-hgrid = 0.5            # grid spacing
-xinit,yinit = 0.0, 0.0 # grid origin coordinates
-nx,ny = 300, 220       # grid size
-grd = Grid2D(hgrid,xinit,yinit,nx,ny) # create the Grid2D struct
+# hgrid: grid spacing
+# xinit,yinit: grid origin coordinates
+# nx,ny: grid size
+grd = Grid2D(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)  # create the Grid2D struct
 ```
 Then define the coordinates of the sources, a two-column array (since we are in 2D) representing the \$x\$ and \$y\$ coordinates
 ```@example parts
-coordsrc = [hgrid.*LinRange(10.0,290.0,4)   hgrid.*200.0.*ones(4)] 
+coordsrc = [grd.hgrid.*LinRange(10.0,290.0,4)   grd.hgrid.*200.0.*ones(4)] 
 ```
 and the receivers, again a two-column array (since we are in 2D) representing the \$x\$ and \$y\$ coordinates
 ```@example parts
-coordrec = [hgrid.*LinRange(8.0,200.0,10)  hgrid.*20.0.*ones(10)] 
+coordrec = [grd.hgrid.*LinRange(8.0,200.0,10)  grd.hgrid.*20.0.*ones(10)] 
 ```
 The velocity model is defined as a 2D array with size (`grd.nx` \$\times\$ `grd.ny`)
 ```@example parts
 velmod = 2.5 .* ones(grd.nx,grd.ny) 
 # increasing velocity with depth...
-for i=1:ny 
+for i=1:grd.ny 
   velmod[:,i] = 0.034 * i .+ velmod[:,i] 
 end
 ```
@@ -162,15 +158,12 @@ ttimegrid
 Here a synthetic example of 2D gradient computations is illustrated. In reality, traveltime data are "measured" from recorded seismograms, however, here we first create some synthetic "observed" traveltimes using a synthetic velocity model. First the grid and velocity model are set up, then forward calculations are performed, as in the section above [Example of forward calculations](@ref).
 ```@example grad1
 using EikonalSolvers
-hgrid = 0.5                   # grid spacing
-xinit,yinit = 0.0, 0.0        # grid origin coordinates
-nx,ny = 300, 220              # grid size
-grd = Grid2D(hgrid,xinit,yinit,nx,ny)                              # create the Grid2D struct
+grd = Grid2D(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)         # create the Grid2D struct
 coordsrc = [hgrid.*LinRange(10.0,290.0,4)   hgrid.*200.0.*ones(4)] # coordinates of the sources (4 sources)
 coordrec = [hgrid.*LinRange(8.0,200.0,10)  hgrid.*20.0.*ones(10)] # coordinates of the receivers (10 receivers)
 velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
 # increasing velocity with depth...
-for i=1:ny 
+for i=1:grd.ny 
   velmod[:,i] = 0.034 * i .+ velmod[:,i] 
 end
 
@@ -194,7 +187,7 @@ Now we can finally compute the gradient of the misfit functional (see above) at 
 # create a guess/"current" model 
 vel0 = 2.3 .* ones(grd.nx,grd.ny) 
 # increasing velocity with depth...
-for i=1:ny
+for i=1:grd.ny
    vel0[:,i] = 0.015 * i .+ vel0[:,i]
 end
     

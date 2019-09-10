@@ -1,6 +1,8 @@
 
-MIT License
-Copyright (c) 2019 Andrea Zunino
+#
+# MIT License
+# Copyright (c) 2019 Andrea Zunino
+# 
 
 ##############################################
 """
@@ -16,6 +18,8 @@ export gradttime2D
 export Grid3D
 export traveltime3D
 export gradttime3D
+
+export misfitfunc
 
 
 ## For parallelisation

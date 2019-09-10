@@ -2,9 +2,53 @@
 #######################################################
 ##        Eikonal utilities                          ## 
 #######################################################
+"""
+     misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},stdobs::Vector{Float64})
+
+Calculate the misfit functional 
+```math
+    S = \dfrac{1}{2} \sum_i \dfrac{\left( \mathbf{\tau}_i^{\rm{calc}}(\mathbf{v})-\mathbf{\tau}_i^{\rm{obs}} \right)^2}{\sigma_i^2} \, .
+```
+# Arguments
+    * `velmod`: velocity model, either a 2D or 3D array.
+    * `ttpicksobs`: the traveltimes at the receivers.
+    * `stdobs`: a vector of standard deviations representing the error on the measured traveltimes.
+
+# Returns
+    The value of the misfit functional (L2-norm).
+
+"""
+function misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},
+                    stdobs::Vector{Float64})
+
+    if ndims(velmod==2)
+        # compute the forward response
+        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
+    elseif ndims(velmod==3)
+        # compute the forward response
+        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
+    else
+        error("Input velocity model has wrong dimensions.")
+    end
+
+    # flatten traveltime array
+    dcalc = ttpicks[:]
+    dobs = ttpicksobs[:]
+
+    ## L2 norm
+    diffcalobs = dcalc .- dobs
+    misf = 0.5 .* sum( diffcalobs.^2 ./ stdobs  )
+    
+    return misf
+end
 
 ######################################################
 
+"""
+    distribsrcs(nsrc::Integer,nw::Integer)
+
+Calculate how to subdivide the sources among workers for parallel jobs.
+"""
 function distribsrcs(nsrc::Integer,nw::Integer)
     ## calculate how to subdivide the srcs among the workers
     if nsrc>=nw
@@ -43,11 +87,10 @@ The fields are:
 
 # Example
 ```julia-repl
-julia> Grid2D(5.0,0.0,0.0,300,250)
-Grid2D(5.0, 0.0, 0.0, 300, 250, 301, 251)
+julia> Grid2D(hgrid=5.0,xinit=0.0,yinit=0.0,nx=300,ny=250)
 ```
 """
-struct Grid2D
+Base.@kwdef struct Grid2D
     hgrid::Float64
     xinit::Float64
     yinit::Float64
@@ -82,11 +125,10 @@ The fields are:
 
 # Example
 ```julia-repl
-julia> Grid3D(5.0,0.0,0.0,0.0,60,70,40)
-Grid3D(5.0, 0.0, 0.0, 0.0, 60, 70, 40, 61, 71, 41)
+julia> Grid3D(hgrid=5.0,xinit=0.0,yinit=0.0,zinit=0.0,nx=60,ny=60,nz=40)
 ```
 """
-struct Grid3D
+Base.@kwdef struct Grid3D
     hgrid::Float64
     xinit::Float64
     yinit::Float64
