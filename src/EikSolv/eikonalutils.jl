@@ -315,7 +315,8 @@ Calculate the misfit functional
 
 """
 function misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},
-                    stdobs::Vector{Float64},grd::Union{Grid2D,Grid3D})
+                    stdobs::Vector{Float64},coordsrc::Array{Float64,2},
+                    coordred::Array{Float64,2},grd::Union{Grid2D,Grid3D})
 
     if ndims(velmod)==2
         # compute the forward response
