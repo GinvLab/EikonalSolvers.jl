@@ -331,10 +331,11 @@ function misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64,2},
     # flatten traveltime array
     dcalc = ttpicks[:]
     dobs = ttpicksobs[:]
+    stdobsv = stdobs[:]
 
     ## L2 norm
     diffcalobs = dcalc .- dobs
-    misf = 0.5 .* sum( diffcalobs.^2 ./ stdobs  )
+    misf = 0.5 .* sum( diffcalobs.^2 ./ stdobsv  )
     
     return misf
 end
