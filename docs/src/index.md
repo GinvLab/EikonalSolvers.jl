@@ -174,7 +174,7 @@ nothing # hide
 Then the "observed" traveltime data are created by adding some Gaussian noise to the traveltimes computed above to simulate real measurements.
 ```@example grad1
 # standard deviation of error on observed data
-stdobs = 0.15.*ones(size(coordrec,1))
+stdobs = 0.15.*ones(size(coordrec,1),size(coordsrc,1))
 # generate a "noise" array to simulate real data
 noise = stdobs.^2 .* randn(size(ttpicks))
 # add the noise to the synthetic traveltime data

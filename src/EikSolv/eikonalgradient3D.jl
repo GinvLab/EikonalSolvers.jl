@@ -11,7 +11,7 @@
 @doc raw""" 
     gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},
                 coordrec::Array{Float64,2},pickobs::Array{Float64,2},
-                pickcalc::Array{Float64,2}, stdobs::Vector{Float64} ; 
+                pickcalc::Array{Float64,2}, stdobs::Array{Float64,2} ; 
                 gradttalgo::String="gradFMM_hiord")
 
 Calculate the gradient using the adjoint state method for 3D velocity models. 
@@ -25,7 +25,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `coordsrc`: the coordinates of the source(s) (x,y,z), a 3-column array 
 - `coordrec`: the coordinates of the receiver(s) (x,y,z), a 3-column array 
 - `pickobs`: observed traveltime picks
-- `stdobs`: standard deviation of error on observed traveltime picks
+- `stdobs`: standard deviation of error on observed traveltime picks, an array with same shape than `pickobs`
 - `gradttalgo`: the algorithm to use to compute the forward and gradient, one amongst the following
     * "gradFS\_podlec", fast sweeping method using Podvin-Lecomte stencils for forward, fast sweeping method for adjoint   
     * "gradFMM\_podlec," fast marching method using Podvin-Lecomte stencils for forward, fast marching method for adjoint 
@@ -36,7 +36,7 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                     pickobs::Array{Float64,2},stdobs::Vector{Float64} ; gradttalgo::String="gradFMM_hiord")
+                     pickobs::Array{Float64,2},stdobs::Array{Float64,2} ; gradttalgo::String="gradFMM_hiord")
    
     @assert size(coordsrc,2)==3
     @assert size(coordrec,2)==3
@@ -61,7 +61,7 @@ function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2
             igrs = grpsrc[s,1]:grpsrc[s,2]
             @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
                                                      coordsrc[igrs,:],coordrec,
-                                                     grd,stdobs,pickobs[:,igrs],
+                                                     grd,stdobs[:,igrs],pickobs[:,igrs],
                                                      gradttalgo )
         end
     end
@@ -74,10 +74,8 @@ end
 """
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc3D(vel::Array{Float64,3},xysrc::Array{Float64,2},
-                         coordrec::Array{Float64,2},
-                         grd::Grid3D,
-                         stdobs::Vector{Float64},pickobs1::Array{Float64,2},
+function calcgradsomesrc3D(vel::Array{Float64,3},xysrc::Array{Float64,2},coordrec::Array{Float64,2},
+                         grd::Grid3D,stdobs::Array{Float64,2},pickobs1::Array{Float64,2},
                          adjalgo::String)
 
     nx,ny,nz=size(vel)
@@ -121,16 +119,16 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xysrc::Array{Float64,2},
         if adjalgo=="gradFS_podlec"
 
             grad1 += eikgrad_FS_SINGLESRC(ttonesrc,vel,xysrc[s,:],coordrec,grd,
-                                     pickobs1[:,s],ttpicks1,stdobs)
+                                     pickobs1[:,s],ttpicks1,stdobs[:,s])
 
         elseif adjalgo=="gradFMM_podlec"
 
             grad1 += eikgrad_FMM_SINGLESRC(ttonesrc,vel,xysrc[s,:],coordrec,
-                                          grd,pickobs1[:,s],ttpicks1,stdobs)
+                                          grd,pickobs1[:,s],ttpicks1,stdobs[:,s])
             
         elseif adjalgo=="gradFMM_hiord"
             grad1 += eikgrad_FMM_hiord_SINGLESRC(ttonesrc,vel,xysrc[s,:],coordrec,
-                                                  grd,pickobs1[:,s],ttpicks1,stdobs)
+                                                  grd,pickobs1[:,s],ttpicks1,stdobs[:,s])
 
         else
             println("Wrong adjalgo algo name: $(adjalgo)... ")

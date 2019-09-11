@@ -196,7 +196,7 @@ function test_gradtt_2D()
 
     #--------------------------------------
     # Gradient of misfit
-    stdobs = 0.15.*ones(size(coordrec,1))
+    stdobs = 0.15.*ones(size(coordrec,1),size(coordsrc,1))
     ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
     noise = stdobs.^2 .* randn(size(ttpicks))
     dobs = ttpicks .+ noise
@@ -221,7 +221,7 @@ function test_gradtt_3D()
 
     #--------------------------------------
     # Gradient of misfit
-    stdobs = 0.15 .* ones(size(coordrec,1))
+    stdobs = 0.15 .* ones(size(coordrec,1),size(coordsrc,1))
     ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
     noise = stdobs.^2 .* randn(size(ttpicks))
     dobs = ttpicks .+ noise
