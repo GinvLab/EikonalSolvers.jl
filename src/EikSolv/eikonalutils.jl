@@ -314,8 +314,8 @@ Calculate the misfit functional
     The value of the misfit functional (L2-norm).
 
 """
-function misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},
-                    stdobs::Vector{Float64},coordsrc::Array{Float64,2},
+function misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64,2},
+                    stdobs::Vector{Float64,2},coordsrc::Array{Float64,2},
                     coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D})
 
     if ndims(velmod)==2
