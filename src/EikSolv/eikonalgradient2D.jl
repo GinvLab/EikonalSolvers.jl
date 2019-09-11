@@ -258,7 +258,9 @@ function sourceboxlocgrad!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos:
             end
         end 
     end
-    return onsrc
+    # returning also xsrc,ysrc because the src may have been repositioned
+    #   to avoid singularities
+    return onsrc,xsrc,ysrc
 end
 
 ##############################################################################
@@ -327,53 +329,56 @@ end
 function adjderivonsource(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64,j::Int64,
                           xinit::Float64,yinit::Float64,dh::Float64,xsrc::Float64,ysrc::Float64)        
 
-        ## If we are in the square containing the source,
-        ## use real position of source for the derivatives.
-        ## Calculate tt on x and y on the edges of the square
-        ##  H is the projection of the point src onto X and Y
-        xp = Float64(i-1)*dh+xinit
-        yp = Float64(j-1)*dh+yinit
-        dist2src = dist2src = sqrt( (xp-xsrc)^2+(yp-ysrc)^2 )
-        ## distances P to src
-        distHPx = abs(xp-xsrc)
-        distHPy = abs(yp-ysrc)
-        ## Calculate the traveltime to hit the x side
-        ## time at H along x
-        thx = tt[i,j]*distHPy/dist2src
-        ## Calculate the traveltime to hit the y side
-        ## time at H along y
-        thy = tt[i,j]*distHPx/dist2src
-        
-        if onsrc[i+1,j]==true                            
-            aback = -(tt[i,j]-tt[i-1,j])/dh
-            if distHPx==0.0
-                aforw = 0.0 # point exactly on source
-            else
-                aforw = -(thx-tt[i,j])/distHPx # dist along x
-            end
-        elseif onsrc[i-1,j]==true
-            if distHPx==0.0
-                aback = 0.0 # point exactly on source
-            else
-                aback = -(tt[i,j]-thx)/distHPx # dist along x
-            end
-            aforw = -(tt[i+1,j]-tt[i,j])/dh
+    ## If we are in the square containing the source,
+    ## use real position of source for the derivatives.
+    ## Calculate tt on x and y on the edges of the square
+    ##  H is the projection of the point src onto X and Y
+    xp = Float64(i-1)*dh+xinit
+    yp = Float64(j-1)*dh+yinit
+    ## distances P to src
+    distHPx = abs(xp-xsrc)
+    distHPy = abs(yp-ysrc)
+    dist2src = sqrt( distHPx^2+distHPy^2 )
+    # assert dist2src>0.0 otherwise a singularity will occur
+    @assert dist2src>0.0
+
+    ## Calculate the traveltime to hit the x side
+    ## time at H along x
+    thx = tt[i,j]*distHPy/dist2src
+    ## Calculate the traveltime to hit the y side
+    ## time at H along y
+    thy = tt[i,j]*distHPx/dist2src
+    
+    if onsrc[i+1,j]==true                            
+        aback = -(tt[i,j]-tt[i-1,j])/dh
+        if distHPx==0.0
+            aforw = 0.0 # point exactly on source
+        else
+            aforw = -(thx-tt[i,j])/distHPx # dist along x
         end
-        if onsrc[i,j+1]==true
-            bback = -(tt[i,j]-tt[i,j-1])/dh
-            if distHPy==0.0
-                bforw = 0.0 # point exactly on source
-            else
-                bforw = -(thy-tt[i,j])/distHPy # dist along y
-            end
-        else onsrc[i,j-1]==true
-            if distHPy==0.0
-                bback = 0.0 # point exactly on source
-            else
-                bback = -(tt[i,j]-thy)/distHPy # dist along y
-            end
-            bforw = -(tt[i,j+1]-tt[i,j])/dh
+    elseif onsrc[i-1,j]==true
+        if distHPx==0.0
+            aback = 0.0 # point exactly on source
+        else
+            aback = -(tt[i,j]-thx)/distHPx # dist along x
         end
+        aforw = -(tt[i+1,j]-tt[i,j])/dh
+    end
+    if onsrc[i,j+1]==true
+        bback = -(tt[i,j]-tt[i,j-1])/dh
+        if distHPy==0.0
+            bforw = 0.0 # point exactly on source
+        else
+            bforw = -(thy-tt[i,j])/distHPy # dist along y
+        end
+    else onsrc[i,j-1]==true
+        if distHPy==0.0
+            bback = 0.0 # point exactly on source
+        else
+            bback = -(tt[i,j]-thy)/distHPy # dist along y
+        end
+        bforw = -(tt[i,j+1]-tt[i,j])/dh
+    end
 
     return aback,aforw,bback,bforw
 end
@@ -413,13 +418,11 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
     
     ## source
     ## STAGGERED grid
-    onsrc = sourceboxlocgrad!(tt,vel,src,grd; staggeredgrid=true )
+    onsrc,xsrc,ysrc = sourceboxlocgrad!(tt,vel,src,grd; staggeredgrid=true )
     # receivers
     # lambdaold!!!!
     onarec = recboxlocgrad!(tt,lambdaold,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
 
-    xsrc,ysrc = src[1],src[2]
- 
     ######################################################
 
     iswe = [2 ntx-1 1; ntx-1 2 -1; ntx-1 2 -1; 2 ntx-1 1]
@@ -532,12 +535,10 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
     
     ## source
     ## STAGGERED grid
-    onsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=true )
+    onsrc,xsrc,ysrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=true )
     ## receivers
     onarec = recboxlocgrad!(tt,lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
     
-    xsrc,ysrc = src[1],src[2]
-
     ######################################################
     neigh = [1  0;
              0  1;
@@ -744,12 +745,11 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
     
     ## source
     ## regular grid
-    onsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=false )
+    onsrc,xsrc,ysrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=false )
     ## receivers
     onarec = recboxlocgrad!(tt,lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=false)
 
-    xsrc,ysrc = src[1],src[2]
-
+    
     ######################################################
     neigh = [1  0;
              0  1;

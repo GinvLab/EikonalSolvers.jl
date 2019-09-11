@@ -281,7 +281,7 @@ function sourceboxlocgrad!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos:
         end
     end#
 
-    return onsrc
+    return onsrc,xsrc,ysrc,zsrc
 end
 
 ############################################################################
@@ -373,6 +373,8 @@ function adjderivonsource(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64,j::
     distPSy = abs(yp-ysrc)
     distPSz = abs(zp-zsrc)
     dist2src = sqrt(distPSx^2+distPSy^2+distPSz^2)
+    # assert dist2src>0.0 otherwise a singularity will occur
+    @assert dist2src>0.0
 
     ## Calculate the traveltime to hit the x edge
     ## time at H along x
@@ -471,12 +473,10 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     
     ## source
     ## STAGGERED grid
-    onsrc = sourceboxlocgrad!(tt,vel,src,grd; staggeredgrid=true )
+    onsrc,xsrc,ysrc,zsrc = sourceboxlocgrad!(tt,vel,src,grd; staggeredgrid=true )
     # receivers
     # lambdaold!!!!
     onarec = recboxlocgrad!(tt,lambdaold,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
-
-    xsrc,ysrc,zsrc = src[1],src[2],src[3]
  
     ##============================================================================
 
@@ -637,12 +637,10 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     ## source
     ## source
     ## STAGGERED grid
-    onsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=true )
+    onsrc,xsrc,ysrc,zsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=true )
     ## receivers
     onarec = recboxlocgrad!(tt,lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
     
-    xsrc,ysrc,zsrc = src[1],src[2],src[3]
-
     ######################################################
     #-------------------------------
     ## init FMM 
@@ -870,11 +868,9 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     
     ## source
     ## regular grid
-    onsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=false )
+    onsrc,xsrc,ysrc,zsrc = sourceboxlocgrad!(tt,vel,src,grd, staggeredgrid=false )
     ## receivers
     onarec = recboxlocgrad!(tt,lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=false)
-
-    xsrc,ysrc,zsrc = src[1],src[2],src[3]
 
     ######################################################
     #-------------------------------
