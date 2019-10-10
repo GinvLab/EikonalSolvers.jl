@@ -14,7 +14,7 @@ function distribsrcs(nsrc::Integer,nw::Integer)
     if nsrc>=nw
         dis = div(nsrc,nw)
         grpsizes = dis*ones(Int64,nw)        
-        resto = mod(nsrc,dis)
+        resto = mod(nsrc,nw)
         if resto>0
             ## add the reminder 
             grpsizes[1:resto] .+= 1
