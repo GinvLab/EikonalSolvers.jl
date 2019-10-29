@@ -41,5 +41,8 @@ include("EikSolv/eikonalforward3D.jl")
 include("EikSolv/eikonalgradient3D.jl")
 
 
+## Hamiltonian Monte Carlo setup
+include("HMCtraveltimes.jl")
+
 end
 ##############################################
