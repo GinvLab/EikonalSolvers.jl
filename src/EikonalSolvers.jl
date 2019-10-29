@@ -21,6 +21,7 @@ export gradttime3D
 
 export misfitfunc
 
+export EikonalProb
 
 ## For parallelisation
 using Distributed
