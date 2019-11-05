@@ -1153,8 +1153,8 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     ##
     xorig = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
     yorig = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
-    xsrc = src[1] - xorig - grdcoarse.xinit
-    ysrc = src[2] - yorig - grdcoarse.yinit
+    xsrc = src[1] - xorig #- grdcoarse.xinit
+    ysrc = src[2] - yorig #- grdcoarse.yinit
     srcfine = Float64[xsrc,ysrc]
 
     ##
@@ -1222,7 +1222,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
             
             ## if the point is out of bounds skip this iteration
             if (i>nx) || (i<1) || (j>ny) || (j<1)
-                    continue
+                continue
             end
 
             if status[i,j]==0 ## far
@@ -1242,6 +1242,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
 
     #-------------------------------
     ## main FMM loop
+    firstwarning=true
     totnpts = nx*ny
     @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
@@ -1266,12 +1267,23 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         ##
         ##########################################################
         #  if (ia==nx) || (ia==1) || (ja==ny) || (ja==1)
-        if (ia==1 && !outxmin) || (ia==nx && !outxmax) || (ja==1 && !outymin) || (ja==ny && !outxmax)
+        if (ia==1 && !outxmin) || (ia==nx && !outxmax) || (ja==1 && !outymin) || (ja==ny && !outymax)
             ttimecoarse[i1coarse:i2coarse,j1coarse:j2coarse]  =  ttime[1:downscalefactor:end,1:downscalefactor:end]
             statuscoarse[i1coarse:i2coarse,j1coarse:j2coarse] = status[1:downscalefactor:end,1:downscalefactor:end]
             ## delete current narrow band to avoid problems when returned to coarse grid
             statuscoarse[statuscoarse.==1] .= 0
-            return ttime,status
+
+            ## Prevent the difficult case of traveltime hitting the borders but
+            ##   not the coarse grid, which would produce an empty "statuscoarse" and an empty "ttimecoarse".
+            ## Probably needs a better fix..."
+            if count(statuscoarse.>0)<1
+                if firstwarning 
+                    @warn("Traveltime hitting the borders but not the coarse grid, continuing.")
+                    firstwarning=false
+                end
+                continue
+            end
+            return nothing
         end
         ##########################################################
 

@@ -341,11 +341,11 @@ function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
         ttimeold[:,:,:] = ttime
         #ttimeold = copy(ttime)
         
-        for swe=1:8 ##in [1,2,3,4,5,6,7,8]
+        @inbounds for swe=1:8 ##in [1,2,3,4,5,6,7,8]
 
-            for k=kswe[swe,1]:kswe[swe,3]:kswe[swe,2]            
-                for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
-                    for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
+            @inbounds for k=kswe[swe,1]:kswe[swe,3]:kswe[swe,2]            
+                @inbounds for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
+                    @inbounds for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
                         
                         ##===========================================
                         ## If on a source node, skip this iteration
@@ -366,9 +366,9 @@ function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
                         ## Stencils 3D
 
                         ## loop over 8 cells 
-                        for ice=1:8
+                        @inbounds for ice=1:8
                             ## rotate for each cell
-                            for a=1:3
+                            @inbounds for a=1:3
                                 M[a] = rotste.Mce[a,ice] + curpt[a]
                             end
                             
@@ -379,7 +379,7 @@ function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
                             ##isinboundsmod(M,NXYZ)==false  && continue ## much slower...
                             
                             ## Get current cell velocity
-                            for a=1:3
+                            @inbounds for a=1:3
                                 slopt[a] = rotste.slopt_ce[a,ice] + curpt[a]
                             end
                             
@@ -393,7 +393,7 @@ function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
                             tdiff_cor[ice] = tm + hs*SQRTOF3
                             
                             ## loop over 3 faces
-                            for iface=1:3
+                            @inbounds for iface=1:3
 
                                 ## global index
                                 l=(ice-1)*3+iface
@@ -478,7 +478,7 @@ function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
                         ## Stencils 2D
 
                         ## 12 faces
-                        for ifa=1:12                            
+                        @inbounds for ifa=1:12                            
                             ## rotate for each "face" (12 faces: 3 planes x=0,y=0,z=0)
                             for a=1:3
                                 M[a] = rotste.Med[a,ifa] + curpt[a]
@@ -525,7 +525,7 @@ function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
                             tdiff_fac[ifa] = tm + hs*SQRTOF2
 
                             ## there are 2 edges to consider
-                            for ied=1:2
+                            @inbounds for ied=1:2
                                 l=2*(ifa-1)+ied            
 
                                 ## rotate for each of 12 faces x 2 edges
@@ -547,9 +547,9 @@ function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
                         ## Stencils 1D
                         
                         # 6 1D transmissions...
-                        for ise=1:6
+                        @inbounds for ise=1:6
 
-                            for a=1:3
+                            @inbounds for a=1:3
                                 P[a] = rotste.Pli[a,ise] + curpt[a]
                             end
                             
@@ -560,7 +560,7 @@ function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
                             end
                             ##isinboundsmod(P,NXYZ)==false  && continue
                             
-                            for iv=1:4            
+                            @inbounds for iv=1:4            
                                 for a=1:3
                                     sloptli[a] = rotste.slopt_li[a,ise,iv] + curpt[a]
                                 end
@@ -797,9 +797,9 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     cartid_nxnynz = CartesianIndices((ntx,nty,ntz))
 
     ## construct initial narrow band
-    for l=1:naccinit ##
+    @inbounds for l=1:naccinit ##
         
-        for ne=1:6 ## six potential neighbors
+        @inbounds for ne=1:6 ## six potential neighbors
             
             i = is[l] + neigh[ne,1]
             j = js[l] + neigh[ne,2]
@@ -829,7 +829,7 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     #-------------------------------
     ## main FMM loop
     totnpts = ntx*nty*ntz 
-    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -848,7 +848,7 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
         ttime[ia,ja,ka] = tmptt
 
         ## try all neighbors of newly accepted point
-        for ne=1:6
+        @inbounds for ne=1:6
 
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
@@ -1263,7 +1263,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     ks = [l[3] for l in ijkss]
     naccinit = length(ijkss)
 
-     ## Init the max binary heap with void arrays but max size
+    ## Init the max binary heap with void arrays but max size
     Nmax=nx*ny*nz
     bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
 
@@ -1276,9 +1276,8 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     tmptt::Float64 = 0.0 
 
     ## construct initial narrow band
-    for l=1:naccinit ##
-        
-        for ne=1:6 ## six potential neighbors
+    @inbounds for l=1:naccinit ##        
+        @inbounds for ne=1:6 ## six potential neighbors
             
             i = is[l] + neigh[ne,1]
             j = js[l] + neigh[ne,2]
@@ -1308,7 +1307,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     #-------------------------------
     ## main FMM loop
     totnpts = nx*ny*nz 
-    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -1325,7 +1324,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
         ttime[ia,ja,ka] = tmptt
 
         ## try all neighbors of newly accepted point
-        for ne=1:6
+        @inbounds for ne=1:6
 
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
@@ -1387,8 +1386,8 @@ end
    Compute the traveltime at a given node using 2nd order stencil 
     where possible, otherwise revert to 1st order.
 """
-function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},
-    grd::Grid3D,status::Array{Int64,3},i::Int64,j::Int64,k::Int64)
+function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Grid3D,
+                         status::Array{Int64,3},i::Int64,j::Int64,k::Int64)
 
     
     #######################################################
@@ -1469,7 +1468,6 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},
                 ksh = -1
             end
 
-
             ## check if on boundaries
             isonb1,isonb2 = isonbord(i+ish,j+jsh,k+ksh,nx,ny,nz)
                                     
@@ -1527,15 +1525,20 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},
             beta  += ( -2.0*curalpha * chosenval1 )
             gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
         end
+
+        #@show use1stord,use2ndord,alpha
     end
     
     ### roots of the quadratic equation
-    #@show acoef,bcoef,ccoef
     tmpsq = sqrt(beta^2-4.0*alpha*gamma)
     soughtt1 = (-beta + tmpsq)/(2.0*alpha)
     soughtt2 = (-beta - tmpsq)/(2.0*alpha)
     ## choose the largest solution
     soughtt = max(soughtt1,soughtt2)
+
+    # @show i,j,k,ttcurpt,soughtt
+    # @show alpha,beta,gamma,soughtt
+    # @show findall(ttime.<1e30)
 
     return soughtt
 end
@@ -1544,16 +1547,15 @@ end
 
 
 """
-  Refinement of the grid around the source. FMM calculated inside a finer grid 
+  Refinement of the grid around the source. Traveltime calculated (FMM) inside a finer grid 
     and then passed on to coarser grid
 """
 function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3},
     vel::Array{Float64,3},src::Vector{Float64},grdcoarse::Grid3D,inittt::Float64)
       
-    ##
-    ## 2x10 nodes -> 2x50 nodes
-    ##
+    ## downscaling factor
     downscalefactor::Int = 5
+    ## extent of refined grid in terms of coarse grid nodes
     noderadius::Int = 5
 
     ## find indices of closest node to source in the "big" array
@@ -1561,9 +1563,8 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     ixsrcglob,iysrcglob,izsrcglob = findclosestnode(src[1],src[2],src[3],grdcoarse.xinit,
                                                     grdcoarse.yinit,grdcoarse.zinit,grdcoarse.hgrid) 
     
-    
     ##
-    ## Define chunck of coarse grid
+    ## Define the chunck of coarse grid
     ##
     i1coarsevirtual = ixsrcglob - noderadius
     i2coarsevirtual = ixsrcglob + noderadius
@@ -1654,8 +1655,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
                 velfinegrd[i,j,k] = velcoarsegrd[ii,jj,kk]
             end
         end
-    end
- 
+    end 
   
     ##
     ## Source location, etc. within fine grid
@@ -1678,11 +1678,11 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     status[onsrc] .= 2 ## set to accepted on src
     naccinit=count(status.==2)
 
-    ## get all i,j accepted
+    ## get all i,j,k accepted
     ijkss = findall(status.==2) 
     is = [l[1] for l in ijkss]
     js = [l[2] for l in ijkss]
-    ks = [l[2] for l in ijkss]
+    ks = [l[3] for l in ijkss]
     naccinit = length(ijkss)
 
     ## Init the min binary heap with void arrays but max size
@@ -1699,8 +1699,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     
     ## construct initial narrow band
     @inbounds for l=1:naccinit ##
-        
-        @inbounds for ne=1:4 ## four potential neighbors
+        @inbounds for ne=1:6 ## six potential neighbors
 
             i = is[l] + neigh[ne,1]
             j = js[l] + neigh[ne,2]
@@ -1708,13 +1707,14 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
             
             ## if the point is out of bounds skip this iteration
             if (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1)
-                    continue
+                continue
             end
 
             if status[i,j,k]==0 ## far
 
                 ## add tt of point to binary heap and give handle
                 tmptt = calcttpt_2ndord(ttime,velfinegrd,grdfine,status,i,j,k)
+
                 # get handle
                 # han = sub2ind((nx,ny),i,j)
                 han = linid_nxnynz[i,j,k]
@@ -1728,6 +1728,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
 
     #-------------------------------
     ## main FMM loop
+    firstwarning=true
     totnpts = nx*ny*nz
     @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
@@ -1744,7 +1745,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         status[ia,ja,ka] = 2 # 2=accepted
         # set traveltime of the new accepted point
         ttime[ia,ja,ka] = tmptt
-
+        
         ##########################################################
         ##
         ## If the the accepted point is on the edge of the
@@ -1752,17 +1753,28 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         ##
         ##########################################################
         #  if (ia==nx) || (ia==1) || (ja==ny) || (ja==1)
-        if (ia==1 && !outxmin) || (ia==nx && !outxmax) || (ja==1 && !outymin) || (ja==ny && !outxmax) || (ka==1 && !outzmin) || (ka==nz && !outzmax)
+        if (ia==1 && !outxmin) || (ia==nx && !outxmax) || (ja==1 && !outymin) || (ja==ny && !outymax) || (ka==1 && !outzmin) || (ka==nz && !outzmax)
             ttimecoarse[i1coarse:i2coarse,j1coarse:j2coarse,k1coarse:k2coarse]  =  ttime[1:downscalefactor:end,1:downscalefactor:end,1:downscalefactor:end]
             statuscoarse[i1coarse:i2coarse,j1coarse:j2coarse,k1coarse:k2coarse] = status[1:downscalefactor:end,1:downscalefactor:end,1:downscalefactor:end]
             ## delete current narrow band to avoid problems when returned to coarse grid
             statuscoarse[statuscoarse.==1] .= 0
-            return ttime,status
+
+            ## Prevent the difficult case of traveltime hitting the borders but
+            ##   not the coarse grid, which would produce an empty "statuscoarse" and an empty "ttimecoarse".
+            ## Probably needs a better fix..."
+            if count(statuscoarse.>0)<1
+                if firstwarning 
+                    @warn("Traveltime hitting the borders but not the coarse grid, continuing.")
+                    firstwarning=false
+                end
+                continue
+            end
+            return nothing
         end
         ##########################################################
 
         ## try all neighbors of newly accepted point
-        @inbounds for ne=1:4 
+        @inbounds for ne=1:6 
 
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
@@ -1794,6 +1806,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
             end
         end
         ##-------------------------------
+
     end
     error("Ouch...")
 end

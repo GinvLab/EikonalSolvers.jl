@@ -5,7 +5,6 @@
 module HMCtraveltimes
 
 using EikonalSolvers
-#using LinearAlgebra
 
 export EikonalProb
 
@@ -31,7 +30,7 @@ function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
         velnd = reshape(vecvel,eikprob.grd.nx,eikprob.grd.ny)
     elseif typeof(eikprob.grd)==Grid3D
         # reshape vector to 3D array
-        velnd = reshape(vecvel,eikprob.grd.nx,eikprob.grd.ny,eikprob.nz)
+        velnd = reshape(vecvel,eikprob.grd.nx,eikprob.grd.ny,eikprob.grd.nz)
     else
         error("typeof(eikprob.grd)== ?? ")
     end
@@ -42,18 +41,22 @@ function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
         #############################################
         #println("logpdf")
         misval = misfitfunc(velnd,eikprob.dobs,eikprob.stdobs,eikprob.coordsrc,
-                            eikprob.coordrec,eikprob.grd) .+ priorfun()
+                            eikprob.coordrec,eikprob.grd) .+ nlogprior()
         return misval
 
     elseif kind=="gradlogpdf"
         #################################################
         ## compute the gradient of the misfit function ##
         #################################################
-        #println("grad")
-        grad = gradttime2D(velnd,eikprob.grd,eikprob.coordsrc,
-                           eikprob.coordrec,eikprob.dobs,eikprob.stdobs)
+        if typeof(eikprob.grd)==Grid2D
+            grad = gradttime2D(velnd,eikprob.grd,eikprob.coordsrc,
+                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs)
+        elseif typeof(eikprob.grd)==Grid3D
+            grad = gradttime3D(velnd,eikprob.grd,eikprob.coordsrc,
+                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs)
+        end
         # flatten traveltime array
-        vecgrad = grad[:]
+        vecgrad = vec(grad) .+ gradnlogprior()
         # return flattened gradient
         return vecgrad
         
@@ -65,10 +68,17 @@ end
 #################################################################
 
 ## prior functional
-function priorfun(  )
+function nlogprior(  )
 
     return 0.0
 end
+
+## prior functional
+function gradnlogprior(  )
+
+    return 0.0
+end
+
 
 #################################################################
 

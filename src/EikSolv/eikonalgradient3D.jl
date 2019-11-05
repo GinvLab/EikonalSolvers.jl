@@ -56,14 +56,12 @@ function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2
     
     tmpgrad = zeros(grd.nx,grd.ny,grd.nz,nchu)
     ## do the calculations
-    @sync begin 
-        for s=1:nchu
-            igrs = grpsrc[s,1]:grpsrc[s,2]
-            @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
-                                                     coordsrc[igrs,:],coordrec,
-                                                     grd,stdobs[:,igrs],pickobs[:,igrs],
-                                                     gradttalgo )
-        end
+    @sync for s=1:nchu
+        igrs = grpsrc[s,1]:grpsrc[s,2]
+        @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
+                                                   coordsrc[igrs,:],coordrec,
+                                                   grd,stdobs[:,igrs],pickobs[:,igrs],
+                                                   gradttalgo )
     end
     grad = sum(tmpgrad,dims=4)
     return grad
@@ -310,17 +308,17 @@ function recboxlocgrad!(ttime::Array{Float64,3},lambda::Array{Float64,3},ttpicks
     onarec[:,:,:] .= false
     nrec=size(rec,1)
     
-   ## init receivers
+    ## init receivers
     nrec=size(rec,1)
     for r=1:nrec
         if staggeredgrid==false
-            i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,2],grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
+            i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,3],grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
         elseif staggeredgrid==true
-            i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,2],grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid)
+            i,j,k = findclosestnode(rec[r,1],rec[r,2],rec[r,3],grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid)
         end
         if (i==1) || (i==nxmax) || (j==1) || (j==nymax) || (k==1) || (k==nzmax)
             ## Receivers on the boundary of model
-            ## (n⋅∇T)γ = Tcalc - Tobs
+            ## (n⋅∇T)λ = Tcalc - Tobs
             if i==1
                 # forward diff
                 n∇T = - (ttime[2,j,k]-ttime[1,j,k])/grd.hgrid 
@@ -500,9 +498,9 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
 
         for swe=1:8
 
-            for k=kswe[swe,1]:kswe[swe,3]:kswe[swe,2]            
-                for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
-                    for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
+            @inbounds for k=kswe[swe,1]:kswe[swe,3]:kswe[swe,2]            
+                @inbounds for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
+                    @inbounds for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
                         
                         if onsrc[i,j,k]==true # in the box containing the src
 
@@ -684,9 +682,8 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     cartid_ntxntyntz = CartesianIndices((ntx,nty,ntz))
 
     ## construct initial narrow band
-    for l=1:naccinit 
-        for ne=1:4 ## four potential neighbors
-            
+    @inbounds for l=1:naccinit 
+        @inbounds for ne=1:6 ## six potential neighbors
             i = irec[l] + neigh[ne,1]
             j = jrec[l] + neigh[ne,2]
             k = krec[l] + neigh[ne,3]
@@ -714,7 +711,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     #-------------------------------
     ## main FMM loop
     totnpts = ntx*nty*ntz
-    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -735,7 +732,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
                     xinit,yinit,zinit,xsrc,ysrc,zsrc,lambda,ia,ja,ka)
         
         ## try all neighbors of newly accepted point
-        for ne=1:4 
+        @inbounds for ne=1:6 ## six potential neighbors
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
             k = ka + neigh[ne,3]
@@ -916,9 +913,8 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     cartid_nxnynz = CartesianIndices((nx,ny,nz))
 
     ## construct initial narrow band
-    for l=1:naccinit 
-        for ne=1:4 ## four potential neighbors
-            
+    @inbounds for l=1:naccinit 
+        @inbounds for ne=1:6 ## six potential neighbors
             i = irec[l] + neigh[ne,1]
             j = jrec[l] + neigh[ne,2]
             k = jrec[l] + neigh[ne,3]
@@ -946,7 +942,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     #-------------------------------
     ## main FMM loop
     totnpts = nx*ny*nz
-    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -967,7 +963,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
                             xinit,yinit,zinit,xsrc,ysrc,zsrc,lambda,ia,ja,ka)
         
         ## try all neighbors of newly accepted point
-        for ne=1:4 
+        @inbounds for ne=1:6 ## six potential neighbors
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
             k = ka + neigh[ne,3]
@@ -1094,7 +1090,11 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},
 
     lambda[i,j,k] = numer/denom
 
-    return #lambda
+    # @show tt[i,j,k]
+    # @show aforwplus,aforwminus,abackplus,abackminus
+    # @show bforwplus,bforwminus,bbackplus,bbackminus
+    # @show cforwplus,cforwminus,cbackplus,cbackminus
+    return nothing #lambda
 end
 
 

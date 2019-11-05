@@ -135,6 +135,7 @@ function findclosestnode(x::Float64,y::Float64,xinit::Float64,yinit::Float64,h::
 end
     
 #####################################################################
+
 """
     findclosestnode(x::Float64,y::Float64,z::Float64,xinit::Float64,
                     yinit::Float64,zinit::Float64,h::Float64) 
@@ -251,7 +252,9 @@ function trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
         println("$i,$xh,$j,$yh,$k,$zh")
         return
     end 
-    # print*,x,y,z
+
+    # @show i,j,k
+    # @show x,y,z
 
     x0=i*ttgrdspacing
     y0=j*ttgrdspacing

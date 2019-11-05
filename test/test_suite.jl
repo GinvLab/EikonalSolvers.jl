@@ -17,8 +17,8 @@ function creategridmod2D()
     ny = 70 
     grd = Grid2D(hgrid,xinit,yinit,nx,ny)
         
-    xmax = xinit + (nx-1)*hgrid+xinit
-    ymax = yinit + (ny-1)*hgrid+yinit
+    xmax = xinit + (nx-1)*hgrid
+    ymax = yinit + (ny-1)*hgrid
     println("Grid size (velocity): $nx x $ny from ($xinit,$yinit) to  ($xmax,$ymax) ")
     println("Model parameters: $(nx*ny)")
     
@@ -53,9 +53,9 @@ function creategridmod3D()
     nz = 20
     grd = Grid3D(hgrid,xinit,yinit,zinit,nx,ny,nz)
         
-    xmax = xinit + (nx-1)*hgrid+xinit
-    ymax = yinit + (ny-1)*hgrid+yinit
-    zmax = zinit + (nz-1)*hgrid+zinit
+    xmax = xinit + (nx-1)*hgrid
+    ymax = yinit + (ny-1)*hgrid
+    zmax = zinit + (nz-1)*hgrid
     println("Grid size (velocity): $nx x $ny x $nz from ($xinit,$yinit,$zinit) to  ($xmax,$ymax,$zmax) ")
     println("Model parameters: $(nx*ny*nz)")
     
