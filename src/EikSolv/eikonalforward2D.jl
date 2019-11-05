@@ -177,7 +177,8 @@ function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::V
 
     end
 
-    halfg = 0.0 #hgrid/2.0    
+    halfg = 0.0 #hgrid/2.0
+    # Euclidean distance
     dist = sqrt(rx^2+ry^2)
     #@show dist,src,rx,ry
     if dist<=mindistsrc
@@ -497,8 +498,7 @@ function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
     cartid_nxny = CartesianIndices((nx,ny))
     
     ## construct initial narrow band
-    @inbounds for l=1:naccinit ##
-        
+    @inbounds for l=1:naccinit ##        
         @inbounds  for ne=1:4 ## four potential neighbors
 
             i = is[l] + neigh[ne,1]
@@ -666,8 +666,7 @@ end
 
 #########################################################################
 
-function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},
-                       grd::Grid2D) 
+function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
  
     ## Sizes
     nx,ny=grd.nx,grd.ny #size(vel)  ## NOT A STAGGERED GRID!!!
@@ -710,7 +709,8 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},
         ## 
         ## NO refinement around the source      
         ##
-        
+        println("\nttFMM_hiord(): NO refinement around the source! \n")
+
         ## source location, etc.      
         ## REGULAR grid
         onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=false )
@@ -1124,11 +1124,9 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     nx = (i2coarse-i1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
     ny = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
 
-    # @show ixsrcglob,iysrcglob
-    # @show i1coarse,i2coarse,j1coarse,j2coarse
-    # @show nx,ny
-    xinit = 0.0
-    yinit = 0.0
+    # set origin of the fine grid
+    xinit = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
+    yinit = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
     grdfine = Grid2D(dh,xinit,yinit,nx,ny)
 
     ## 
@@ -1151,10 +1149,10 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     ##
     ## Reset coodinates to match the fine grid
     ##
-    xorig = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
-    yorig = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
-    xsrc = src[1] - xorig #- grdcoarse.xinit
-    ysrc = src[2] - yorig #- grdcoarse.yinit
+    # xorig = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
+    # yorig = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
+    xsrc = src[1] #- xorig #- grdcoarse.xinit
+    ysrc = src[2] #- yorig #- grdcoarse.yinit
     srcfine = Float64[xsrc,ysrc]
 
     ##

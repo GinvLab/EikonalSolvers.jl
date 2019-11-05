@@ -1228,6 +1228,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
         ## 
         ## NO refinement around the source      
         ##
+        println("\nttFMM_hiord(): NO refinement around the source! \n")
 
         ## source location, etc.      
         ## REGULAR grid
@@ -1597,12 +1598,10 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     ny = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
     nz = (k2coarse-k1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
 
-    # @show ixsrcglob,iysrcglob
-    # @show i1coarse,i2coarse,j1coarse,j2coarse
-    # @show nx,ny
-    xinit = 0.0
-    yinit = 0.0
-    zinit = 0.0
+    # set the origin of fine grid
+    xinit = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
+    yinit = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
+    zinit = ((k1coarse-1)*grdcoarse.hgrid+grdcoarse.zinit)
     grdfine = Grid3D(dh,xinit,yinit,zinit,nx,ny,nz)
 
     ## 
@@ -1625,9 +1624,9 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     ##
     ## Reset coodinates to match the fine grid
     ##
-    xorig = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
-    yorig = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
-    zorig = ((k1coarse-1)*grdcoarse.hgrid+grdcoarse.zinit)
+    # xorig = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
+    # yorig = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
+    # zorig = ((k1coarse-1)*grdcoarse.hgrid+grdcoarse.zinit)
     xsrc = src[1] - xorig - grdcoarse.xinit
     ysrc = src[2] - yorig - grdcoarse.yinit
     zsrc = src[3] - zorig - grdcoarse.zinit

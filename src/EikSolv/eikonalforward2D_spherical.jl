@@ -4,7 +4,6 @@
 ##        Eikonal forward 2D                         ## 
 #######################################################
 
-using PyPlot
 
 ######################################################
 """
@@ -265,9 +264,9 @@ function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpo
     rr = xsrc-((ix-1)*grd.Δr+grd.rinit)
     rθ = ysrc-((iy-1)*grd.Δθ+grd.θinit)
 
-
-    halfg = 0.0 #hgrid/2.0    
-    dist = sqrt(rr^2+rθ^2)
+    halfg = 0.0 #hgrid/2.0
+    ## distance in POLAR COORDINATES
+    dist = sqrt(rr^2+grd.r[ix]^2*rθ^2)
     #@show dist,src,rr,rθ
     if dist<=mindistsrc
         onsrc[ix,iy] = true
@@ -301,7 +300,7 @@ function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpo
 end 
 
 #################################################################################
-#########################################################################
+#################################################################################
 
 function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},
                      grd::Grid2DSphere) 
@@ -762,7 +761,6 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
     ## ix, iy will become the center of the refined grid
     ixsrcglob,iysrcglob = findclosestnode_sph(src[1],src[2],grdcoarse.rinit,grdcoarse.θinit,grdcoarse.Δr,grdcoarse.Δθ) 
     
-
     ##
     ## Define chunck of coarse grid
     ##
@@ -785,20 +783,21 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
     ##
     dr = grdcoarse.Δr/downscalefactor
     dθ = grdcoarse.Δθ/downscalefactor
-    @show dr,dθ
 
     # fine grid size
     nr = (i2coarse-i1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
     nθ = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
 
-    # set the origin of fine grid  
-    rinit = 0.0 
-    θinit = 0.0
+    # set the origin of fine grid
+    ## not a Cartesian grid, so the radius MATTERS for the derivatives
+    rinit = grdcoarse.r[i1coarse]
+    θinit = grdcoarse.θ[j1coarse]
+    # rinit = 0.0 
+    # θinit = 0.0
+
     ###  grdfine = Grid2D(dh,xinit,yinit,nx,ny)
     grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=nr,nθ=nθ,rinit=rinit,θinit=θinit)
-    @show grdfine
-    @show grd
-    
+
     ## 
     ## Time array
     ##
@@ -819,10 +818,10 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
     ##
     ## Reset coordinates to match the fine grid
     ##
-    xorig = ((i1coarse-1)*grdcoarse.Δr+grdcoarse.rinit) 
-    yorig = ((j1coarse-1)*grdcoarse.Δθ+grdcoarse.θinit) 
-    xsrc = src[1] - xorig #- grdcoarse.rinit
-    ysrc = src[2] - yorig #- grdcoarse.θinit
+    # xorig = ((i1coarse-1)*grdcoarse.Δr+grdcoarse.rinit) 
+    # yorig = ((j1coarse-1)*grdcoarse.Δθ+grdcoarse.θinit) 
+    xsrc = src[1] #- xorig #- grdcoarse.rinit
+    ysrc = src[2] #- yorig #- grdcoarse.θinit
     srcfine = Float64[xsrc,ysrc]
 
     ##
@@ -906,37 +905,11 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
         end
     end
 
-
-    
-    begin
-        figure()
-        subplot(221)
-        title("INIT status fine")
-        imshow(status)
-        colorbar()
-        #plot(iis-1,jjs-1,"o")
-        subplot(222)
-        title("INIT ttime fine")
-        imshow(ttime)
-        colorbar()
-        #plot(iis-1,jjs-1,"o")
-        subplot(223)
-        title("INIT status coarse")
-        imshow(statuscoarse)
-        colorbar()
-        subplot(224)
-        title("INIT ttime coarse")
-        imshow(ttimecoarse)
-        colorbar()
-    end
-
-    
     #-------------------------------
     ## main FMM loop
     firstwarning=true
     totnpts = nr*nθ
     @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
-
         
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -975,29 +948,6 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
                 end
                 continue
             end
-
-            begin
-                figure()
-                subplot(221)
-                title("status fine")
-                imshow(status)
-                colorbar()
-                #plot(iis-1,jjs-1,"o")
-                subplot(222)
-                title("ttime fine")
-                imshow(ttime)
-                colorbar()
-                #plot(iis-1,jjs-1,"o")
-                subplot(223)
-                title("status coarse")
-                imshow(statuscoarse)
-                colorbar()
-                subplot(224)
-                title("ttime coarse")
-                imshow(ttimecoarse)
-                colorbar()
-            end
-   
             return nothing 
         end
         ##########################################################
@@ -1035,34 +985,7 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
         end
         ##-------------------------------
 
-        # begin            
-        #     figure()
-        #     suptitle("node: $node")
-        #     subplot(221)
-        #     title("status fine")
-        #     imshow(status)
-        #     colorbar()
-        #     #plot(iis-1,jjs-1,"o")
-        #     subplot(222)
-        #     title("ttime fine")
-        #     imshow(ttime)
-        #     colorbar()
-        #     #plot(iis-1,jjs-1,"o")
-        #     subplot(223)
-        #     title("status coarse")
-        #     imshow(statuscoarse)
-        #     colorbar()
-        #     subplot(224)
-        #     title("ttime coarse")
-        #     imshow(ttimecoarse)
-        #     colorbar()
-        #     if node>10
-        #         error("bbbbohhhh")
-        #     end
-        # end
-
-        
-    end
+     end
     error("Ouch...")
 end
 
