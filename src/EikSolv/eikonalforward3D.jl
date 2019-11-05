@@ -1627,9 +1627,9 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     # xorig = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
     # yorig = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
     # zorig = ((k1coarse-1)*grdcoarse.hgrid+grdcoarse.zinit)
-    xsrc = src[1] - xorig - grdcoarse.xinit
-    ysrc = src[2] - yorig - grdcoarse.yinit
-    zsrc = src[3] - zorig - grdcoarse.zinit
+    xsrc = src[1] #- xorig - grdcoarse.xinit
+    ysrc = src[2] #- yorig - grdcoarse.yinit
+    zsrc = src[3] #- zorig - grdcoarse.zinit
     srcfine = Float64[xsrc,ysrc,zsrc]
 
     ##
