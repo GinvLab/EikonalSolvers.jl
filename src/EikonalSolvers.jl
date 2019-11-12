@@ -11,18 +11,12 @@
 module EikonalSolvers
 
 
-export Grid2D
-export traveltime2D
-export gradttime2D
+export Grid2D,traveltime2D,gradttime2D
+export Grid2DSphere,traveltime2Dsphere,gradttime2Dsphere
 
-export Grid2DSphere,traveltime2Dsphere
-
-export Grid3D
-export traveltime3D
-export gradttime3D
+export Grid3D,traveltime3D,gradttime3D
 
 export misfitfunc
-
 export EikonalProb
 
 ## For parallelisation
@@ -34,12 +28,14 @@ using .BinHeaps
 
 ## general utils
 include("EikSolv/eikonalutils.jl")
+include("EikSolv/eikonalutils_spherical.jl")
 
 ## 2D stuff
 include("EikSolv/eikonalforward2D.jl")
 include("EikSolv/eikonalgradient2D.jl")
 # spherical/polar coodinates
 include("EikSolv/eikonalforward2D_spherical.jl")
+include("EikSolv/eikonalgradient2D_spherical.jl")
 
 ## 3D stuff
 include("EikSolv/eikonalforward3D.jl")

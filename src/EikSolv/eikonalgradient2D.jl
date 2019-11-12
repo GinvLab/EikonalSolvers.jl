@@ -329,6 +329,20 @@ end
 function adjderivonsource(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64,j::Int64,
                           xinit::Float64,yinit::Float64,dh::Float64,xsrc::Float64,ysrc::Float64)        
 
+    ##          thx
+    ##     o-----.------> x
+    ##     |\    |
+    ##     | \d  | HPy
+    ##     |  \  |
+    ##     |   \ |
+    ##     |    \|
+    ## thy .-----.P
+    ##     |HPx 
+    ##     |
+    ##     \/
+    ##     y
+    ##
+
     ## If we are in the square containing the source,
     ## use real position of source for the derivatives.
     ## Calculate tt on x and y on the edges of the square

@@ -4,138 +4,6 @@
 ##        Eikonal forward 2D                         ## 
 #######################################################
 
-
-######################################################
-"""
-A structure holding the 2D SPHERICAL grid parameters, geometry and size.
-
-The constructor is given by:
-
-     Grid2DSphere(; Δr::Float64,Δθ::Float64,rinit::Float64,θinit::Float64,nr::Int64,nθ::Int64)
-
-The fields are:    
-- `Δr`: spacing of the grid nodes along the radial coordinate r
-- `Δθ`: spacing of the grid nodes along the θ coordinate
-- `rinit, θinit`: origin of the coordinates of the grid
-- `nr, nθ`: number of nodes along r and θ for the velocity array (structured grid)
-
-
-# Example
-```julia-repl
-julia> Grid2DSphere(Δr=15.0,Δθ=2.0,nr=10,nθ=15,rinit=500.0,θinit=0.0)
-```
-"""
-#Base.@kwdef
-struct Grid2DSphere
-    Δr::Float64
-    Δθ::Float64
-    rinit::Float64
-    θinit::Float64
-    nr::Int64
-    nθ::Int64
-    r::Vector{Float64}
-    θ::Vector{Float64}
-
-    function Grid2DSphere(; Δr::Float64,Δθ::Float64,rinit::Float64,θinit::Float64,nr::Int64,nθ::Int64)
-        r = [rinit+Δr*(i-1) for i =1:nr]
-        θ = [θinit+Δθ*(i-1) for i =1:nθ]
-        ## limit to 180 degrees for now...
-        @assert all(0.0.<=θ.<=180.0)
-        # ## now convert everything to radians
-        # println("Grid2DSphere(): converting θ to radians")
-        # θ .= deg2rad(θ)
-        # Δθ = deg2rad(Δθ)
-        new(Δr,Δθ,rinit,θinit,nr,nθ,r,θ)
-    end
-end
-
-#####################################################################
-"""
-    findclosestnode_sph(x::Float64,y::Float64,z::Float64,xinit::Float64,
-                        yinit::Float64,zinit::Float64,Δr::Float64,Δθ::Float64) 
-
-Find closest node on a grid to a given point.
-"""
-function findclosestnode_sph(r::Float64,θ::Float64,rinit::Float64,θinit::Float64,
-                             Δr::Float64,Δθ::Float64) 
-    # xini ???
-    # yini ???
-    ir = floor((r-rinit)/Δr)
-    iθ = floor((θ-θinit)/Δθ)
-
-    rx = r-(ir*Δr+rinit)
-    ry = θ-(iθ*Δθ+θinit)
-
-    middler = Δr/2.0
-    middleθ = Δθ/2.0
-
-    if rx>=middler
-        ir = ir+1
-    end
-    if ry>=middleθ  
-        iθ = iθ+1
-    end
-    return Int(ir+1),Int(iθ+1) # julia
-end
-
-
-#############################################################
-
-"""
-     bilinear_interp_sph(f::Array{Float64,2},grdsph::Grid2DSphere,
-                             xreq::Float64,yreq::Float64)
-
-Bilinear interpolation (spherical coordinates).
-"""
-function bilinear_interp_sph(f::Array{Float64,2},grdsph::Grid2DSphere,
-                             xreq::Float64,yreq::Float64)
-    xinit = grdsph.rinit
-    yinit = grdsph.θinit
-    dx = grdsph.Δr
-    dy = grdsph.Δθ
-    nx = grdsph.nr
-    nx = grdsph.nθ
-    
-    
-    nx,ny = size(f)
-    ## rearrange such that the coordinates of corners are (0,0), (0,1), (1,0), and (1,1)
-    xh=(xreq-xinit)/dx
-    yh=(yreq-yinit)/dy
-    i=floor(Int64,xh+1) # indices starts from 1
-    j=floor(Int64,yh+1) # indices starts from 1
-  
-    ## rearrange such that the coordinates of corners are (0,0), (0,1), (1,0), and (1,1)
-    xh=(xreq-xinit)/dx
-    yh=(yreq-yinit)/dy
-    i=floor(Int64,xh+1) # indices starts from 1
-    j=floor(Int64,yh+1) # indices starts from 1
-    ## if at the edges of domain choose previous square...
-    if i==nx
-        i=i-1
-    end
-    if j==ny
-        j=j-1
-    end  ## if at the edges of domain choose previous square...
-    if i==nx
-        i=i-1
-    end
-    if j==ny
-        j=j-1
-    end
-    xd=xh-(i-1) # indices starts from 1
-    yd=yh-(j-1) # indices starts from 1
-    intval = f[i,j]*(1.0-xd)*(1.0-yd)+f[i+1,j]*(1.0-yd)*xd +
-        f[i,j+1]*(1.0-xd)*yd+f[i+1,j+1]*xd*yd
-    
-    # println("------------")
-    # @show xreq yreq xh yh 
-    # @show i j xd yd
-    # @show f[i:i+1,j:j+1], intval
-    return intval
-end
-
-##########################################################################
-
 ## @doc raw because of some backslashes in the string...
 @doc raw"""
     traveltime2Dsphere(vel::Array{Float64,2},grd::Grid2DSphere,coordsrc::Array{Float64,2},
@@ -255,18 +123,19 @@ function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpo
 
     ## source location, etc.      
     mindistsrc = 1e-5   
-    xsrc,ysrc=srcpos[1],srcpos[2]
+    rsrc,θsrc=srcpos[1],srcpos[2]
 
     ## regular grid
     onsrc = zeros(Bool,grd.nr,grd.nθ)
     onsrc[:,:] .= false
-    ix,iy = findclosestnode_sph(xsrc,ysrc,grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
-    rr = xsrc-((ix-1)*grd.Δr+grd.rinit)
-    rθ = ysrc-((iy-1)*grd.Δθ+grd.θinit)
+    ix,iy = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
+    rr = rsrc-((ix-1)*grd.Δr+grd.rinit)
+    rθ = θsrc-((iy-1)*grd.Δθ+grd.θinit)
 
     halfg = 0.0 #hgrid/2.0
     ## distance in POLAR COORDINATES
-    dist = sqrt(rr^2+grd.r[ix]^2*rθ^2)
+    ## sqrt(r1^+r2^2 - 2*r1*r2*cos(θ1-θ2))
+    dist = sqrt(rsrc^2+grd.r[ix]^2-2.0*cosd(θsrc-grd.θ[iy]) )  #sqrt(rr^2+grd.r[ix]^2*rθ^2)
     #@show dist,src,rr,rθ
     if dist<=mindistsrc
         onsrc[ix,iy] = true
@@ -288,11 +157,14 @@ function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpo
             i = lcart[1]
             j = lcart[2]
             ## regular grid
-            xp = (i-1)*grd.Δr+grd.rinit
-            yp = (j-1)*grd.Δθ+grd.θinit
-            ii = Int(floor((xsrc-grd.rinit)/grd.Δr)) +1
-            jj = Int(floor((ysrc-grd.θinit)/grd.Δθ)) +1             
-            ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+            # xp = (i-1)*grd.Δr+grd.rinit
+            # yp = (j-1)*grd.Δθ+grd.θinit
+            ii = Int(floor((rsrc-grd.rinit)/grd.Δr)) +1
+            jj = Int(floor((θsrc-grd.θinit)/grd.Δθ)) +1
+            ##ttime[i,j] = sqrt((rsrc-xp)^2+(θsrc-yp)^2) / vel[ii,jj]
+            ## sqrt(r1^+r2^2 -2*r1*r2*cos(θ1-θ2))
+            distp = sqrt(rsrc^2+grd.r[ii]^2-2.0*cosd(θsrc-grd.θ[jj]) )
+            ttime[i,j] = distp / vel[ii,jj]
         end
     end
 
