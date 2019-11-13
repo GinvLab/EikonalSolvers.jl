@@ -132,7 +132,8 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},src
 
     ## loop to make sure we don't accidentally move the src to another node/edge
     ## sqrt(r1^+r2^2 - 2*r1*r2*cos(θ1-θ2))
-    while (sqrt(rsrc^2+grd.r[ir]^2-2.0*cosd(θsrc-grd.θ[iθ]))<=mindistsrc) || (abs(rr)<=mindistsrc) || (abs(rθ)<=mindistsrc)
+    dist = sqrt(rsrc^2+grd.r[ir]^2-2.0*rsrc*grd.r[ir]*cosd(θsrc-grd.θ[iθ]))
+    while (dist<=mindistsrc) || (abs(rr)<=mindistsrc) || (abs(rθ)<=mindistsrc)
         src_on_nodeedge = true
         
         ## shift the source 
@@ -153,6 +154,7 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},src
         ir,iθ = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,grd.Δr,grd.Δθ) 
         rr = rsrc-((ir-1)*grd.Δr+grd.rinit)
         rθ = θsrc-((iθ-1)*grd.Δθ+grd.θinit)
+        dist = sqrt(rsrc^2+grd.r[ir]^2-2.0*rsrc*grd.r[ir]*cosd(θsrc-grd.θ[iθ]))
     end
 
     ## To avoid singularities, the src can only be inside a box,
@@ -184,7 +186,9 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},src
             ii = Int(floor((rsrc-grd.rinit)/grd.Δr) +1)
             jj = Int(floor((θsrc-grd.θinit)/grd.Δθ) +1)
             #### vel[isrc[1,1],jsrc[1,1]]
-            distp = sqrt(rsrc^2+grd.r[ii]^2-2.0*cosd(θsrc-grd.θ[jj]) )
+            r1=rsrc
+            r2=grd.r[ii]
+            dist = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[jj]))  
             ttime[i,j] = distp / vel[ii,jj]
         end 
     end
@@ -287,7 +291,9 @@ function adjderivonsource_sph(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64
     ## distances P to src
     distHPx = abs(xp-xsrc)
     distHPy = abs(grd.r[i]*(yp-ysrc)) ## arc distance...
-    dist2src = sqrt(xsrc^2+grd.r[i]^2-2.0*cosd(ysrc-grd.θ[j]) )
+    r1=xsrc
+    r2=grd.r[i]
+    dist2src = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(ysrc-grd.θ[j]))  
     # assert dist2src>0.0 otherwise a singularity will occur
     @assert dist2src>0.0
 

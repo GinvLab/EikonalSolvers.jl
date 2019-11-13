@@ -992,8 +992,6 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             beta  = 0.0
             gamma = - slowcurpt^2 ## !!!!
 
-            chovalxy = zeros(2)
-            
             ## 2 directions
             @inbounds for axis=1:2
                 
@@ -1048,8 +1046,6 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
                     gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
 
                 end
-                
-                chovalxy[axis] = chosenval1
             end
             
         end ## begin...

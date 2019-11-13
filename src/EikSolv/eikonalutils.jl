@@ -182,33 +182,19 @@ function bilinear_interp(f::Array{Float64,2},hgrid::Float64,
     i=floor(Int64,xh+1) # indices starts from 1
     j=floor(Int64,yh+1) # indices starts from 1
   
-    ## rearrange such that the coordinates of corners are (0,0), (0,1), (1,0), and (1,1)
-    xh=(xreq-xinit)/hgrid
-    yh=(yreq-yinit)/hgrid
-    i=floor(Int64,xh+1) # indices starts from 1
-    j=floor(Int64,yh+1) # indices starts from 1
     ## if at the edges of domain choose previous square...
     if i==nx
         i=i-1
     end
     if j==ny
         j=j-1
-    end  ## if at the edges of domain choose previous square...
-    if i==nx
-        i=i-1
-    end
-    if j==ny
-        j=j-1
-    end
+    end 
+
     xd=xh-(i-1) # indices starts from 1
     yd=yh-(j-1) # indices starts from 1
     intval = f[i,j]*(1.0-xd)*(1.0-yd)+f[i+1,j]*(1.0-yd)*xd +
         f[i,j+1]*(1.0-xd)*yd+f[i+1,j+1]*xd*yd
     
-    # println("------------")
-    # @show xreq yreq xh yh 
-    # @show i j xd yd
-    # @show f[i:i+1,j:j+1], intval
     return intval
 end
 

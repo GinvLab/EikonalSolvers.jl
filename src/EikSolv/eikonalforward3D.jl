@@ -1527,19 +1527,119 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Grid
             gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
         end
 
-        #@show use1stord,use2ndord,alpha
     end
+
+    ## compute discriminant 
+    sqarg = beta^2-4.0*alpha*gamma
+
+    ## from 2D:
+    ## To get a non-negative discriminant, need to fulfil:
+    ##    (tx-ty)^2 - 2*s^2/curalpha <= 0
+    ##    where tx,ty can be
+    ##     t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order
+    ##     t? = chosenval1  if 1st order 
+    ##  
+    ## If discriminant is negative (probably because of sharp contrasts in
+    ##  velocity) revert to 1st order for both x and y
+    if sqarg<0.0
+
+        begin
+            
+            alpha = 0.0
+            beta  = 0.0
+            gamma = - slowcurpt^2 ## !!!!
+
+            ## 3 directions
+            @inbounds for axis=1:3
+                
+                use1stord = false
+                chosenval1 = HUGE
+                
+                ## two sides for each direction
+                @inbounds for l=1:2
+
+                    ## map the 4 cases to an integer as in linear indexing...
+                    lax = l + 2*(axis-1)
+                    if lax==1 # axis==1
+                        ish = 1
+                        jsh = 0
+                        ksh = 0
+                    elseif lax==2 # axis==1
+                        ish = -1
+                        jsh = 0
+                        ksh = 0
+                    elseif lax==3 # axis==2
+                        ish = 0
+                        jsh = 1
+                        ksh = 0
+                    elseif lax==4 # axis==2
+                        ish = 0
+                        jsh = -1
+                        ksh = 0
+                    elseif lax==5 # axis==3
+                        ish = 0
+                        jsh = 0
+                        ksh = 1
+                    elseif lax==6 # axis==3
+                        ish = 0
+                        jsh = 0
+                        ksh = -1
+                    end
+                    
+                    ## check if on boundaries
+                    isonb1,isonb2 = isonbord_sph(i+ish,j+jsh,k+ksh,nr,nθ,nφ)
+                    
+                    ## 1st order
+                    if !isonb1 && status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
+                        testval1 = ttime[i+ish,j+jsh,k+ksh]
+                        ## pick the lowest value of the two
+                        if testval1<chosenval1 ## < only
+                            chosenval1 = testval1
+                            use1stord = true
+                        end
+                    end
+                end # end two sides
+
+                if axis==1
+                    deltah = dx
+                elseif axis==2
+                    deltah = dy
+                elseif axis==3
+                    deltah = dz
+                end
+
+                if use1stord # first order
+                    ## curalpha: make sure you multiply only times the
+                    ##   current alpha for beta and gamma...
+                    curalpha = 1.0/deltah^2 
+                    alpha += curalpha
+                    beta  += ( -2.0*curalpha * chosenval1 )
+                    gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
+                end
+            end
+
+        end # begin...
+
+        ## recompute sqarg
+        sqarg = beta^2-4.0*alpha*gamma
+
+        if sqarg<0.0
+            ## TODO: adapt message to 3D!
+            println("\n To get a non-negative discriminant, need to fulfil [in 2D]: ")
+            println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
+            println(" where tx,ty can be")
+            println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
+            println(" t? = chosenval1  if 1st order ")
+            error("sqarg<0.0")
+        end
+    end ## if sqarg<0.0
     
     ### roots of the quadratic equation
-    tmpsq = sqrt(beta^2-4.0*alpha*gamma)
+    tmpsq = sqrt(sqarg)
     soughtt1 = (-beta + tmpsq)/(2.0*alpha)
     soughtt2 = (-beta - tmpsq)/(2.0*alpha)
     ## choose the largest solution
     soughtt = max(soughtt1,soughtt2)
-
-    # @show i,j,k,ttcurpt,soughtt
-    # @show alpha,beta,gamma,soughtt
-    # @show findall(ttime.<1e30)
 
     return soughtt
 end

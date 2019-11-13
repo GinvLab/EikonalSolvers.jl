@@ -135,7 +135,9 @@ function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpo
     halfg = 0.0 #hgrid/2.0
     ## distance in POLAR COORDINATES
     ## sqrt(r1^+r2^2 - 2*r1*r2*cos(θ1-θ2))
-    dist = sqrt(rsrc^2+grd.r[ix]^2-2.0*cosd(θsrc-grd.θ[iy]) )  #sqrt(rr^2+grd.r[ix]^2*rθ^2)
+    r1=rsrc
+    r2=grd.r[ix]
+    dist = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iy]) )  #sqrt(rr^2+grd.r[ix]^2*rθ^2)
     #@show dist,src,rr,rθ
     if dist<=mindistsrc
         onsrc[ix,iy] = true
@@ -163,7 +165,9 @@ function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpo
             jj = Int(floor((θsrc-grd.θinit)/grd.Δθ)) +1
             ##ttime[i,j] = sqrt((rsrc-xp)^2+(θsrc-yp)^2) / vel[ii,jj]
             ## sqrt(r1^+r2^2 -2*r1*r2*cos(θ1-θ2))
-            distp = sqrt(rsrc^2+grd.r[ii]^2-2.0*cosd(θsrc-grd.θ[jj]) )
+            r1=rsrc
+            r2=grd.r[ii]
+            distp = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iy]))
             ttime[i,j] = distp / vel[ii,jj]
         end
     end
@@ -380,8 +384,8 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
     #  Sethian, 1996, A fast marching level set method for monotonically
     #  advancing fronts, PNAS
 
-    deltar = sphgrd.Δr
-    deltaθ = deg2rad(sphgrd.Δθ)  ## DEG to RAD !!!!
+    dr = sphgrd.Δr
+    dθ = deg2rad(sphgrd.Δθ)  ## DEG to RAD !!!!
 
     # dx2 = dx^2
     # dy2 = dy^2
@@ -438,7 +442,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
 
             ## check if on boundaries
             isonb1st,isonb2nd = isonbord_sph(i+ish,j+jsh,nr,nθ)
-                                    
+            
             ## 1st order
             if !isonb1st && status[i+ish,j+jsh]==2 ## 2==accepted
                 testval1 = ttime[i+ish,j+jsh]
@@ -446,7 +450,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
                 if testval1<chosenval1 ## < only
                     chosenval1 = testval1
                     use1stord = true
-                        
+                    
                     ## 2nd order
                     ish2::Int64 = 2*ish
                     jsh2::Int64 = 2*jsh
@@ -467,22 +471,17 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             end
         end # end two sides
 
-        # if axis==1
-        #     deltah = dx
-        # elseif axis==2
-        #     deltah = dy
-        # end
+        if axis==1
+            deltah = dr
+        elseif axis==2
+            deltah = sphgrd.r[i]*dθ
+        end
 
         if use2ndord && use1stord # second order
             tmpa2 = 1.0/3.0 * (4.0*chosenval1-chosenval2)
             ## curalpha: make sure you multiply only times the
             ##   current alpha for beta and gamma...
-            if axis==1 ## r, radial
-                curalpha = 9.0/(4.0 * deltar^2)
-            elseif axis==2 # θ, angle
-                rad = sphgrd.r[i]
-                curalpha = 9.0/(4.0 * (rad*deltaθ)^2)
-            end
+            curalpha = 9.0/(4.0 * deltah^2)
             alpha += curalpha
             beta  += ( -2.0*curalpha * tmpa2 )
             gamma += curalpha * tmpa2^2
@@ -490,17 +489,12 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
         elseif use1stord # first order
             ## curalpha: make sure you multiply only times the
             ##   current alpha for beta and gamma...
-            if axis==1 ## r, radial
-                curalpha = 1.0/deltar^2
-            elseif axis==2 # θ, angle
-                rad = sphgrd.r[i]
-                curalpha = 1.0/(rad*deltaθ)^2
-            end
-            alpha += curalpha
-            beta  += ( -2.0*curalpha * chosenval1 )
-            gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
-
+            curalpha = 1.0/deltah^2
         end
+        alpha += curalpha
+        beta  += ( -2.0*curalpha * chosenval1 )
+        gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
+
     end
 
     ## compute discriminant 
@@ -521,8 +515,6 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             beta  = 0.0
             gamma = - slowcurpt^2 ## !!!!
 
-            chovalxy = zeros(2)
-            
             ## 2 directions
             @inbounds for axis=1:2
                 
@@ -562,29 +554,22 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
                     end
                 end # end two sides
 
-                # if axis==1
-                #     deltah = dx
-                # elseif axis==2
-                #     deltah = dy
-                # end
+                if axis==1
+                    deltah = dr
+                elseif axis==2
+                    deltah = sphgrd.r[i]*dθ
+                end
                 
                 if use1stord # first order
                     ## curalpha: make sure you multiply only times the
                     ##   current alpha for beta and gamma...
-                    if axis==1 ## r, radial
-                        curalpha = 1.0/deltar^2
-                    elseif axis==2 # θ, angle
-                        rad = sphgrd.r[i]
-                        curalpha = 1.0/(rad*deltaθ)^2
-                    end
+                    curalpha = 1.0/deltah^2
                     alpha += curalpha
                     beta  += ( -2.0*curalpha * chosenval1 )
                     gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
 
                 end
-                
-                chovalxy[axis] = chosenval1
-            end
+              end
             
         end ## begin...
 
