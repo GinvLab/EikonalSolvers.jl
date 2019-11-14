@@ -133,14 +133,14 @@ function sourceboxloctt_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpo
     mindistsrc = 1e-5
   
     rsrc,θsrc,φsrc=srcpos[1],srcpos[2],srcpos[3]
-    
+
     ## regular grid
     onsrc = zeros(Bool,grd.nr,grd.nθ,grd.nφ)
     onsrc[:,:,:] .= false
     ir,iθ,iφ = findclosestnode_sph(rsrc,θsrc,φsrc,grd.rinit,grd.θinit,grd.φinit,grd.Δr,grd.Δθ,grd.Δφ)
-    rr = rsrc-((ir-1)*grd.Δr+grd.rinit)
-    rθ = θsrc-((iθ-1)*grd.Δθ+grd.θinit)
-    rφ = φsrc-((iφ-1)*grd.Δφ+grd.φinit)
+    rr = rsrc-grd.r[ir] #((ir-1)*grd.Δr+grd.rinit)
+    rθ = θsrc-grd.θ[iθ] #((iθ-1)*grd.Δθ+grd.θinit)
+    rφ = φsrc-grd.φ[iφ] #((iφ-1)*grd.Δφ+grd.φinit)
 
     halfg = 0.0 #hgrid/2.0
     ## distance in POLAR coordinates
@@ -184,19 +184,19 @@ function sourceboxloctt_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpo
             j = lcart[2]
             k = lcart[3]
             ## regular grid
-            rp = (i-1)*grd.hgrid+grd.rinit
-            θp = (j-1)*grd.hgrid+grd.θinit
-            φp = (k-1)*grd.hgrid+grd.φinit
-            ii = Int(floor((rsrc-grd.rinit)/grd.hgrid) +1)
-            jj = Int(floor((θsrc-grd.θinit)/grd.hgrid) +1)
-            kk = Int(floor((φsrc-grd.φinit)/grd.hgrid) +1)            
-
+            # rp = (i-1)*grd.hgrid+grd.rinit
+            # θp = (j-1)*grd.hgrid+grd.θinit
+            # φp = (k-1)*grd.hgrid+grd.φinit
+            # ii = Int(floor((rsrc-grd.rinit)/grd.rgrid) +1)
+            # jj = Int(floor((θsrc-grd.θinit)/grd.θgrid) +1)
+            # kk = Int(floor((φsrc-grd.φinit)/grd.φgrid) +1) 
+       
             r1 = rsrc
-            r2 = grd.r[ii]
+            r2 = grd.r[i]
             θ1 = θsrc
-            θ2 = grd.θ[jj]
+            θ2 = grd.θ[j]
             φ1 = φsrc
-            φ2 = grd.φ[kk]
+            φ2 = grd.φ[k]
             dist = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
             ttime[i,j,k] = distp / vel[ii,jj,kk]
         end
@@ -732,7 +732,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     # set the origin of fine grid
     rinit = grdcoarse.r[i1coarse] 
     θinit = grdcoarse.θ[j1coarse]
-    φinit = grdcoarse.φ[j1coarse]
+    φinit = grdcoarse.φ[k1coarse]
     # grd
     grdfine = Grid3DSphere(Δr=dr,Δθ=dθ,Δφ=dφ,nr=nr,nθ=nθ,nφ=nφ,rinit=rinit,θinit=θinit,φinit=φinit)
 

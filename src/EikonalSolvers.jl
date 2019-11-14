@@ -15,7 +15,7 @@ export Grid2D,traveltime2D,gradttime2D
 export Grid2DSphere,traveltime2Dsphere,gradttime2Dsphere
 
 export Grid3D,traveltime3D,gradttime3D
-export Grid3DSphere,traveltime3Dsphere #,gradttime3Dsphere
+export Grid3DSphere,traveltime3Dsphere,gradttime3Dsphere
 
 export misfitfunc
 export EikonalProb
@@ -43,7 +43,7 @@ include("EikSolv/eikonalforward3D.jl")
 include("EikSolv/eikonalgradient3D.jl")
 # spherical/polar coodinates
 include("EikSolv/eikonalforward3D_spherical.jl")
-#include("EikSolv/eikonalgradient3D_spherical.jl")
+include("EikSolv/eikonalgradient3D_spherical.jl")
 
 ## Hamiltonian Monte Carlo setup
 include("HMCtraveltimes.jl")

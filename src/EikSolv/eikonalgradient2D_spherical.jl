@@ -67,11 +67,11 @@ end
 """
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},coordrec::Array{Float64,2},
+function calcgradsomesrc2D(vel::Array{Float64,2},xθsrc::Array{Float64,2},coordrec::Array{Float64,2},
                            grd::Grid2DSphere,stdobs::Array{Float64,2},pickobs1::Array{Float64,2})
                           
     nx,ny=size(vel)
-    nsrc = size(xysrc,1)
+    nsrc = size(xθsrc,1)
     nrec = size(coordrec,1)                
     ttpicks1 = zeros(nrec)
     grad1 = zeros(nx,ny)
@@ -87,7 +87,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},coordre
         ###########################################
         ## calc ttime
         ## adjalgo=="gradFMM_hiord"
-        ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
+        ttgrdonesrc = ttFMM_hiord(vel,xθsrc[s,:],grd)
 
         ## ttime at receivers
         @inbounds for i=1:size(coordrec,1)
@@ -99,7 +99,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},coordre
         ##  add gradients from different sources
 
         ## adjalgo=="gradFMM_hiord"
-        grad1 += eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec,
+        grad1 += eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xθsrc[s,:],coordrec,
                                              grd,pickobs1[:,s],ttpicks1,stdobs[:,s])
 
     end
@@ -122,10 +122,10 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},src
     onsrc = zeros(Bool,grd.nr,grd.nθ)
     onsrc[:,:] .= false
     ir,iθ = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,grd.Δr,grd.Δθ) 
-    rr = rsrc-((ir-1)*grd.Δr+grd.rinit)
-    rθ = θsrc-((iθ-1)*grd.Δθ+grd.θinit)
-    max_r = (grd.nr-1)*grd.Δr+grd.rinit
-    max_θ = (grd.nθ-1)*grd.Δθ+grd.θinit
+    rr = rsrc-grd.r[ir] #rsrc-((ir-1)*grd.Δr+grd.rinit)
+    rθ = θsrc-grd.θ[iθ] #θsrc-((iθ-1)*grd.Δθ+grd.θinit)
+    max_r = grd.r[end] #(grd.nr-1)*grd.Δr+grd.rinit
+    max_θ = grd.φ[end] #(grd.nθ-1)*grd.Δθ+grd.θinit
         
     halfg = 0.0    
     src_on_nodeedge = false   
@@ -152,8 +152,8 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},src
         ## recompute parameters related to position of source
         ## regular grid
         ir,iθ = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,grd.Δr,grd.Δθ) 
-        rr = rsrc-((ir-1)*grd.Δr+grd.rinit)
-        rθ = θsrc-((iθ-1)*grd.Δθ+grd.θinit)
+        rr = rsrc-grd.r[ir] #rsrc-((ir-1)*grd.Δr+grd.rinit)
+        rθ = θsrc-grd.θ[iθ] #θsrc-((iθ-1)*grd.Δθ+grd.θinit)
         dist = sqrt(rsrc^2+grd.r[ir]^2-2.0*rsrc*grd.r[ir]*cosd(θsrc-grd.θ[iθ]))
     end
 
@@ -231,10 +231,10 @@ function recboxlocgrad_sph!(ttime::Array{Float64,2},lambda::Array{Float64,2},ttp
                 n∇T = (ttime[end,j]-ttime[end-1,j])/deltar
             elseif j==1
                 # forward diff
-                n∇T = - (ttime[i,2]-ttime[i,1])/(grd.r[i]*deltar) 
+                n∇T = - (ttime[i,2]-ttime[i,1])/(grd.r[i]*deltaθ) 
             elseif j==nymax
                 # backward diff
-                n∇T = (ttime[i,end]-ttime[i,end-1])/(grd.r[i]*deltar)
+                n∇T = (ttime[i,end]-ttime[i,end-1])/(grd.r[i]*deltaθ)
             end
             onarec[i,j] = true
             lambda[i,j] = (ttpicks[r]-pickobs[r])/(n∇T * stdobs[r]^2)
@@ -254,7 +254,7 @@ end
 #############################################################################
 
 function adjderivonsource_sph(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64,j::Int64,
-                          grd::Grid2DSphere,xsrc::Float64,ysrc::Float64)        
+                          grd::Grid2DSphere,rsrc::Float64,θsrc::Float64)        
 
     ##          thx
     ##     o-----.------> x
@@ -289,11 +289,11 @@ function adjderivonsource_sph(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64
     xp = grd.r[i] #Float64(i-1)*dh+xinit
     yp = grd.θ[j] #Float64(j-1)*dh+yinit
     ## distances P to src
-    distHPx = abs(xp-xsrc)
-    distHPy = abs(grd.r[i]*(yp-ysrc)) ## arc distance...
-    r1=xsrc
+    distHPx = abs(xp-rsrc)
+    distHPy = abs(grd.r[i]*deg2rad(yp-θsrc)) ## arc distance...
+    r1=rsrc
     r2=grd.r[i]
-    dist2src = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(ysrc-grd.θ[j]))  
+    dist2src = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[j]))  
     # assert dist2src>0.0 otherwise a singularity will occur
     @assert dist2src>0.0
 
@@ -308,7 +308,7 @@ function adjderivonsource_sph(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64
     thy = tt[i,j]*distHPx/dist2src
     
     if onsrc[i+1,j]==true                            
-        aback = -(tt[i,j]-tt[i-1,j])/deltar^2
+        aback = -(tt[i,j]-tt[i-1,j])/deltar
         if distHPx==0.0
             aforw = 0.0 # point exactly on source
         else
@@ -320,10 +320,10 @@ function adjderivonsource_sph(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64
         else
             aback = -(tt[i,j]-thx)/distHPx # dist along x
         end
-        aforw = -(tt[i+1,j]-tt[i,j])/deltar^2
+        aforw = -(tt[i+1,j]-tt[i,j])/deltar
     end
     if onsrc[i,j+1]==true
-        bback = -(tt[i,j]-tt[i,j-1])/(grd.r[i]*deltaθ)^2
+        bback = -(tt[i,j]-tt[i,j-1])/(grd.r[i]*deltaθ)
         if distHPy==0.0
             bforw = 0.0 # point exactly on source
         else
@@ -335,7 +335,7 @@ function adjderivonsource_sph(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64
         else
             bback = -(tt[i,j]-thy)/distHPy # dist along y
         end
-        bforw = -(tt[i,j+1]-tt[i,j])/(grd.r[i]*deltaθ)^2
+        bforw = -(tt[i,j+1]-tt[i,j])/(grd.r[i]*deltaθ)
     end
 
     return aback,aforw,bback,bforw
@@ -369,7 +369,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
     
     ## source
     ## regular grid
-    onsrc,xsrc,ysrc = sourceboxlocgrad_sph!(tt,vel,src,grd)
+    onsrc,rsrc,θsrc = sourceboxlocgrad_sph!(tt,vel,src,grd)
     ## receivers
     onarec = recboxlocgrad_sph!(tt,lambda,ttpicks,grd,rec,pickobs,stdobs)
 
@@ -457,7 +457,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
         status[ia,ja] = 2 # 2=accepted
 
         # set lambda of the new accepted point
-        calcLAMBDA_hiord!(tt,status,onsrc,onarec,grd,xsrc,ysrc,lambda,ia,ja)
+        calcLAMBDA_hiord!(tt,status,onsrc,onarec,grd,rsrc,θsrc,lambda,ia,ja)
                           
 
         ## try all neighbors of newly accepted point
@@ -513,14 +513,14 @@ end
 ########################################################################################
 
 function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},onsrc::Array{Bool,2},onarec::Array{Bool,2},
-                           grd::Grid2DSphere,xsrc::Float64,ysrc::Float64,lambda::Array{Float64,2},i::Int64,j::Int64)
+                           grd::Grid2DSphere,rsrc::Float64,θsrc::Float64,lambda::Array{Float64,2},i::Int64,j::Int64)
 
     deltar = grd.Δr
     deltaθ = deg2rad(grd.Δθ)  ## DEG to RAD !!!!
 
     if onsrc[i,j]==true #  in the box containing the src
 
-        aback,aforw,bback,bforw = adjderivonsource_sph(tt,onsrc,i,j,grd,xsrc,ysrc)
+        aback,aforw,bback,bforw = adjderivonsource_sph(tt,onsrc,i,j,grd,rsrc,θsrc)
 
     else # not on src
 
