@@ -39,7 +39,7 @@ function gradttime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Arr
     @assert all(vel.>=0.0)
     @assert all(grd.rinit.<=coordsrc[:,1].<=((grd.nr-1)*grd.Δr+grd.rinit))
     @assert all(grd.θinit.<=coordsrc[:,2].<=((grd.nθ-1)*grd.Δθ+grd.θinit))
-    @assert all(grd.φinit.<=coordsrc[:,2].<=((grd.nφ-1)*grd.Δφ+grd.φinit))
+    @assert all(grd.φinit.<=coordsrc[:,3].<=((grd.nφ-1)*grd.Δφ+grd.φinit))
 
     nsrc=size(coordsrc,1)
     nw = nworkers()
@@ -68,8 +68,7 @@ end
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc3D(vel::Array{Float64,3},xθsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                           grd::Grid3D,stdobs::Array{Float64,2},pickobs1::Array{Float64,2},
-                           adjalgo::String)
+                           grd::Grid3DSphere,stdobs::Array{Float64,2},pickobs1::Array{Float64,2} )
 
     nr,nθ,nφ=size(vel)
     ttpicks1 = zeros(size(coordrec,1))
@@ -108,7 +107,7 @@ end
 ############################################################################
 
 function sourceboxlocgrad_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},
-                               grd::Grid3D; staggeredgrid::Bool )
+                               grd::Grid3DSphere )
 
     ##########################
     ##   Init source
@@ -140,7 +139,7 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},src
     φ1 = φsrc
     φ2 = grd.φ[iφ]
     dist = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
-    while  (dist<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc) || (abs(rz)<=mindistsrc)
+    while  (dist<=mindistsrc) || (abs(rr)<=mindistsrc) || (abs(rθ)<=mindistsrc) || (abs(rφ)<=mindistsrc)
         src_on_nodeedge = true
         
         ## shift the source 
@@ -154,7 +153,7 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},src
         else #(make sure it's not already at the bottom y)
             θsrc = θsrc-0.001*grd.Δθ
         end
-        if φsrc < max_φ-0.002*
+        if φsrc < max_φ-0.002*grd.Δφ
             φsrc = φsrc+0.001*grd.Δφ
         else #(make sure it's not already at the bottom z)
             φsrc = φsrc-0.001*grd.Δφ
@@ -167,7 +166,7 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},src
         rr = rsrc-grd.r[ir] #((ir-1)*grd.Δr+grd.rinit)
         rθ = θsrc-grd.θ[iθ] #((iθ-1)*grd.Δθ+grd.θinit)
         rφ = φsrc-grd.φ[iφ] #((iφ-1)*grd.Δφ+grd.φinit)
-
+        
         r1 = rsrc
         r2 = grd.r[ir]
         θ1 = θsrc
@@ -175,7 +174,6 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},src
         φ1 = φsrc
         φ2 = grd.φ[iφ]
         dist = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))       
-        end
     end
 
     ## To avoid singularities, the src can only be inside a box,
@@ -229,18 +227,17 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},src
             φ1 = φsrc
             φ2 = grd.φ[k]
             distp = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
-            ttime[i,j,k] = distp / vel[ii,jj,kk]ttime[i,j,k] 
-            end
+            ttime[i,j,k] = distp / vel[i,j,k]ttime[i,j,k] 
         end
-    end #
+    end
 
     return onsrc,rsrc,θsrc,φsrc
 end
 
 ############################################################################
 
-function recboxlocgrad_sph!(ttime::Array{Float64,3},lambda::Array{Float64,3},ttpicks::Vector{Float64},grd::Grid3D,
-                        rec::Array{Float64,2},pickobs::Vector{Float64},stdobs::Vector{Float64}; staggeredgrid::Bool)
+function recboxlocgrad_sph!(ttime::Array{Float64,3},lambda::Array{Float64,3},ttpicks::Vector{Float64},grd::Grid3DSphere,
+                        rec::Array{Float64,2},pickobs::Vector{Float64},stdobs::Vector{Float64} )
 
     ##########################
     ## Init receivers
@@ -341,8 +338,8 @@ function adjderivonsource_sph(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64
     zp = grd.φ[k] #Float64(k-1)*dh+zinit
 
     distPSx = abs(xp-rsrc) ## abs needed for later...
-    distPSy = abs(grd.r[i]*deg2rad(yp-ysrc)) ## arc distance...
-    distPSz = abs( grd.r[i]*sind(grd.θ[j]*deg2rad(yp-ysrc))) ## arc distance...
+    distPSy = abs(grd.r[i]*deg2rad(yp-θsrc)) ## arc distance...
+    distPSz = abs(grd.r[i]*sind(grd.θ[j]*deg2rad(zp-φsrc))) ## arc distance...
 
     # distance from current point to source
     r1 = rsrc
@@ -546,8 +543,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
         status[ia,ja,ka] = 2 # 2=accepted
 
         # set lambda of the new accepted point
-        calcLAMBDA_hiord!(tt,status,onsrc,onarec,dh,
-                            xinit,yinit,zinit,rsrc,θsrc,φsrc,lambda,ia,ja,ka)
+        calcLAMBDA_hiord!(tt,status,onsrc,onarec,grd,rsrc,θsrc,φsrc,lambda,ia,ja,ka)
         
         ## try all neighbors of newly accepted point
         @inbounds for ne=1:6 ## six potential neighbors
@@ -603,7 +599,7 @@ end
 ##====================================================================##
 
 function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},onsrc::Array{Bool,3},onarec::Array{Bool,3},
-                           grd::Grid2DSphere,rsrc::Float64,θsrc::Float64,φsrc::Float64,lambda::Array{Float64,3},
+                           grd::Grid3DSphere,rsrc::Float64,θsrc::Float64,φsrc::Float64,lambda::Array{Float64,3},
                            i::Int64,j::Int64,k::Int64)
 
     deltar = grd.Δr
@@ -641,8 +637,8 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},onsrc::Arra
             ##  2*h => 2*dh/2 = dh
             aback = -(tt[i,j,k]  -tt[i-1,j,k])/deltar
             aforw = -(tt[i+1,j,k]-tt[i,j,k])/deltar
-            bback = -(tt[i,j,k]  -tt[i,j-1,k])/(grd.r[i]*deltaθ))h
-            bforw = -(tt[i,j+1,k]-tt[i,j,k])/(grd.r[i]*deltaθ))
+            bback = -(tt[i,j,k]  -tt[i,j-1,k])/(grd.r[i]*deltaθ)
+            bforw = -(tt[i,j+1,k]-tt[i,j,k])/(grd.r[i]*deltaθ)
             cback = -(tt[i,j,k]  -tt[i,j,k-1])/(grd.r[i]*sind(grd.θ[j])*deltaφ)
             cforw = -(tt[i,j,k+1]-tt[i,j,k])/(grd.r[i]*sind(grd.θ[j])*deltaφ)
 
