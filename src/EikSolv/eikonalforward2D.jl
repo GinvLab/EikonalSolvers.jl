@@ -98,7 +98,13 @@ function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64
 end
 
 ###########################################################################
+"""
+     ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
+                      coordrec::Array{Float64,2},grd::Grid2D,
+                      algo::String ; returntt::Bool=false )
 
+  Compute the forward problem for a group of sources.
+"""
 function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
                       coordrec::Array{Float64,2},grd::Grid2D,
                       algo::String ; returntt::Bool=false )
@@ -150,7 +156,14 @@ end
 
 #################################################################################
 
-function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},grd::Grid2D; staggeredgrid::Bool )
+"""
+    sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
+                   grd::Grid2D; staggeredgrid::Bool )
+
+ Define the "box" of nodes around/including the source.
+"""
+function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
+                         grd::Grid2D; staggeredgrid::Bool )
     ## staggeredgrid keyword required!
     
     ## source location, etc.      
@@ -225,6 +238,11 @@ end
 
 #################################################################################
 
+"""
+      ttFS_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
+ 
+ Fast sweeping method for a single source in 2D using using Podvin-Lecomte stencils on a staggered grid.
+"""
 function ttFS_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
 
     epsilon = 1e-6
@@ -401,6 +419,11 @@ end ## ttFS_podlec
 
 ###############################################################################
 
+"""
+     ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
+ 
+ Fast marching method for a single source in 2D using using Podvin-Lecomte stencils on a staggered grid.
+"""
 function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
  
     epsilon = 1e-6
@@ -582,6 +605,9 @@ end
 
 ##====================================================================##
 
+"""
+ Compute the traveltime at requested node using Podvin-Lecomte stencils on a staggered grid.
+"""
 function calcttpt!(ttime::Array{Float64,2},ttlocmin::Vector{Float64},inittt::Float64,
                   slowness::Array{Float64,2},grd::Grid2D,
                   cooa::Array{Int64,2},coob::Array{Int64,2},
@@ -666,6 +692,11 @@ end
 
 #########################################################################
 
+"""
+    ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
+
+ Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid. 
+"""
 function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
  
     ## Sizes
@@ -835,6 +866,9 @@ end
 
 ##====================================================================##
 
+"""
+ Test if point is on borders of domain.
+"""
 function isonbord(ib::Int64,jb::Int64,nx::Int64,ny::Int64)
     isonb1st = false
     isonb2nd = false
@@ -970,8 +1004,8 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             alpha += curalpha
             beta  += ( -2.0*curalpha * chosenval1 )
             gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
-
         end
+
     end
 
     ## compute discriminant 
@@ -1076,13 +1110,13 @@ end
 
 ##====================================================================##
 
-
 """
   Refinement of the grid around the source. FMM calculated inside a finer grid 
     and then passed on to coarser grid
 """
 function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2},
-    vel::Array{Float64,2},src::Vector{Float64},grdcoarse::Grid2D,inittt::Float64)
+                      vel::Array{Float64,2},src::Vector{Float64},grdcoarse::Grid2D,
+                      inittt::Float64)
       
     ##
     ## 2x10 nodes -> 2x50 nodes
@@ -1123,7 +1157,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     # set origin of the fine grid
     xinit = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
     yinit = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
-    grdfine = Grid2D(dh,xinit,yinit,nx,ny)
+    grdfine = Grid2D(hgrid=dh,xinit=xinit,yinit=yinit,nx=nx,ny=ny)
 
     ## 
     ## Time array

@@ -10,10 +10,15 @@ using EikonalSolvers
 include("test_suite.jl")
 
 
-testname = ["forward traveltime 2D","forward traveltime 3D",
-            "gradient traveltime 2D","gradient traveltime 3D"]
+testname = ["forward traveltime 2D (Cartesian coord.)","forward traveltime 3D (Cartesian coord.)",
+            "gradient traveltime 2D (Cartesian coord.)","gradient traveltime 3D (Cartesian coord.)",
+            "forward traveltime 2D (spherical coord.)","forward traveltime 3D (spherical coord.)",
+            "gradient traveltime 2D (spherical coord.)","gradient traveltime 3D (spherical coord.)" ]
+
 testfun  = [test_fwdtt_2D,          test_fwdtt_3D,
-            test_gradtt_2D,          test_gradtt_3D]
+            test_gradtt_2D,         test_gradtt_3D,
+            test_fwdtt_2Dsphere,    test_fwdtt_3Dsphere,
+            test_gradtt_2Dsphere,   test_gradtt_3Dsphere]
 
 nwor = nworkers()
 

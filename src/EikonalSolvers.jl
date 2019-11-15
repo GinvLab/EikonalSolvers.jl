@@ -5,8 +5,11 @@
 # 
 
 ##############################################
-"""
-     EikonalSolvers module, 2D and 3D traveltime and gradient computations.
+"""    
+EikonalSolvers module, 2D and 3D traveltime and gradient computations in Cartesian 
+ and spherical coordinates. 
+Computes seismic traveltimes by solving the eikonal equation in two and three dimensions with the possibility of computing the gradient of the misfit function with respect to the velocity model.  
+Both forward and gradient computations are parallelised using Julia's distributed computing functions and the parallelisation is "by source", distributing calculations for different sources to different processors
 """
 module EikonalSolvers
 

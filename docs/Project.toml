@@ -3,4 +3,4 @@ Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 EikonalSolvers = "0631ba50-6b23-11e9-3fc3-378508ba069a"
 
 [compat]
-Documenter = "0.22"
+Documenter = "^0.23"

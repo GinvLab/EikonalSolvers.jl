@@ -19,7 +19,6 @@ The fields are:
 julia> Grid2DSphere(Δr=15.0,Δθ=2.0,nr=10,nθ=15,rinit=500.0,θinit=0.0)
 ```
 """
-#Base.@kwdef
 struct Grid2DSphere
     Δr::Float64
     Δθ::Float64
@@ -45,6 +44,7 @@ end
 
 
 ######################################################
+
 """
 A structure holding the 3D SPHERICAL grid parameters, geometry and size.
 
@@ -59,13 +59,11 @@ The fields are:
 - `rinit, θinit,θinit`: origin of the coordinates of the grid
 - `nr, nθ, nφ`: number of nodes along r, θ and φ for the velocity array (structured grid)
 
-
 # Example
 ```julia-repl
-    julia> Grid3DSphere(Δr=15.0,Δθ=2.0,Δφ=1.5,nr=10,nθ=15,nφ=12,rinit=500.0,θinit=0.0,φinit=0.0)
+    julia> Grid3DSphere(Δr=15.0,Δθ=2.0,Δφ=1.5,nr=10,nθ=15,nφ=12,rinit=500.0,θinit=20.0,φinit=0.0)
 ```
 """
-#Base.@kwdef
 struct Grid3DSphere
     Δr::Float64
     Δθ::Float64

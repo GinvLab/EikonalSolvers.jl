@@ -2,6 +2,9 @@
 ################################################################
 ################################################################
 
+"""
+A convenience module to facilitate the use of `EikonalSolvers` within the framework of Hamiltonian Monte Carlo inversion by employing the package `HMCtomo`. 
+"""
 module HMCtraveltimes
 
 using EikonalSolvers

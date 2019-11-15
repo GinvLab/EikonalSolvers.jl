@@ -120,7 +120,13 @@ end
 
 #########################################################################
 
+"""
+     ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
+                      coordrec::Array{Float64,2},grd::Grid3D,
+                      algo::String ; returntt::Bool=false )
 
+  Compute the forward problem for a group of sources.
+"""
 function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
                       coordrec::Array{Float64,2},grd::Grid3D,
                       algo::String ; returntt::Bool=false )
@@ -173,7 +179,12 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
 end
 
 ###############################################################################
+"""
+       sourceboxloctt!(ttime::Array{Float64,3},vel::Array{Float64,3},
+                       srcpos::Vector{Float64},grd::Grid3D; staggeredgrid::Bool )
 
+ Define the "box" of nodes around/including the source.
+"""
 function sourceboxloctt!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},grd::Grid3D; staggeredgrid::Bool )
     ## staggeredgrid keyword required!
 
@@ -263,7 +274,11 @@ end
 
 ###############################################################################
 
+"""
+    ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)  
 
+ Fast sweeping method for a single source in 3D using using Podvin-Lecomte stencils on a staggered grid.
+"""
 function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D) 
 
     epsilon = 1e-5
@@ -736,7 +751,11 @@ end
 #################################################################
 #################################################################
 
+"""
+    ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
 
+ Fast marching method for a single source in 3D using using Podvin-Lecomte stencils on a staggered grid.
+"""
 function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D) 
 
     epsilon = 1e-5
@@ -890,6 +909,9 @@ end  # ttFMM_podlec
 
 #################################################################
 
+"""
+ Compute the traveltime at requested node using Podvin-Lecomte stencils on a staggered grid.
+"""
 function calcttpt(ttime::Array{Float64,3},rotste::RotoStencils,
                    onsrc::Array{Bool,3},slowness::Array{Float64,3},
                    grd::Grid3D,HUGE::Float64,i::Int64,j::Int64,k::Int64)
@@ -1182,8 +1204,11 @@ end
 
 #############################################################################
 ##=========================================================================##
+"""
+    ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
 
-
+ Higher order (2nd) fast marching method in 3D using traditional stencils on regular grid. 
+"""
 function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D) 
 
     ## Sizes
@@ -1367,6 +1392,9 @@ end  # ttFMM_hiord
 
 ###################################################################
 
+"""
+ Test if point is on borders of domain.
+"""
 function isonbord(ib::Int64,jb::Int64,kb::Int64,nx::Int64,ny::Int64,nz::Int64)
     isonb1 = false
     isonb2 = false
@@ -1646,7 +1674,6 @@ end
 
 ###################################################################
 
-
 """
   Refinement of the grid around the source. Traveltime calculated (FMM) inside a finer grid 
     and then passed on to coarser grid
@@ -1702,7 +1729,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     xinit = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
     yinit = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
     zinit = ((k1coarse-1)*grdcoarse.hgrid+grdcoarse.zinit)
-    grdfine = Grid3D(dh,xinit,yinit,zinit,nx,ny,nz)
+    grdfine = Grid3D(hgrid=dh,xinit=xinit,yinit=yinit,zinit=zinit,nx=nx,ny=ny,nz=nz)
 
     ## 
     ## Time array
@@ -1772,8 +1799,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
              0  0 -1]
 
     #-------------------------------
-    ## init FMM 
-
+    ## init FMM
     status[onsrc] .= 2 ## set to accepted on src
     naccinit=count(status.==2)
 

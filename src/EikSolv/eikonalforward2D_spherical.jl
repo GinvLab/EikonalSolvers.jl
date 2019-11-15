@@ -490,11 +490,11 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             ## curalpha: make sure you multiply only times the
             ##   current alpha for beta and gamma...
             curalpha = 1.0/deltah^2
+            alpha += curalpha
+            beta  += ( -2.0*curalpha * chosenval1 )
+            gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
         end
-        alpha += curalpha
-        beta  += ( -2.0*curalpha * chosenval1 )
-        gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
-
+        
     end
 
     ## compute discriminant 

@@ -10,7 +10,8 @@ makedocs(modules = [EikonalSolvers],
          format = Documenter.HTML(prettyurls=get(ENV,"CI",nothing)=="true"),
          pages = [
              "Home" => "index.md",
-             "API" => "publicapi.md"
+             "API" => "publicapi.md",
+             "Private stuff" => "privatestuff.md"
          ]
          )
 

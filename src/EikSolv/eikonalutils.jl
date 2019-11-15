@@ -50,7 +50,7 @@ The fields are:
 julia> Grid2D(hgrid=5.0,xinit=0.0,yinit=0.0,nx=300,ny=250)
 ```
 """
-Base.@kwdef struct Grid2D
+struct Grid2D #Base.@kwdef 
     hgrid::Float64
     xinit::Float64
     yinit::Float64
@@ -59,7 +59,7 @@ Base.@kwdef struct Grid2D
     ntx::Int64
     nty::Int64
 
-    function Grid2D(hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
+    function Grid2D(; hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
         new(hgrid,xinit,yinit,nx,ny,ntx,nty)
@@ -88,7 +88,7 @@ The fields are:
 julia> Grid3D(hgrid=5.0,xinit=0.0,yinit=0.0,zinit=0.0,nx=60,ny=60,nz=40)
 ```
 """
-Base.@kwdef struct Grid3D
+struct Grid3D #Base.@kwdef
     hgrid::Float64
     xinit::Float64
     yinit::Float64
@@ -100,7 +100,7 @@ Base.@kwdef struct Grid3D
     nty::Int64
     ntz::Int64
     ## constructor function
-    function Grid3D(hgrid::Float64,xinit::Float64,yinit::Float64, zinit::Float64,
+    function Grid3D(; hgrid::Float64,xinit::Float64,yinit::Float64, zinit::Float64,
                     nx::Int64,ny::Int64,nz::Int64)
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
@@ -199,6 +199,7 @@ function bilinear_interp(f::Array{Float64,2},hgrid::Float64,
 end
 
 #############################################################
+
 """
     trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
                       xinit::Float64,yinit::Float64,zinit::Float64,

@@ -197,8 +197,8 @@ function sourceboxloctt_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpo
             θ2 = grd.θ[j]
             φ1 = φsrc
             φ2 = grd.φ[k]
-            dist = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
-            ttime[i,j,k] = distp / vel[ii,jj,kk]
+            distp = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
+            ttime[i,j,k] = distp / vel[i,j,k]
         end
     end
     return onsrc

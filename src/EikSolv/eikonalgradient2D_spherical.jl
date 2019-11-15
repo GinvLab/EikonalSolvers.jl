@@ -125,7 +125,7 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},src
     rr = rsrc-grd.r[ir] #rsrc-((ir-1)*grd.Δr+grd.rinit)
     rθ = θsrc-grd.θ[iθ] #θsrc-((iθ-1)*grd.Δθ+grd.θinit)
     max_r = grd.r[end] #(grd.nr-1)*grd.Δr+grd.rinit
-    max_θ = grd.φ[end] #(grd.nθ-1)*grd.Δθ+grd.θinit
+    max_θ = grd.θ[end] #(grd.nθ-1)*grd.Δθ+grd.θinit
         
     halfg = 0.0    
     src_on_nodeedge = false   
@@ -188,7 +188,7 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},src
             #### vel[isrc[1,1],jsrc[1,1]]
             r1=rsrc
             r2=grd.r[ii]
-            dist = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[jj]))  
+            distp = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[jj]))  
             ttime[i,j] = distp / vel[ii,jj]
         end 
     end
