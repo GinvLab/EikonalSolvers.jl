@@ -281,16 +281,23 @@ function adjderivonsource_sph(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64
     ##          o...        ...o
     ## 
     ##
- 
+
     ## If we are in the box(?) containing the source,
     ## use real position of source for the derivatives.
     ## Calculate tt on x and y on the edges of the square
     ##  H is the projection of the point src onto X and Y
     xp = grd.r[i] #Float64(i-1)*dh+xinit
     yp = grd.θ[j] #Float64(j-1)*dh+yinit
-    ## distances P to src
+
+    ## distance to the side "x", along radius
     distHPx = abs(xp-rsrc)
-    distHPy = abs(grd.r[i]*deg2rad(yp-θsrc)) ## arc distance...
+
+    ## distance to the side "y", along θ
+    r1=rsrc
+    r2=rsrc
+    distHPy = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-yp))  
+
+    ## distance P to src
     r1=rsrc
     r2=grd.r[i]
     dist2src = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[j]))  
@@ -299,41 +306,43 @@ function adjderivonsource_sph(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64
 
     deltar = grd.Δr
     deltaθ = deg2rad(grd.Δθ)  ## DEG to RAD !!!!
-
+    arcHPy = abs(rsrc*deg2rad(yp-θsrc)) ## arc distance use RSRC...
+    
     ## Calculate the traveltime to hit the x side
     ## time at H along x
-    thx = tt[i,j]*distHPy/dist2src
+    thx = tt[i,j]*distHPx/dist2src
     ## Calculate the traveltime to hit the y side
     ## time at H along y
-    thy = tt[i,j]*distHPx/dist2src
+    thy = tt[i,j]*distHPy/dist2src
     
     if onsrc[i+1,j]==true                            
         aback = -(tt[i,j]-tt[i-1,j])/deltar
         if distHPx==0.0
             aforw = 0.0 # point exactly on source
         else
-            aforw = -(thx-tt[i,j])/distHPx # dist along x
+            aforw = -(thx-tt[i,j])/distHPx # dist along r
         end
     elseif onsrc[i-1,j]==true
         if distHPx==0.0
             aback = 0.0 # point exactly on source
         else
-            aback = -(tt[i,j]-thx)/distHPx # dist along x
+            aback = -(tt[i,j]-thx)/distHPx # dist along r
         end
         aforw = -(tt[i+1,j]-tt[i,j])/deltar
     end
+    
     if onsrc[i,j+1]==true
         bback = -(tt[i,j]-tt[i,j-1])/(grd.r[i]*deltaθ)
         if distHPy==0.0
             bforw = 0.0 # point exactly on source
         else
-            bforw = -(thy-tt[i,j])/distHPy # dist along y
-        end
+            bforw = -(thy-tt[i,j])/arcHPy # dist along θ arc
+        end        
     else onsrc[i,j-1]==true
         if distHPy==0.0
             bback = 0.0 # point exactly on source
         else
-            bback = -(tt[i,j]-thy)/distHPy # dist along y
+            bback = -(tt[i,j]-thy)/arcHPy # dist along θ arc
         end
         bforw = -(tt[i,j+1]-tt[i,j])/(grd.r[i]*deltaθ)
     end

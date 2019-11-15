@@ -45,6 +45,11 @@ grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs)
 ```
 ![ttarrays](docs/src/images/gradient.png)
 
+An example of traveltimes and gradient in spherical coordinates (2D):
+
+![sph2dttgrad](docs/src/images/sph2dttgrad.png)
+
+
 # Calculations in 3D 
 
 Calculations in 3D for both Cartesian and spherical coordinates, are analogous to the 2D function, see the documentation at <https://inverseproblem.github.io/EikonalSolvers.jl/stable>.

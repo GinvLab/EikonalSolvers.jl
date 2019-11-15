@@ -202,6 +202,8 @@ velmod = 2.5 .* ones(grd.nr,grd.nθ)                           # velocity model
 ttimepicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
 nothing # hide
 ```
+The following picture shows an example of computed traveltime and gradient in spherical coordinates in 2D.
+![sph2dttgrad](./images/sph2dttgrad.png)
 
 
 ## Example of gradient calculation	

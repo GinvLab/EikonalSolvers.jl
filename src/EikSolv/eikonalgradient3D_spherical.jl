@@ -337,9 +337,28 @@ function adjderivonsource_sph(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64
     yp = grd.θ[j] #Float64(j-1)*dh+yinit
     zp = grd.φ[k] #Float64(k-1)*dh+zinit
 
-    distPSx = abs(xp-rsrc) ## abs needed for later...
-    distPSy = abs(grd.r[i]*deg2rad(yp-θsrc)) ## arc distance...
-    distPSz = abs(grd.r[i]*sind(grd.θ[j]*deg2rad(zp-φsrc))) ## arc distance...
+    # distances to the sides
+
+    ## distance to the side "x", along radius
+    distHPx = abs(xp-rsrc) ## abs needed for later...
+
+    ## distance to the side "y", along θ
+    r1 = rsrc
+    r2 = rsrc
+    θ1 = θsrc
+    θ2 = grd.θ[k]
+    φ1 = φsrc
+    φ2 = φsrc
+    distHPy = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
+
+    ## distance to the side "z", along φ
+    r1 = rsrc
+    r2 = rsrc
+    θ1 = θsrc
+    θ2 = θsrc
+    φ1 = φsrc
+    φ2 = grd.φ[k]
+    distHPz = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
 
     # distance from current point to source
     r1 = rsrc
@@ -358,59 +377,63 @@ function adjderivonsource_sph(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64
     deltar = grd.Δr
     deltaθ = deg2rad(grd.Δθ)  ## DEG to RAD !!!!
     deltaφ = deg2rad(grd.Δφ)  ## DEG to RAD !!!!
+    arcHPy = abs(rsrc*deg2rad(yp-θsrc)) ## arc distance 
+    arcHPz = abs(rsrc*sind(θsrc)*deg2rad(zp-φ)) ## arc distance 
     
     ## Calculate the traveltime to hit the x edge
     ## time at H along x
-    thx = tt[i,j,k]*(sqrt(distPSy^2+distPSz^2))/dist2src
+    thx = tt[i,j,k]*distHPx/dist2src
     ## Calculate the traveltime to hit the y edge
     ## time at H along y
-    thy = tt[i,j,k]*(sqrt(distPSx^2+distPSz^2))/dist2src
+    thy = tt[i,j,k]*distHPy/dist2src
     ## Calculate the traveltime to hit the z edge
     ## time at H along z
-    thz = tt[i,j,k]*(sqrt(distPSx^2+distPSy^2))/dist2src
+    thz = tt[i,j,k]*distHPz/dist2src
     
     if onsrc[i+1,j,k]==true              
         aback = -(tt[i,j,k]-tt[i-1,j,k])/deltar
         if distPSx==0.0
             aforw = 0.0 # point exactly on source
         else
-            aforw = -(thx-tt[i,j,k])/distPSx # dist along x
+            aforw = -(thx-tt[i,j,k])/distHPx # dist along r
         end
     elseif onsrc[i-1,j,k]==true
         if distPSx==0.0
             aback = 0.0 # point exactly on source
         else
-            aback = -(tt[i,j,k]-thx)/distPSx # dist along x
+            aback = -(tt[i,j,k]-thx)/distHPx # dist along r
         end
         aforw = -(tt[i+1,j,k]-tt[i,j,k])/deltar
     end
+
     if onsrc[i,j+1,k]==true
         bback = -(tt[i,j,k]-tt[i,j-1,k])/(grd.r[i]*deltaθ)
         if distPSy==0.0
             bforw = 0.0 # point exactly on source
         else
-            bforw = -(thy-tt[i,j,k])/distPSy # dist along y
+            bforw = -(thy-tt[i,j,k])/arcHPy # dist along θ arc
         end
     else onsrc[i,j-1,k]==true
         if distPSy==0.0
             bback = 0.0 # point exactly on source
         else        
-            bback = -(tt[i,j,k]-thy)/distPSy # dist along y
+            bback = -(tt[i,j,k]-thy)/arcHPy # dist along θ arc
         end
         bforw = -(tt[i,j+1,k]-tt[i,j,k])/(grd.r[i]*deltaθ)
     end
+    
     if onsrc[i,j,k+1]==true     
         cback = -(tt[i,j,k]-tt[i,j,k-1])/(grd.r[i]*sind(grd.θ[j])*deltaφ)
         if distPSz==0.0
             cforw = 0.0 # point exactly on source
         else        
-            cforw = -(thz-tt[i,j,k])/distPSz # dist along z
+            cforw = -(thz-tt[i,j,k])/arcHPz # dist along φ arc
         end
     elseif onsrc[i,j,k-1]==true
         if distPSz==0.0
             cback = 0.0 # point exactly on source
         else        
-            cback = -(tt[i,j,k]-thz)/distPSz # dist along z
+            cback = -(tt[i,j,k]-thz)/arcHPz # dist along φ arc
         end
         cforw = -(tt[i,j,k+1]-tt[i,j,k])/(grd.r[i]*sind(grd.θ[j])*deltaφ)
     end
@@ -673,9 +696,8 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},onsrc::Arra
     denom = (aforwplus - abackminus)/deltar + (bforwplus - bbackminus)/(grd.r[i]*deltaθ) +
         (cforwplus - cbackminus)/(grd.r[i]*sind(grd.θ[j])*deltaφ)
 
-    lambda[i,j,k] = numer/denom
+    lambda[i,j,k] = numer/denom    
 
-    # @show tt[i,j,k]
     # @show aforwplus,aforwminus,abackplus,abackminus
     # @show bforwplus,bforwminus,bbackplus,bbackminus
     # @show cforwplus,cforwminus,cbackplus,cbackminus
