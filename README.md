@@ -47,7 +47,7 @@ grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs)
 
 An example of traveltimes and gradient in spherical coordinates (2D):
 
-![sph2dttgrad](docs/src/images/sph2dttgrad.png)
+<img src="docs/src/images/sph2dttgrad.png" alt="traveltime gradient spherical coord 2D" height="290">
 
 
 # Calculations in 3D 
