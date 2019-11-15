@@ -49,7 +49,7 @@ grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs)
 
 Calculations in 3D for both Cartesian and spherical coordinates, are analogous to the 2D function, see the documentation at <https://inverseproblem.github.io/EikonalSolvers.jl/stable>.
 
-<img src="docs/src/images/examplegrad3D.png" alt="Example gradient 3D" height="350"/>
-<img src="docs/src/images/examplegrad3Dsphere.png" alt="Example gradient 3D in spherical coordinates" height="350"/>
+<img src="docs/src/images/examplegrad3Dcarsph.png" alt="Example gradient 3D" height="350"/>
+
 
 

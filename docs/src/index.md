@@ -284,7 +284,7 @@ grad = gradttime2Dsphere(vel0,grd,coordsrc,coordrec,dobs,stdobs)
 nothing # hide
 ```	
 An example of a (thresholded) sensitivity kernel and contouring of traveltimes in 3D, using spherical coordinates, is depicted in the following plot:
-![grad3D](./images/examplegrad3Dsphere.png)
+![grad3D](./images/examplegrad3Dcarsph.png)
 
 
 # References
