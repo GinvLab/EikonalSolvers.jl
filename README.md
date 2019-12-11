@@ -38,7 +38,7 @@ ttimepicks,ttimegrid = traveltime2D(velmod,grd,coordsrc,coordrec,returntt=true)
 
 ## Example of gradient calculations in 2D
 
-The gradient of the misfit functional (see documentation) with respect to velocity can be calculated as following. A set of observed traveltimes, error on the measuraments and a reference velocity model are also required.
+The gradient of the misfit functional (see documentation) with respect to velocity can be calculated as following. A set of observed traveltimes, error on the measurements and a reference velocity model are also required.
 ```julia
 # calculate the gradient of the misfit function
 grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs)
