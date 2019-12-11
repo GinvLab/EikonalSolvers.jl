@@ -214,7 +214,7 @@ function sourceboxlocgrad!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos:
             ix,iy = findclosestnode(xsrc,ysrc,grd.xinit-hgr,grd.yinit-hgr,grd.hgrid) 
             rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
             ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr) 
-        end        
+        end
     end
 
     ## To avoid singularities, the src can only be inside a box,
@@ -328,7 +328,8 @@ end
 #############################################################################
 
 function adjderivonsource(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64,j::Int64,
-                          xinit::Float64,yinit::Float64,dh::Float64,xsrc::Float64,ysrc::Float64)        
+                          xinit::Float64,yinit::Float64,dh::Float64,xsrc::Float64,ysrc::Float64;
+                          staggeredgrid::Bool)        
 
     ##          thx
     ##     o-----.------> x
@@ -348,8 +349,14 @@ function adjderivonsource(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64,j::
     ## use real position of source for the derivatives.
     ## Calculate tt on x and y on the edges of the square
     ##  H is the projection of the point src onto X and Y
-    xp = Float64(i-1)*dh+xinit
-    yp = Float64(j-1)*dh+yinit
+    if staggeredgrid==false
+        xp = Float64(i-1)*dh+xinit
+        yp = Float64(j-1)*dh+yinit
+    else
+        hgr = dh/2.0
+        xp = Float64(i-1)*dh+xinit-hgr
+        yp = Float64(j-1)*dh+yinit-hgr
+    end
     ## distances P to src
     distHPx = abs(xp-xsrc)
     distHPy = abs(yp-ysrc)
@@ -458,7 +465,7 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                                      
                     if onsrc[i,j]==true # in the box containing the src
 
-                        aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc)
+                        aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc,staggeredgrid=true)
                         
                     else # not on src
                         ## Leung & Qian, 2006 ( -deriv...)
@@ -686,7 +693,7 @@ function calcLAMBDA!(tt::Array{Float64,2},status::Array{Int64,2},onsrc::Array{Bo
     
     if onsrc[i,j]==true # in the box containing the src
 
-        aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc)
+        aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc,staggeredgrid=true)
         
     else # not on src
         aback = -(tt[i,j]  -tt[i-1,j])/dh
@@ -910,7 +917,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
 
     if onsrc[i,j]==true #  in the box containing the src
 
-        aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc)
+        aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc,staggeredgrid=false)
 
     else # not on src
 

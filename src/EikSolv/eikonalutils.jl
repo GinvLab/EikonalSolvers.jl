@@ -306,8 +306,8 @@ Calculate the misfit functional
 
 """
 function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Array{Float64,2},
-                    stdobs::Array{Float64,2},coordsrc::Array{Float64,2},
-                    coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere})
+                      stdobs::Array{Float64,2},coordsrc::Array{Float64,2},
+                      coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere})
 
     if typeof(grd)==Grid2D 
         # compute the forward response
