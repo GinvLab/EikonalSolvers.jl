@@ -31,7 +31,7 @@ function traveltime2Dsphere( vel::Array{Float64,2},grd::Grid2DSphere,coordsrc::A
         
     @assert size(coordsrc,2)==2
     @assert size(coordrec,2)==2
-    @assert all(vel.>=0.0)
+    @assert all(vel.>0.0)
     @assert all(grd.rinit.<=coordsrc[:,1].<=((grd.nr-1)*grd.Δr+grd.rinit))
     @assert all(grd.θinit.<=coordsrc[:,2].<=((grd.nθ-1)*grd.Δθ+grd.θinit))
     

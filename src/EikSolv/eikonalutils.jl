@@ -32,11 +32,9 @@ end
 
 ######################################################
 """
+    Grid2D(hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
+
 A structure holding the 2D grid parameters, geometry and size.
-
-The constructor is given by:
-
-     Grid2D(hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
 
 The fields are:    
 - `hgrid`: spacing of the grid nodes (same for x and y)
@@ -69,12 +67,10 @@ end
 ######################################################
 
 """
-A structure holding the 3D grid parameters, geometry and size.
-
-The constructor is given by:
-
-     Grid2D(hgrid::Float64,xinit::Float64,yinit::Float64,zinit::Float64,
+     Grid3D(hgrid::Float64,xinit::Float64,yinit::Float64,zinit::Float64,
             nx::Int64,ny::Int64,nz::Int64)
+
+A structure holding the 3D grid parameters, geometry and size.
 
 The fields are:    
 - `hgrid`: spacing of the grid nodes (same for x, y and z)
@@ -289,7 +285,9 @@ end
 ###################################################################
 
 @doc raw"""
-     misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64},stdobs::Vector{Float64},grd::Union{Grid2D,Grid3D})
+     ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Array{Float64,2},
+                  stdobs::Array{Float64,2},coordsrc::Array{Float64,2},
+                  coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2Dsphere,Grid3Dsphere})
 
 Calculate the misfit functional 
 ```math
@@ -299,29 +297,38 @@ Calculate the misfit functional
     * `velmod`: velocity model, either a 2D or 3D array.
     * `ttpicksobs`: the traveltimes at the receivers.
     * `stdobs`: a vector of standard deviations representing the error on the measured traveltimes.
+    * `coordsrc`: coordinates of the sources
+    * `coordrec`: coordinates of the receivers
+    * `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
 
 # Returns
-    The value of the misfit functional (L2-norm).
+    The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
 
 """
-function misfitfunc(velmod::Array{Float64},ttpicksobs::Array{Float64,2},
+function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Array{Float64,2},
                     stdobs::Array{Float64,2},coordsrc::Array{Float64,2},
-                    coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D})
+                    coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere})
 
-    if ndims(velmod)==2
+    if typeof(grd)==Grid2D 
         # compute the forward response
         ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
-    elseif ndims(velmod)==3
+    elseif typeof(grd)==Grid2DSphere
+        # compute the forward response
+        ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
+    elseif typeof(grd)==Grid3D 
         # compute the forward response
         ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
+    elseif typeof(grd)==Gride3DSphere
+        # compute the forward response
+        ttpicks = traveltime3Dsphere(velmod,grd,coordsrc,coordrec)
     else
         error("Input velocity model has wrong dimensions.")
     end
 
     # flatten traveltime array
-    dcalc = ttpicks[:]
-    dobs = ttpicksobs[:]
-    stdobsv = stdobs[:]
+    dcalc = vec(ttpicks)
+    dobs = vec(ttpicksobs)
+    stdobsv = vec(stdobs)
 
     ## L2 norm
     diffcalobs = dcalc .- dobs

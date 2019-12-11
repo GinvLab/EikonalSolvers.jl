@@ -40,7 +40,7 @@ function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2
    
     @assert size(coordsrc,2)==3
     @assert size(coordrec,2)==3
-    @assert all(vel.>=0.0)
+    @assert all(vel.>0.0)
     @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
     @assert all(grd.zinit.<=coordsrc[:,3].<=((grd.nz-1)*grd.hgrid+grd.zinit))
@@ -1089,7 +1089,13 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},
         (cforwplus - cbackminus)/dh
 
     lambda[i,j,k] = numer/denom
-
+   
+    if denom==0.0
+        # @show onsrc[i,j]
+        # @show aforwplus,abackminus
+        # @show bforwplus,bbackminus
+        error("calcLAMBDA_hiord!(): denom==0")
+    end
     # @show tt[i,j,k]
     # @show aforwplus,aforwminus,abackplus,abackminus
     # @show bforwplus,bforwminus,bbackplus,bbackminus

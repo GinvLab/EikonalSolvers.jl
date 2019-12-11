@@ -35,7 +35,7 @@ function gradttime2Dsphere(vel::Array{Float64,2}, grd::Grid2DSphere,coordsrc::Ar
 
     @assert size(coordsrc,2)==2
     @assert size(coordrec,2)==2
-    @assert all(vel.>=0.0)
+    @assert all(vel.>0.0)
     @assert all(grd.rinit.<=coordsrc[:,1].<=((grd.nr-1)*grd.Δr+grd.rinit))
     @assert all(grd.θinit.<=coordsrc[:,2].<=((grd.nθ-1)*grd.Δθ+grd.θinit))
 
@@ -583,6 +583,13 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},onsrc::Arra
     ##================================================
     
     lambda[i,j] = numer/denom
+
+    if denom==0.0
+        # @show onsrc[i,j]
+        # @show aforwplus,abackminus
+        # @show bforwplus,bbackminus
+        error("calcLAMBDA_hiord!(): denom==0")
+    end
 
     return #lambda
 end

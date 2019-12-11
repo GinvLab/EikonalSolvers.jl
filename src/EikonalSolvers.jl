@@ -20,7 +20,7 @@ export Grid2DSphere,traveltime2Dsphere,gradttime2Dsphere
 export Grid3D,traveltime3D,gradttime3D
 export Grid3DSphere,traveltime3Dsphere,gradttime3Dsphere
 
-export misfitfunc
+export ttmisfitfunc
 export EikonalProb
 
 ## For parallelisation
@@ -31,8 +31,8 @@ include("BinHeap/BinHeaps.jl")
 using .BinHeaps
 
 ## general utils
-include("EikSolv/eikonalutils.jl")
 include("EikSolv/eikonalutils_spherical.jl")
+include("EikSolv/eikonalutils.jl")
 
 ## 2D stuff
 include("EikSolv/eikonalforward2D.jl")

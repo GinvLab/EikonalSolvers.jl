@@ -34,7 +34,7 @@ function traveltime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Ar
     #println("Check the source/rec to be in bounds!!!")
     @assert size(coordsrc,2)==3
     @assert size(coordrec,2)==3
-    @assert all(vel.>=0.0)
+    @assert all(vel.>0.0)
     @assert all(grd.rinit.<=coordsrc[:,1].<=((grd.nr-1)*grd.Δr+grd.rinit))
     @assert all(grd.θinit.<=coordsrc[:,2].<=((grd.nθ-1)*grd.Δθ+grd.θinit))
     @assert all(grd.φinit.<=coordsrc[:,3].<=((grd.nφ-1)*grd.Δφ+grd.φinit))

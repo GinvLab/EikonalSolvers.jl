@@ -38,7 +38,7 @@ function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64
         
     @assert size(coordsrc,2)==2
     @assert size(coordrec,2)==2
-    @assert all(vel.>=0.0)
+    @assert all(vel.>0.0)
     @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
     
@@ -1078,7 +1078,6 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
                     alpha += curalpha
                     beta  += ( -2.0*curalpha * chosenval1 )
                     gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
-
                 end
             end
             
@@ -1093,7 +1092,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             println(" where tx,ty can be")
             println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
             println(" t? = chosenval1  if 1st order ")
-            error("sqarg<0.0")
+            error("calcttpt_2ndord(): sqarg<0.0, negative discriminant")
         end
     end ## if sqarg<0.0
     

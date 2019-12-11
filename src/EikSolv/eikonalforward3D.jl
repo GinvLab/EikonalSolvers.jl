@@ -55,7 +55,7 @@ function traveltime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,
     #println("Check the source/rec to be in bounds!!!")
     @assert size(coordsrc,2)==3
     @assert size(coordrec,2)==3
-    @assert all(vel.>=0.0)
+    @assert all(vel.>0.0)
     @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
     @assert all(grd.zinit.<=coordsrc[:,3].<=((grd.nz-1)*grd.hgrid+grd.zinit))

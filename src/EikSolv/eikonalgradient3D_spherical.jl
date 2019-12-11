@@ -36,7 +36,7 @@ function gradttime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Arr
    
     @assert size(coordsrc,2)==3
     @assert size(coordrec,2)==3
-    @assert all(vel.>=0.0)
+    @assert all(vel.>0.0)
     @assert all(grd.rinit.<=coordsrc[:,1].<=((grd.nr-1)*grd.Δr+grd.rinit))
     @assert all(grd.θinit.<=coordsrc[:,2].<=((grd.nθ-1)*grd.Δθ+grd.θinit))
     @assert all(grd.φinit.<=coordsrc[:,3].<=((grd.nφ-1)*grd.Δφ+grd.φinit))
@@ -697,6 +697,13 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},onsrc::Arra
         (cforwplus - cbackminus)/(grd.r[i]*sind(grd.θ[j])*deltaφ)
 
     lambda[i,j,k] = numer/denom    
+
+    if denom==0.0
+        # @show onsrc[i,j]
+        # @show aforwplus,abackminus
+        # @show bforwplus,bbackminus
+        error("calcLAMBDA_hiord!(): denom==0")
+    end
 
     # @show aforwplus,aforwminus,abackplus,abackminus
     # @show bforwplus,bforwminus,bbackplus,bbackminus

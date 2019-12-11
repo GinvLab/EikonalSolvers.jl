@@ -11,6 +11,7 @@ using EikonalSolvers
 
 export EikonalProb
 
+
 #################################################################
 
 ## create the problem type for traveltime tomography
@@ -46,6 +47,7 @@ function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
         misval = misfitfunc(velnd,eikprob.dobs,eikprob.stdobs,eikprob.coordsrc,
                             eikprob.coordrec,eikprob.grd) .+ nlogprior()
         return misval
+        
 
     elseif kind=="gradlogpdf"
         #################################################
@@ -60,8 +62,9 @@ function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
         end
         # flatten traveltime array
         vecgrad = vec(grad) .+ gradnlogprior()
+
         # return flattened gradient
-        return vecgrad
+        return  vecgrad
         
     else
         error("Wrong argument 'kind'...")

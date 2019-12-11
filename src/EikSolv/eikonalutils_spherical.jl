@@ -1,11 +1,9 @@
 
 ######################################################
 """
+    Grid2DSphere(; Δr::Float64,Δθ::Float64,rinit::Float64,θinit::Float64,nr::Int64,nθ::Int64)
+
 A structure holding the 2D SPHERICAL grid parameters, geometry and size.
-
-The constructor is given by:
-
-     Grid2DSphere(; Δr::Float64,Δθ::Float64,rinit::Float64,θinit::Float64,nr::Int64,nθ::Int64)
 
 The fields are:    
 - `Δr`: spacing of the grid nodes along the radial coordinate r
@@ -46,11 +44,10 @@ end
 ######################################################
 
 """
+    Grid3DSphere(; Δr::Float64,Δθ::Float64,Δφ::Float64,rinit::Float64,
+                   θinit::Float64,φinit::Float64,nr::Int64,nθ::Int64,nφ::Int64)
+
 A structure holding the 3D SPHERICAL grid parameters, geometry and size.
-
-The constructor is given by:
-
-     Grid3DSphere(; Δr::Float64,Δθ::Float64,Δφ::Float64,rinit::Float64,θinit::Float64,φinit::Float64,nr::Int64,nθ::Int64,nφ::Int64)
 
 The fields are:    
 - `Δr`: spacing of the grid nodes along the radial coordinate r

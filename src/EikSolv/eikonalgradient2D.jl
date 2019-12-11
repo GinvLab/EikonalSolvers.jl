@@ -38,7 +38,7 @@ function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,
 
     @assert size(coordsrc,2)==2
     @assert size(coordrec,2)==2
-    @assert all(vel.>=0.0)
+    @assert all(vel.>0.0)
     @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
 
@@ -63,6 +63,7 @@ function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,
         end
     end
     grad = sum(tmpgrad,dims=3)[:,:]
+    #@assert !any(isnan.(grad))
     return grad
 end
 
@@ -963,6 +964,13 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
     ##================================================
     
     lambda[i,j] = numer/denom
+
+    if denom==0.0
+        # @show onsrc[i,j]
+        # @show aforwplus,abackminus
+        # @show bforwplus,bbackminus
+        error("calcLAMBDA_hiord!(): denom==0")
+    end
 
     return #lambda
 end
