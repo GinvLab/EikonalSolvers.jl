@@ -49,7 +49,7 @@ function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
         ## compute the logdensity value for vecvel ##
         #############################################
         #println("logpdf")
-        misval = misfitfunc(velnd,eikprob.dobs,eikprob.stdobs,eikprob.coordsrc,
+        misval = ttmisfitfunc(velnd,eikprob.dobs,eikprob.stdobs,eikprob.coordsrc,
                             eikprob.coordrec,eikprob.grd) .+ nlogprior()
         return misval
         
