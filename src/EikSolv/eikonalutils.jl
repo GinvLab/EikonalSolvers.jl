@@ -287,19 +287,24 @@ end
 @doc raw"""
      ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Array{Float64,2},
                   stdobs::Array{Float64,2},coordsrc::Array{Float64,2},
-                  coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2Dsphere,Grid3Dsphere})
+                  coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2Dsphere,Grid3Dsphere});
+                  ttalgo::String="ttFMM_hiord" )
 
 Calculate the misfit functional 
 ```math
     S = \dfrac{1}{2} \sum_i \dfrac{\left( \mathbf{\tau}_i^{\rm{calc}}(\mathbf{v})-\mathbf{\tau}_i^{\rm{obs}} \right)^2}{\sigma_i^2} \, .
 ```
 # Arguments
-    * `velmod`: velocity model, either a 2D or 3D array.
-    * `ttpicksobs`: the traveltimes at the receivers.
-    * `stdobs`: a vector of standard deviations representing the error on the measured traveltimes.
-    * `coordsrc`: coordinates of the sources
-    * `coordrec`: coordinates of the receivers
-    * `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
+    - `velmod`: velocity model, either a 2D or 3D array.
+    - `ttpicksobs`: the traveltimes at the receivers.
+    - `stdobs`: a vector of standard deviations representing the error on the measured traveltimes.
+    - `coordsrc`: coordinates of the sources
+    - `coordrec`: coordinates of the receivers
+    - `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
+    - `ttalgo` (optional): the algorithm to use to compute the traveltime, one amongst the following
+        * "ttFS\_podlec", fast sweeping method using Podvin-Lecomte stencils
+        * "ttFMM\_podlec," fast marching method using Podvin-Lecomte stencils
+        * "ttFMM\_hiord", second order fast marching method, the default algorithm 
 
 # Returns
     The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
@@ -307,14 +312,15 @@ Calculate the misfit functional
 """
 function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Array{Float64,2},
                       stdobs::Array{Float64,2},coordsrc::Array{Float64,2},
-                      coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere})
+                      coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
+                      ttalgo::String="ttFMM_hiord")
 
     if typeof(grd)==Grid2D 
         # compute the forward response
-        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
+        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
     elseif typeof(grd)==Grid2DSphere
         # compute the forward response
-        ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
+        ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
     elseif typeof(grd)==Grid3D 
         # compute the forward response
         ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)

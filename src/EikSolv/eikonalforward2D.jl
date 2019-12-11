@@ -10,7 +10,7 @@
 ## @doc raw because of some backslashes in the string...
 @doc raw"""
     traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
-                 coordrec::Array{Float64,2} ; algo::String="ttFMM_hiord", 
+                 coordrec::Array{Float64,2} ; ttalgo::String="ttFMM_hiord", 
                  returntt::Bool=false ) 
 
 Calculate traveltime for 2D velocity models. 
@@ -22,7 +22,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grd`: a struct specifying the geometry and size of the model
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
 - `coordrec`: the coordinates of the receiver(s) (x,y), a 2-column array
-- `algo` (optional): the algorithm to use to compute the traveltime, one amongst the following
+- `ttalgo` (optional): the algorithm to use to compute the traveltime, one amongst the following
     * "ttFS\_podlec", fast sweeping method using Podvin-Lecomte stencils
     * "ttFMM\_podlec," fast marching method using Podvin-Lecomte stencils
     * "ttFMM\_hiord", second order fast marching method, the default algorithm 
@@ -34,7 +34,7 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
-                       coordrec::Array{Float64,2} ; algo::String="ttFMM_hiord", returntt::Bool=false ) 
+                       coordrec::Array{Float64,2} ; ttalgo::String="ttFMM_hiord", returntt::Bool=false ) 
         
     @assert size(coordsrc,2)==2
     @assert size(coordrec,2)==2
@@ -57,7 +57,7 @@ function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64
 
     if returntt
         # return traveltime array and picks at receivers
-        if algo=="ttFMM_hiord"
+        if ttalgo=="ttFMM_hiord"
             # in this case velocity and time arrays have the same shape
             ttime = zeros(grd.nx,grd.ny,nsrc)
         else
@@ -74,7 +74,7 @@ function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                           vel,coordsrc[igrs,:],
-                                                          coordrec,grd,algo,
+                                                          coordrec,grd,ttalgo,
                                                           returntt=returntt )
             end
         elseif returntt
@@ -83,7 +83,7 @@ function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttime[:,:,igrs],ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                                           vel,coordsrc[igrs,:],
-                                                                          coordrec,grd,algo,
+                                                                          coordrec,grd,ttalgo,
                                                                           returntt=returntt )
             end
         end
@@ -101,19 +101,19 @@ end
 """
      ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
                       coordrec::Array{Float64,2},grd::Grid2D,
-                      algo::String ; returntt::Bool=false )
+                      ttalgo::String ; returntt::Bool=false )
 
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
                       coordrec::Array{Float64,2},grd::Grid2D,
-                      algo::String ; returntt::Bool=false )
+                      ttalgo::String ; returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
     nrec = size(coordrec,1)                
     ttpicksGRPSRC = zeros(nrec,nsrc) 
 
-    if algo=="ttFMM_hiord"
+    if ttalgo=="ttFMM_hiord"
         # in this case velocity and time arrays have the same shape
         ttGRPSRC = zeros(grd.nx,grd.ny,nsrc)
     else
@@ -126,17 +126,17 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
 
         ## Compute traveltime and interpolation at receivers in one go for parallelization
         
-        if algo=="ttFS_podlec"
+        if ttalgo=="ttFS_podlec"
             ttGRPSRC[:,:,s] = ttFS_podlec(vel,coordsrc[s,:],grd)
             
-        elseif algo=="ttFMM_podlec"
+        elseif ttalgo=="ttFMM_podlec"
             ttGRPSRC[:,:,s] = ttFMM_podlec(vel,coordsrc[s,:],grd)
 
-        elseif algo=="ttFMM_hiord"
+        elseif ttalgo=="ttFMM_hiord"
             ttGRPSRC[:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
 
         else
-            println("\nttforwsomesrc(): Wrong algo name... \n")
+            println("\nttforwsomesrc(): Wrong ttalgo name... \n")
             return nothing
         end
 

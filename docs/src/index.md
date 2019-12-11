@@ -99,7 +99,7 @@ For three-dimensional (3D) problems spherical/polar coordinates (curvilinear gri
 Units are arbitrary but must be *consistent*.
 
 Misfit functional calculation:
-* [`misfitfunc`](@ref), computes the value (scalar) of the misfit functional for given observed traveltimes and velocity modl.
+* [`ttmisfitfunc`](@ref), computes the value (scalar) of the misfit functional for given observed traveltimes and velocity modl.
 
 Moreover, a convenience module `HMCTraveltimes` (see [`EikonalSolvers.HMCtraveltimes`](@ref)) is provided to facilitate the use of `EikonalSolvers` within the framework of Hamiltonian Monte Carlo inversion (see e.g. [^ZuninoMosegaard2018]) by employing the package `HMCtomo`. 
 
@@ -169,7 +169,7 @@ ttimepicks
 To use a diffent algorithm and to additionally return the traveltime everywhere on the grid do
 ```@example parts
 ttalgo = "ttFMM_podlec"
-ttimepicks,ttimegrid = traveltime2D(velmod,grd,coordsrc,coordrec,algo=ttalgo,returntt=true)
+ttimepicks,ttimegrid = traveltime2D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo,returntt=true)
 nothing # hide
 ```
 ![ttarrays](./images/ttime-arrays.png)

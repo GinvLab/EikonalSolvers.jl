@@ -41,7 +41,7 @@ gradttime3Dsphere
 
 ## Misfit functional
 ```@docs
-misfitfunc
+ttmisfitfunc
 ```
 
 ## HMCtomo wrapper
