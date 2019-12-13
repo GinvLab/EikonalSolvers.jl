@@ -21,7 +21,7 @@ export EikonalProb
 
 ## create the problem type for traveltime tomography
 Base.@kwdef struct EikonalProb
-    mstart::Vector{Float64} # required
+    ##mstart::Vector{Float64} # required
     grd::Union{Grid2D,Grid3D}
     dobs::Array{Float64,2}
     stdobs::Array{Float64,2}
@@ -44,17 +44,17 @@ function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
         error("typeof(eikprob.grd)== ?? ")
     end
 
-    if kind=="logpdf"
+    if kind=="nlogpdf"
         #############################################
         ## compute the logdensity value for vecvel ##
         #############################################
         #println("logpdf")
         misval = ttmisfitfunc(velnd,eikprob.dobs,eikprob.stdobs,eikprob.coordsrc,
-                            eikprob.coordrec,eikprob.grd) .+ nlogprior()
+                              eikprob.coordrec,eikprob.grd) 
         return misval
         
 
-    elseif kind=="gradlogpdf"
+    elseif kind=="gradnlogpdf"
         #################################################
         ## compute the gradient of the misfit function ##
         #################################################
@@ -66,30 +66,15 @@ function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs)
         end
         # flatten traveltime array
-        vecgrad = vec(grad) .+ gradnlogprior()
+        vecgrad = vec(grad) 
 
         # return flattened gradient
         return  vecgrad
         
     else
-        error("Wrong argument 'kind'...")
+        error("eikprob::EikonalProb(): Wrong argument 'kind': $kind...")
     end
 end
-
-#################################################################
-
-## prior functional
-function nlogprior(  )
-
-    return 0.0
-end
-
-## prior functional
-function gradnlogprior(  )
-
-    return 0.0
-end
-
 
 #################################################################
 
