@@ -4,7 +4,6 @@
 ##     Misfit of gradient using adjoint              ## 
 #######################################################
 
-
 ###############################################################################
 
 ## @doc raw because of some backslashes in the string...
@@ -908,22 +907,22 @@ function isoutrange(ib::Int64,jb::Int64,nx::Int64,ny::Int64)
     return isoutb1st,isoutb2nd
 end
 
-##--------------------------------------------
+##------------------------------------------------------------------------
 
 function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
                              onsrc::Array{Bool,2},onarec::Array{Bool,2},
                              dh::Float64,xinit::Float64,yinit::Float64,
                              xsrc::Float64,ysrc::Float64,lambda::Array{Float64,2},i::Int64,j::Int64)
 
+    nx,ny = size(lambda)
+    isout1st,isout2nd = isoutrange(i,j,nx,ny)
+
     if onsrc[i,j]==true #  in the box containing the src
 
         aback,aforw,bback,bforw = adjderivonsource(tt,onsrc,i,j,xinit,yinit,dh,xsrc,ysrc,staggeredgrid=false)
 
     else # not on src
-
-        nx,ny = size(lambda)
-        isout1st,isout2nd = isoutrange(i,j,nx,ny)
-
+             
         ##
         ## Central differences in Leung & Qian, 2006 scheme!
         ##  
@@ -936,6 +935,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
             aforw = -( -tt[i+2,j]+8.0*tt[i+1,j]-8.0*tt[i,j]+tt[i-1,j] )/(6.0*dh)
             bback = -( -tt[i,j+1]+8.0*tt[i,j]-8.0*tt[i,j-1]+tt[i,j-2] )/(6.0*dh)
             bforw = -( -tt[i,j+2]+8.0*tt[i,j+1]-8.0*tt[i,j]+tt[i,j-1] )/(6.0*dh)
+
         else
             ##
             ## Central diff (Leung & Qian, 2006); a,b computed in between nodes of velocity
@@ -945,8 +945,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
             aforw = -(tt[i+1,j]-tt[i,j])/dh
             bback = -(tt[i,j]  -tt[i,j-1])/dh
             bforw = -(tt[i,j+1]-tt[i,j])/dh
-        end                     
-
+        end
     end                    
     
     ##================================================
@@ -960,7 +959,30 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
     bforwminus = ( bforw-abs(bforw) )/2.0
     bbackplus  = ( bback+abs(bback) )/2.0
     bbackminus = ( bback-abs(bback) )/2.0
-  
+    
+    ##==============================================================
+    ### Fix problems with higher order derivatives...
+    ### If the denominator is zero, try using shorter stencil (see above)
+    if !isout2nd
+        if aforwplus==0.0 && abackminus==0.0 && bforwplus==0.0 && bbackminus==0.0
+            ## revert to smaller stencil
+            aback = -(tt[i,j]  -tt[i-1,j])/dh
+            aforw = -(tt[i+1,j]-tt[i,j])/dh
+            bback = -(tt[i,j]  -tt[i,j-1])/dh
+            bforw = -(tt[i,j+1]-tt[i,j])/dh
+            # recompute stuff
+            aforwplus  = ( aforw+abs(aforw) )/2.0
+            aforwminus = ( aforw-abs(aforw) )/2.0
+            abackplus  = ( aback+abs(aback) )/2.0
+            abackminus = ( aback-abs(aback) )/2.0
+            bforwplus  = ( bforw+abs(bforw) )/2.0
+            bforwminus = ( bforw-abs(bforw) )/2.0
+            bbackplus  = ( bback+abs(bback) )/2.0
+            bbackminus = ( bback-abs(bback) )/2.0
+        end
+    end
+    ##==============================================================
+
     ## make SURE lambda was INITIALIZED TO ZERO
     ## Leung & Qian, 2006 
     numer = (abackplus * lambda[i-1,j] - aforwminus * lambda[i+1,j] ) / dh +
@@ -973,10 +995,22 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
     lambda[i,j] = numer/denom
 
     if denom==0.0
+        # @show i,j
+        # @show isout2nd
         # @show onsrc[i,j]
+        # @show aback,aforw
+        # @show bback,bforw
         # @show aforwplus,abackminus
         # @show bforwplus,bbackminus
-        error("calcLAMBDA_hiord!(): denom==0")
+        # @show aforwplus,aforwminus
+        # @show abackplus,abackminus
+        # @show bforwplus,bforwminus
+        # @show bbackplus,bbackminus
+        # @show tt[i-1,j-1],tt[i,j-1],tt[i+1,j-1]
+        # @show tt[i-1,j],tt[i,j],tt[i+1,j]
+        # @show tt[i-1,j+1],tt[i,j+1],tt[i+1,j+1]
+
+        error("calcLAMBDA_hiord!(): denom==0, (i,j)=($i,$j)")
     end
 
     return #lambda

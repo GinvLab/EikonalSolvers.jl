@@ -130,7 +130,7 @@ function test_fwdtt_2D()
     ttalgos = ["ttFS_podlec","ttFMM_podlec","ttFMM_hiord"]
     for ttalgo in ttalgos
         println("Traveltime 2D using $ttalgo")
-        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec,algo=ttalgo)
+        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
     end
     
 
@@ -151,7 +151,7 @@ function test_fwdtt_2D()
     for ttalgo in ttalgos
         i+=1
         println("Traveltime 2D using $ttalgo versus analytic solution")
-        ttpicks,ttime = traveltime2D(velanaly,grd,coordsrc[1:1,:],coordrec,algo=ttalgo,returntt=true)
+        ttpicks,ttime = traveltime2D(velanaly,grd,coordsrc[1:1,:],coordrec,ttalgo=ttalgo,returntt=true)
         # mean average error
         if ttalgo in ["ttFS_podlec","ttFMM_podlec"]
             ttime = (ttime[1:end-1,1:end-1].+ttime[2:end,1:end-1] .+
@@ -183,7 +183,7 @@ function test_fwdtt_3D()
     ttalgos = ["ttFS_podlec","ttFMM_podlec","ttFMM_hiord"]
     for ttalgo in ttalgos
         println("Traveltime 3D using $ttalgo")
-        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec,algo=ttalgo)
+        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
     end
     
     return true

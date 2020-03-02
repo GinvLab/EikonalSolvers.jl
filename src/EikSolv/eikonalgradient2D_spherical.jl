@@ -526,15 +526,14 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},onsrc::Arra
 
     deltar = grd.Δr
     deltaθ = deg2rad(grd.Δθ)  ## DEG to RAD !!!!
+    nr,nθ = size(lambda)
+    isout1st,isout2nd = isoutrange(i,j,nr,nθ)
 
     if onsrc[i,j]==true #  in the box containing the src
 
         aback,aforw,bback,bforw = adjderivonsource_sph(tt,onsrc,i,j,grd,rsrc,θsrc)
 
     else # not on src
-
-        nr,nθ = size(lambda)
-        isout1st,isout2nd = isoutrange(i,j,nr,nθ)
 
         ##
         ## Central differences in Leung & Qian, 2006 scheme!
@@ -557,8 +556,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},onsrc::Arra
             aforw = -(tt[i+1,j]-tt[i,j])/deltar
             bback = -(tt[i,j]  -tt[i,j-1])/(grd.r[i]*deltaθ)
             bforw = -(tt[i,j+1]-tt[i,j])/(grd.r[i]*deltaθ)
-        end                     
-
+        end  
     end                    
     
     ##================================================
@@ -572,7 +570,30 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},onsrc::Arra
     bforwminus = ( bforw-abs(bforw) )/2.0
     bbackplus  = ( bback+abs(bback) )/2.0
     bbackminus = ( bback-abs(bback) )/2.0
-  
+
+    ##==============================================================
+    ### Fix problems with higher order derivatives...
+    ### If the denominator is zero, try using shorter stencil (see above)
+    if !isout2nd
+        if aforwplus==0.0 && abackminus==0.0 && bforwplus==0.0 && bbackminus==0.0
+            ## revert to smaller stencil
+            aback = -(tt[i,j]  -tt[i-1,j])/deltar
+            aforw = -(tt[i+1,j]-tt[i,j])/deltar
+            bback = -(tt[i,j]  -tt[i,j-1])/(grd.r[i]*deltaθ)
+            bforw = -(tt[i,j+1]-tt[i,j])/(grd.r[i]*deltaθ)
+            # recompute stuff
+            aforwplus  = ( aforw+abs(aforw) )/2.0
+            aforwminus = ( aforw-abs(aforw) )/2.0
+            abackplus  = ( aback+abs(aback) )/2.0
+            abackminus = ( aback-abs(aback) )/2.0
+            bforwplus  = ( bforw+abs(bforw) )/2.0
+            bforwminus = ( bforw-abs(bforw) )/2.0
+            bbackplus  = ( bback+abs(bback) )/2.0
+            bbackminus = ( bback-abs(bback) )/2.0
+        end
+    end
+    ##==============================================================
+    
     ## make SURE lambda was INITIALIZED TO ZERO
     ## Leung & Qian, 2006 
     numer = (abackplus * lambda[i-1,j] - aforwminus * lambda[i+1,j] ) / deltar +

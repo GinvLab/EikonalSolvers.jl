@@ -4,7 +4,6 @@
 ##        Eikonal forward 2D                         ## 
 #######################################################
 
-
 ##########################################################################
 
 ## @doc raw because of some backslashes in the string...
@@ -34,7 +33,7 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
-                       coordrec::Array{Float64,2} ; ttalgo::String="ttFMM_hiord", returntt::Bool=false ) 
+                       coordrec::Array{Float64,2} ; ttalgo::String="ttFMM_hiord", returntt::Bool=false) 
         
     @assert size(coordsrc,2)==2
     @assert size(coordrec,2)==2
@@ -716,9 +715,9 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
     status[:,:] .= 0   ## set all to far
     
     ##########################################
-    refinearoundsrc=true
+    ##refinearoundsrc=true
     
-    if refinearoundsrc
+    if extrapars.refinearoundsrc
         ##---------------------------------
         ## 
         ## Refinement around the source      
@@ -1087,15 +1086,25 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
         sqarg = beta^2-4.0*alpha*gamma
 
         if sqarg<0.0
-            println("\n To get a non-negative discriminant, need to fulfil: ")
-            println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
-            println(" where tx,ty can be")
-            println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
-            println(" t? = chosenval1  if 1st order ")
-            error("calcttpt_2ndord(): sqarg<0.0, negative discriminant")
+
+            if extrapars.allowfixsqarg==true
+            
+                gamma = beta^2/(4.0*alpha)
+                sqarg = beta^2-4.0*alpha*gamma
+                println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
+                
+            else
+                println("\n To get a non-negative discriminant, need to fulfil: ")
+                println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
+                println(" where tx,ty can be")
+                println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
+                println(" t? = chosenval1  if 1st order ")
+                
+                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant")
+            end
         end
     end ## if sqarg<0.0
-    
+
     ### roots of the quadratic equation
     tmpsq = sqrt(sqarg)
     soughtt1 =  (-beta + tmpsq)/(2.0*alpha)
@@ -1347,7 +1356,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         end
         ##-------------------------------
     end
-    error("Ouch...")
+    error("ttaroundsrc!(): Ouch...")
 end
 
 

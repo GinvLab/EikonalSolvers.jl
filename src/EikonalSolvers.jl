@@ -52,5 +52,29 @@ include("EikSolv/eikonalgradient3D_spherical.jl")
 include("HMCtraveltimes.jl")
 using .HMCtraveltimes
 
+
+
+##--------------------------------------------------------------
+## If true, try to brute-force fix problems with negative sqarg.
+##   Use is discouraged...
+
+Base.@kwdef mutable struct ExtraParams
+    allowfixsqarg::Bool
+    refinearoundsrc::Bool
+end
+
+extrapars = ExtraParams(allowfixsqarg=false,
+                        refinearoundsrc=true)
+
+if extrapars.allowfixsqarg==true
+    @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
+end
+if extrapars.refinearoundsrc==false
+    @warn("ExtraParams: refinearoundsrc==false, no grid refinement around source.")
+end
+##--------------------------------------------------------------
+
+
+
 end
 ##############################################

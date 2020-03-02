@@ -1021,15 +1021,15 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},
                            xsrc::Float64,ysrc::Float64,zsrc::Float64,lambda::Array{Float64,3},
                            i::Int64,j::Int64,k::Int64)
 
+    nx,ny,nz = size(lambda)
+    isout1st,isout2nd = isoutrange(i,j,k,nx,ny,nz)
+
     if onsrc[i,j,k]==true # in the box containing the src
 
         aback,aforw,bback,bforw,cback,cforw = adjderivonsource(tt,onsrc,i,j,k,xinit,yinit,zinit,dh,xsrc,ysrc,zsrc)
 
     else # not on src
-
-        nx,ny,nz = size(lambda)
-        isout1st,isout2nd = isoutrange(i,j,k,nx,ny,nz)
-
+        
         ##
         ## Central differences in Leung & Qian, 2006 scheme!
         ##  
@@ -1057,8 +1057,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},
             cback = -(tt[i,j,k]  -tt[i,j,k-1])/dh
             cforw = -(tt[i,j,k+1]-tt[i,j,k])/dh
 
-        end                     
-
+        end         
     end                    
 
     ##-----------------------------------
@@ -1076,6 +1075,35 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},
     cforwminus = ( cforw-abs(cforw) )/2.0
     cbackplus  = ( cback+abs(cback) )/2.0
     cbackminus = ( cback-abs(cback) )/2.0
+    
+    ##==============================================================
+    ### Fix problems with higher order derivatives...
+    ### If the denominator is zero, try using shorter stencil (see above)
+    if !isout2nd
+        if aforwplus==0.0 && abackminus==0.0 && bforwplus==0.0 && bbackminus==0.0 && cforwplus==0.0 && cbackminus==0.0
+            ## revert to smaller stencil
+            aback = -(tt[i,j,k]  -tt[i-1,j,k])/dh
+            aforw = -(tt[i+1,j,k]-tt[i,j,k])/dh
+            bback = -(tt[i,j,k]  -tt[i,j-1,k])/dh
+            bforw = -(tt[i,j+1,k]-tt[i,j,k])/dh
+            cback = -(tt[i,j,k]  -tt[i,j,k-1])/dh
+            cforw = -(tt[i,j,k+1]-tt[i,j,k])/dh
+            # recompute stuff
+            aforwplus  = ( aforw+abs(aforw) )/2.0
+            aforwminus = ( aforw-abs(aforw) )/2.0
+            abackplus  = ( aback+abs(aback) )/2.0
+            abackminus = ( aback-abs(aback) )/2.0
+            bforwplus  = ( bforw+abs(bforw) )/2.0
+            bforwminus = ( bforw-abs(bforw) )/2.0
+            bbackplus  = ( bback+abs(bback) )/2.0
+            bbackminus = ( bback-abs(bback) )/2.0
+            cforwplus  = ( cforw+abs(cforw) )/2.0
+            cforwminus = ( cforw-abs(cforw) )/2.0
+            cbackplus  = ( cback+abs(cback) )/2.0
+            cbackminus = ( cback-abs(cback) )/2.0
+        end
+    end
+    ##==============================================================
     
     ##-------------------------------------------
     ## make SURE lambda was INITIALIZED TO ZERO

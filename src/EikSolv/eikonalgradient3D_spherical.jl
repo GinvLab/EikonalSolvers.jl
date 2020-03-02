@@ -367,7 +367,7 @@ function adjderivonsource_sph(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64
     θ2 = grd.θ[j]
     φ1 = φsrc
     φ2 = grd.φ[k]
-    dist2src = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
+    dist2src = sqrt(r1^2+r2^2-2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
 
     # assert dist2src>0.0 otherwise a singularity will occur
     @assert dist2src>0.0
@@ -378,7 +378,7 @@ function adjderivonsource_sph(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64
     deltaθ = deg2rad(grd.Δθ)  ## DEG to RAD !!!!
     deltaφ = deg2rad(grd.Δφ)  ## DEG to RAD !!!!
     arcHPy = abs(rsrc*deg2rad(yp-θsrc)) ## arc distance 
-    arcHPz = abs(rsrc*sind(θsrc)*deg2rad(zp-φ)) ## arc distance 
+    arcHPz = abs(rsrc*sind(θsrc)*deg2rad(zp-φsrc)) ## arc distance 
     
     ## Calculate the traveltime to hit the x edge
     ## time at H along x
@@ -392,13 +392,13 @@ function adjderivonsource_sph(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64
     
     if onsrc[i+1,j,k]==true              
         aback = -(tt[i,j,k]-tt[i-1,j,k])/deltar
-        if distPSx==0.0
+        if distHPx==0.0
             aforw = 0.0 # point exactly on source
         else
             aforw = -(thx-tt[i,j,k])/distHPx # dist along r
         end
     elseif onsrc[i-1,j,k]==true
-        if distPSx==0.0
+        if distHPx==0.0
             aback = 0.0 # point exactly on source
         else
             aback = -(tt[i,j,k]-thx)/distHPx # dist along r
@@ -408,13 +408,13 @@ function adjderivonsource_sph(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64
 
     if onsrc[i,j+1,k]==true
         bback = -(tt[i,j,k]-tt[i,j-1,k])/(grd.r[i]*deltaθ)
-        if distPSy==0.0
+        if distHPy==0.0
             bforw = 0.0 # point exactly on source
         else
             bforw = -(thy-tt[i,j,k])/arcHPy # dist along θ arc
         end
     else onsrc[i,j-1,k]==true
-        if distPSy==0.0
+        if distHPy==0.0
             bback = 0.0 # point exactly on source
         else        
             bback = -(tt[i,j,k]-thy)/arcHPy # dist along θ arc
@@ -424,13 +424,13 @@ function adjderivonsource_sph(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64
     
     if onsrc[i,j,k+1]==true     
         cback = -(tt[i,j,k]-tt[i,j,k-1])/(grd.r[i]*sind(grd.θ[j])*deltaφ)
-        if distPSz==0.0
+        if distHPz==0.0
             cforw = 0.0 # point exactly on source
         else        
             cforw = -(thz-tt[i,j,k])/arcHPz # dist along φ arc
         end
     elseif onsrc[i,j,k-1]==true
-        if distPSz==0.0
+        if distHPz==0.0
             cback = 0.0 # point exactly on source
         else        
             cback = -(tt[i,j,k]-thz)/arcHPz # dist along φ arc
@@ -628,15 +628,14 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},onsrc::Arra
     deltar = grd.Δr
     deltaθ = deg2rad(grd.Δθ)  ## DEG to RAD !!!!
     deltaφ = deg2rad(grd.Δφ)  ## DEG to RAD !!!!
+    nr,nθ,nφ = size(lambda)
+    isout1st,isout2nd = isoutrange_sph(i,j,k,nr,nθ,nφ)
 
     if onsrc[i,j,k]==true # in the box containing the src
 
         aback,aforw,bback,bforw,cback,cforw = adjderivonsource_sph(tt,onsrc,i,j,k,grd,rsrc,θsrc,φsrc)
 
     else # not on src
-
-        nr,nθ,nφ = size(lambda)
-        isout1st,isout2nd = isoutrange_sph(i,j,k,nr,nθ,nφ)
 
         ##
         ## Central differences in Leung & Qian, 2006 scheme!
@@ -685,6 +684,35 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},onsrc::Arra
     cbackplus  = ( cback+abs(cback) )/2.0
     cbackminus = ( cback-abs(cback) )/2.0
     
+    ##==============================================================
+    ### Fix problems with higher order derivatives...
+    ### If the denominator is zero, try using shorter stencil (see above)
+    if !isout2nd
+        if aforwplus==0.0 && abackminus==0.0 && bforwplus==0.0 && bbackminus==0.0 && cforwplus==0.0 && cbackminus==0.0
+            ## revert to smaller stencil
+            aback = -(tt[i,j,k]  -tt[i-1,j,k])/deltar
+            aforw = -(tt[i+1,j,k]-tt[i,j,k])/deltar
+            bback = -(tt[i,j,k]  -tt[i,j-1,k])/(grd.r[i]*deltaθ)
+            bforw = -(tt[i,j+1,k]-tt[i,j,k])/(grd.r[i]*deltaθ)
+            cback = -(tt[i,j,k]  -tt[i,j,k-1])/(grd.r[i]*sind(grd.θ[j])*deltaφ)
+            cforw = -(tt[i,j,k+1]-tt[i,j,k])/(grd.r[i]*sind(grd.θ[j])*deltaφ)
+            # recompute stuff
+            aforwplus  = ( aforw+abs(aforw) )/2.0
+            aforwminus = ( aforw-abs(aforw) )/2.0
+            abackplus  = ( aback+abs(aback) )/2.0
+            abackminus = ( aback-abs(aback) )/2.0
+            bforwplus  = ( bforw+abs(bforw) )/2.0
+            bforwminus = ( bforw-abs(bforw) )/2.0
+            bbackplus  = ( bback+abs(bback) )/2.0
+            bbackminus = ( bback-abs(bback) )/2.0
+            cforwplus  = ( cforw+abs(cforw) )/2.0
+            cforwminus = ( cforw-abs(cforw) )/2.0
+            cbackplus  = ( cback+abs(cback) )/2.0
+            cbackminus = ( cback-abs(cback) )/2.0
+        end
+    end
+    ##==============================================================
+
     ##-------------------------------------------
     ## make SURE lambda was INITIALIZED TO ZERO
     ## Leung & Qian, 2006

@@ -226,9 +226,9 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3DSpher
     status[:,:,:] .= 0   ## set all to far
     
     ##########################################
-    refinearoundsrc=true
+    ##refinearoundsrc=true
 
-    if refinearoundsrc
+    if extrapars.refinearoundsrc
         ##---------------------------------
         ## 
         ## Refinement around the source      
@@ -651,13 +651,22 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Grid
         sqarg = beta^2-4.0*alpha*gamma
 
         if sqarg<0.0
-            ## TODO: adapt message to 3D!
-            println("\n To get a non-negative discriminant, need to fulfil [in 2D]: ")
-            println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
-            println(" where tx,ty can be")
-            println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
-            println(" t? = chosenval1  if 1st order ")
-            error("sqarg<0.0")
+            if extrapars.allowfixsqarg==true
+                
+                gamma = beta^2/(4.0*alpha)
+                sqarg = beta^2-4.0*alpha*gamma
+                println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
+
+            else
+                ## TODO: adapt message to 3D!
+                println("\n To get a non-negative discriminant, need to fulfil [in 2D]: ")
+                println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
+                println(" where tx,ty can be")
+                println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
+                println(" t? = chosenval1  if 1st order ")
+                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant")
+
+            end
         end
     end ## if sqarg<0.0
 
