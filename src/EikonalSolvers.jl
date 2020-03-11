@@ -53,13 +53,14 @@ include("HMCtraveltimes.jl")
 using .HMCtraveltimes
 
 
-
 ##--------------------------------------------------------------
-## If true, try to brute-force fix problems with negative sqarg.
-##   Use is discouraged...
-
+## allowfixsqarg: if true, try to brute-force fix problems with
+##                negative sqarg.
+##    Use is discouraged...
 Base.@kwdef mutable struct ExtraParams
+    ## brute-force fix negative sqarg
     allowfixsqarg::Bool
+    ## refine grid around source?
     refinearoundsrc::Bool
 end
 
