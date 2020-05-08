@@ -26,7 +26,7 @@ The package will be automatically downloaded from the web and installed.
 
 Alternatively, use the path where the directory of the package is located, be it local or remote (Github):
 ```
-(v1.2) pkg> add /path/to/EikonalSolvers
+(v1.2) pkg> add /path/to/EikonalSolvers.jl
 ```
 
 

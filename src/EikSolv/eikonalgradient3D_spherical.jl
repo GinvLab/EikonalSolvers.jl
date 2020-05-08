@@ -87,7 +87,7 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xθsrc::Array{Float64,2},coordr
         ttonesrc = ttFMM_hiord(vel,xθsrc[s,:],grd)
 
         ## ttime at receivers
-        @inbounds for i=1:size(coordrec,1)
+        for i=1:size(coordrec,1)
             ttpicks1[i] = trilinear_interp_sph( ttonesrc,grd,coordrec[i,1],
                                                 coordrec[i,2],coordrec[i,3] )
         end
@@ -520,8 +520,8 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     cartid_nrnθnφ = CartesianIndices((nr,nθ,nφ))
 
     ## construct initial narrow band
-    @inbounds for l=1:naccinit 
-        @inbounds for ne=1:6 ## six potential neighbors
+    for l=1:naccinit 
+        for ne=1:6 ## six potential neighbors
             i = irec[l] + neigh[ne,1]
             j = jrec[l] + neigh[ne,2]
             k = jrec[l] + neigh[ne,3]
@@ -549,7 +549,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     #-------------------------------
     ## main FMM loop
     totnpts = nr*nθ*nφ
-    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -569,7 +569,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
         calcLAMBDA_hiord!(tt,status,onsrc,onarec,grd,rsrc,θsrc,φsrc,lambda,ia,ja,ka)
         
         ## try all neighbors of newly accepted point
-        @inbounds for ne=1:6 ## six potential neighbors
+        for ne=1:6 ## six potential neighbors
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
             k = ka + neigh[ne,3]
@@ -726,16 +726,52 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},onsrc::Arra
 
     lambda[i,j,k] = numer/denom    
 
+    ##================================================
+    # try once more to fix denom==0.0
+    if denom==0.0
+
+        # set ttime on central pixel as the mean of neighbors
+        ttmp = (tt[i+1,j,k]+tt[i-1,j,k]+tt[i,j+1,k]+tt[i,j-1,k]+tt[i,j,k+1]+tt[i,j,k-1])/6.0
+
+        ## revert to smaller stencil
+        aback = -(tttmp  -tt[i-1,j,k])/deltar
+        aforw = -(tt[i+1,j,k]-tttmp)/deltar
+        bback = -(tttmp  -tt[i,j-1,k])/(grd.r[i]*deltaθ)
+        bforw = -(tt[i,j+1,k]-tttmp)/(grd.r[i]*deltaθ)
+        cback = -(tttmp  -tt[i,j,k-1])/(grd.r[i]*sind(grd.θ[j])*deltaφ)
+        cforw = -(tt[i,j,k+1]-tttmp)/(grd.r[i]*sind(grd.θ[j])*deltaφ)
+        # recompute stuff
+        aforwplus  = ( aforw+abs(aforw) )/2.0
+        aforwminus = ( aforw-abs(aforw) )/2.0
+        abackplus  = ( aback+abs(aback) )/2.0
+        abackminus = ( aback-abs(aback) )/2.0
+        bforwplus  = ( bforw+abs(bforw) )/2.0
+        bforwminus = ( bforw-abs(bforw) )/2.0
+        bbackplus  = ( bback+abs(bback) )/2.0
+        bbackminus = ( bback-abs(bback) )/2.0
+        cforwplus  = ( cforw+abs(cforw) )/2.0
+        cforwminus = ( cforw-abs(cforw) )/2.0
+        cbackplus  = ( cback+abs(cback) )/2.0
+        cbackminus = ( cback-abs(cback) )/2.0
+
+        ## recompute lambda
+        numer =
+            (abackplus * lambda[i-1,j,k] - aforwminus * lambda[i+1,j,k]) / deltar +
+            (bbackplus * lambda[i,j-1,k] - bforwminus * lambda[i,j+1,k]) / (grd.r[i]*deltaθ) +
+            (cbackplus * lambda[i,j,k-1] - cforwminus * lambda[i,j,k+1]) / (grd.r[i]*sind(grd.θ[j])*deltaφ)
+        denom = (aforwplus - abackminus)/deltar + (bforwplus - bbackminus)/(grd.r[i]*deltaθ) +
+            (cforwplus - cbackminus)/(grd.r[i]*sind(grd.θ[j])*deltaφ)
+        lambda[i,j,k] = numer/denom
+
+    end
+    
     if denom==0.0
         # @show onsrc[i,j]
         # @show aforwplus,abackminus
         # @show bforwplus,bbackminus
-        error("calcLAMBDA_hiord!(): denom==0")
+        error("calcLAMBDA_hiord!(): denom==0, (i,j,k)=($i,$j,$k), 2nd ord.: $(!isout2nd)")
     end
 
-    # @show aforwplus,aforwminus,abackplus,abackminus
-    # @show bforwplus,bforwminus,bbackplus,bbackminus
-    # @show cforwplus,cforwminus,cbackplus,cbackminus
     return nothing #lambda
 end
 

@@ -498,9 +498,9 @@ function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
 
         for swe=1:8
 
-            @inbounds for k=kswe[swe,1]:kswe[swe,3]:kswe[swe,2]            
-                @inbounds for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
-                    @inbounds for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
+            for k=kswe[swe,1]:kswe[swe,3]:kswe[swe,2]            
+                for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
+                    for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
                         
                         if onsrc[i,j,k]==true # in the box containing the src
 
@@ -682,8 +682,8 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     cartid_ntxntyntz = CartesianIndices((ntx,nty,ntz))
 
     ## construct initial narrow band
-    @inbounds for l=1:naccinit 
-        @inbounds for ne=1:6 ## six potential neighbors
+    for l=1:naccinit 
+        for ne=1:6 ## six potential neighbors
             i = irec[l] + neigh[ne,1]
             j = jrec[l] + neigh[ne,2]
             k = krec[l] + neigh[ne,3]
@@ -711,7 +711,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     #-------------------------------
     ## main FMM loop
     totnpts = ntx*nty*ntz
-    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -732,7 +732,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
                     xinit,yinit,zinit,xsrc,ysrc,zsrc,lambda,ia,ja,ka)
         
         ## try all neighbors of newly accepted point
-        @inbounds for ne=1:6 ## six potential neighbors
+        for ne=1:6 ## six potential neighbors
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
             k = ka + neigh[ne,3]
@@ -913,8 +913,8 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     cartid_nxnynz = CartesianIndices((nx,ny,nz))
 
     ## construct initial narrow band
-    @inbounds for l=1:naccinit 
-        @inbounds for ne=1:6 ## six potential neighbors
+    for l=1:naccinit 
+        for ne=1:6 ## six potential neighbors
             i = irec[l] + neigh[ne,1]
             j = jrec[l] + neigh[ne,2]
             k = jrec[l] + neigh[ne,3]
@@ -942,7 +942,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     #-------------------------------
     ## main FMM loop
     totnpts = nx*ny*nz
-    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -963,7 +963,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
                             xinit,yinit,zinit,xsrc,ysrc,zsrc,lambda,ia,ja,ka)
         
         ## try all neighbors of newly accepted point
-        @inbounds for ne=1:6 ## six potential neighbors
+        for ne=1:6 ## six potential neighbors
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
             k = ka + neigh[ne,3]
@@ -1118,16 +1118,53 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},
 
     lambda[i,j,k] = numer/denom
    
+    ##================================================
+    # try once more to fix denom==0.0
+    if denom==0.0
+
+        # set ttime on central pixel as the mean of neighbors
+        ttmp = (tt[i+1,j,k]+tt[i-1,j,k]+tt[i,j+1,k]+tt[i,j-1,k]+tt[i,j,k+1]+tt[i,j,k-1])/6.0
+
+        ## revert to smaller stencil
+        aback = -(tttmp  -tt[i-1,j,k])/dh
+        aforw = -(tt[i+1,j,k]-tttmp)/dh
+        bback = -(tttmp  -tt[i,j-1,k])/dh
+        bforw = -(tt[i,j+1,k]-tttmp)/dh
+        cback = -(tttmp  -tt[i,j,k-1])/dh
+        cforw = -(tt[i,j,k+1]-tttmp)/dh
+        # recompute stuff
+        aforwplus  = ( aforw+abs(aforw) )/2.0
+        aforwminus = ( aforw-abs(aforw) )/2.0
+        abackplus  = ( aback+abs(aback) )/2.0
+        abackminus = ( aback-abs(aback) )/2.0
+        bforwplus  = ( bforw+abs(bforw) )/2.0
+        bforwminus = ( bforw-abs(bforw) )/2.0
+        bbackplus  = ( bback+abs(bback) )/2.0
+        bbackminus = ( bback-abs(bback) )/2.0
+        cforwplus  = ( cforw+abs(cforw) )/2.0
+        cforwminus = ( cforw-abs(cforw) )/2.0
+        cbackplus  = ( cback+abs(cback) )/2.0
+        cbackminus = ( cback-abs(cback) )/2.0
+
+        ## recompute lambda
+        numer =
+            (abackplus * lambda[i-1,j,k] - aforwminus * lambda[i+1,j,k]) / dh +
+            (bbackplus * lambda[i,j-1,k] - bforwminus * lambda[i,j+1,k]) / dh +
+            (cbackplus * lambda[i,j,k-1] - cforwminus * lambda[i,j,k+1]) / dh        
+        denom = (aforwplus - abackminus)/dh + (bforwplus - bbackminus)/dh +
+            (cforwplus - cbackminus)/dh
+        lambda[i,j,k] = numer/denom
+
+    end
+
+    # if the second fix didn't work exit...
     if denom==0.0
         # @show onsrc[i,j]
         # @show aforwplus,abackminus
         # @show bforwplus,bbackminus
-        error("calcLAMBDA_hiord!(): denom==0")
+        error("calcLAMBDA_hiord!(): denom==0, (i,j,k)=($i,$j,$k), 2nd ord.: $(!isout2nd)")
     end
-    # @show tt[i,j,k]
-    # @show aforwplus,aforwminus,abackplus,abackminus
-    # @show bforwplus,bforwminus,bbackplus,bbackminus
-    # @show cforwplus,cforwminus,cbackplus,cbackminus
+
     return nothing #lambda
 end
 

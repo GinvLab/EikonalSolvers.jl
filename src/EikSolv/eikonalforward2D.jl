@@ -121,7 +121,7 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
     end
 
     ## group of pre-selected sources
-    @inbounds for s=1:nsrc    
+    for s=1:nsrc    
 
         ## Compute traveltime and interpolation at receivers in one go for parallelization
         
@@ -140,7 +140,7 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
         end
 
         ## interpolate at receivers positions
-        @inbounds for i=1:nrec
+        for i=1:nrec
             ttpicksGRPSRC[i,s] = bilinear_interp( ttGRPSRC[:,:,s], grd.hgrid,grd.xinit,
                                                 grd.yinit,coordrec[i,1],coordrec[i,2])
         end
@@ -209,7 +209,7 @@ function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::V
         
         ## set ttime around source ONLY FOUR points!!!
         ijsrc = findall(onsrc)
-        @inbounds for lcart in ijsrc
+        for lcart in ijsrc
             i = lcart[1]
             j = lcart[2]
             if staggeredgrid==false
@@ -324,22 +324,21 @@ function ttFS_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
     swedifference::Float64 = 0.0
     ttimeold = Array{Float64,2}(undef,ntx,nty)
     #--------------------------------------
- 
+    
     #pa=0
     swedifference = 100.0*epsilon
     while swedifference>epsilon
         #pa +=1
         ttimeold[:,:] = ttime
         
-        @inbounds for swe=1:4 
-            
-            @inbounds  for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
-                @inbounds for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
+        for swe=1:4             
+            for j=jswe[swe,1]:jswe[swe,3]:jswe[swe,2]
+                for i=iswe[swe,1]:iswe[swe,3]:iswe[swe,2]
                     
                     ##--------------------------------##
                     ## if on src, skip this iteration
                     onsrc[i,j]==true && continue
-                        
+                    
                     ####################################################
                     ##   Local solver (Podvin, Lecomte, 1991)         ##
                     ####################################################
@@ -350,7 +349,7 @@ function ttFS_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
                     ttc = inittt
                     
                     ## loop on triangles
-                    @inbounds for cou=1:8
+                    for cou=1:8
                         
                         ipix = coovin[cou,1] + i
                         jpix = coovin[cou,2] + j
@@ -520,8 +519,8 @@ function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
     cartid_nxny = CartesianIndices((nx,ny))
     
     ## construct initial narrow band
-    @inbounds for l=1:naccinit ##        
-        @inbounds  for ne=1:4 ## four potential neighbors
+    for l=1:naccinit ##        
+         for ne=1:4 ## four potential neighbors
 
             i = is[l] + neigh[ne,1]
             j = js[l] + neigh[ne,2]
@@ -549,7 +548,7 @@ function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
     #-------------------------------
     ## main FMM loop
     totnpts = nx*ny
-    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -566,7 +565,7 @@ function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
         ttime[ia,ja] = tmptt
 
         ## try all neighbors of newly accepted point
-        @inbounds for ne=1:4 
+        for ne=1:4 
 
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
@@ -632,7 +631,7 @@ function calcttpt!(ttime::Array{Float64,2},ttlocmin::Vector{Float64},inittt::Flo
     ttc = inittt
     
     ## loop on triangles
-    @inbounds for cou=1:8
+    for cou=1:8
         
         ipix = coovin[cou,1] + i
         jpix = coovin[cou,2] + j
@@ -778,9 +777,9 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
     cartid_nxny = CartesianIndices((nx,ny))
     
     ## construct initial narrow band
-    @inbounds for l=1:naccinit ##
+    for l=1:naccinit ##
         
-        @inbounds for ne=1:4 ## four potential neighbors
+        for ne=1:4 ## four potential neighbors
 
             i = is[l] + neigh[ne,1]
             j = js[l] + neigh[ne,2]
@@ -808,7 +807,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
     #-------------------------------
     ## main FMM loop
     totnpts = nx*ny
-    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -827,7 +826,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
         ttime[ia,ja] = tmptt
 
         ## try all neighbors of newly accepted point
-        @inbounds for ne=1:4 
+        for ne=1:4 
 
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
@@ -924,7 +923,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
     HUGE = 1.0e30
 
     ## 2 directions
-    @inbounds for axis=1:2
+    for axis=1:2
         
         use1stord = false
         use2ndord = false
@@ -932,7 +931,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
         chosenval2 = HUGE
         
         ## two sides for each direction
-        @inbounds for l=1:2
+        for l=1:2
 
             ## map the 4 cases to an integer as in linear indexing...
             lax = l + 2*(axis-1)
@@ -1026,13 +1025,13 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             gamma = - slowcurpt^2 ## !!!!
 
             ## 2 directions
-            @inbounds for axis=1:2
+            for axis=1:2
                 
                 use1stord = false
                 chosenval1 = HUGE
                 
                 ## two sides for each direction
-                @inbounds for l=1:2
+                for l=1:2
 
                     ## map the 4 cases to an integer as in linear indexing...
                     lax = l + 2*(axis-1)
@@ -1091,7 +1090,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             
                 gamma = beta^2/(4.0*alpha)
                 sqarg = beta^2-4.0*alpha*gamma
-                println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
+                println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###\n")
                 
             else
                 println("\n To get a non-negative discriminant, need to fulfil: ")
@@ -1197,8 +1196,8 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     ## Nearest neighbor interpolation for velocity on finer grid
     ## 
     velfinegrd = Array{Float64}(undef,nx,ny)
-    @inbounds for j=1:ny
-        @inbounds for i=1:nx
+    for j=1:ny
+        for i=1:nx
             di=div(i-1,downscalefactor)
             ri=i-di*downscalefactor
             ii = ri>=downscalefactor/2+1 ? di+2 : di+1
@@ -1249,9 +1248,9 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     cartid_nxny = CartesianIndices((nx,ny))
     
     ## construct initial narrow band
-    @inbounds for l=1:naccinit ##
+    for l=1:naccinit ##
         
-         @inbounds for ne=1:4 ## four potential neighbors
+         for ne=1:4 ## four potential neighbors
 
             i = is[l] + neigh[ne,1]
             j = js[l] + neigh[ne,2]
@@ -1280,7 +1279,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     ## main FMM loop
     firstwarning=true
     totnpts = nx*ny
-    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -1324,7 +1323,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         ##########################################################
 
         ## try all neighbors of newly accepted point
-        @inbounds for ne=1:4 
+        for ne=1:4 
 
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]

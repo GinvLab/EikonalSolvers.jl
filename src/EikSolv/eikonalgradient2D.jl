@@ -990,16 +990,45 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
     
     denom = (aforwplus - abackminus)/dh + (bforwplus - bbackminus)/dh
     
-    ##================================================
-    
     lambda[i,j] = numer/denom
 
+    ##================================================
+    # try once more to fix denom==0.0
+    if denom==0.0
+
+        # set ttime on central pixel as the mean of neighbors
+        ttmp = (tt[i+1,j]+tt[i-1,j]+tt[i,j+1]+tt[i,j-1])/4.0
+
+        ## revert to smaller stencil
+        aback = -(ttmp  -tt[i-1,j])/dh
+        aforw = -(tt[i+1,j]-ttmp)/dh
+        bback = -(ttmp  -tt[i,j-1])/dh
+        bforw = -(tt[i,j+1]-ttmp)/dh
+        # recompute stuff
+        aforwplus  = ( aforw+abs(aforw) )/2.0
+        aforwminus = ( aforw-abs(aforw) )/2.0
+        abackplus  = ( aback+abs(aback) )/2.0
+        abackminus = ( aback-abs(aback) )/2.0
+        bforwplus  = ( bforw+abs(bforw) )/2.0
+        bforwminus = ( bforw-abs(bforw) )/2.0
+        bbackplus  = ( bback+abs(bback) )/2.0
+        bbackminus = ( bback-abs(bback) )/2.0
+
+        ## recompute lambda
+        numer = (abackplus * lambda[i-1,j] - aforwminus * lambda[i+1,j] ) / dh +
+            (bbackplus * lambda[i,j-1] - bforwminus * lambda[i,j+1]) / dh
+        denom = (aforwplus - abackminus)/dh + (bforwplus - bbackminus)/dh
+        lambda[i,j] = numer/denom
+
+    end
+
+    # if the second fix didn't work exit...
     if denom==0.0
         # @show i,j
         # @show isout2nd
         # @show onsrc[i,j]
-        # @show aback,aforw
-        # @show bback,bforw
+        # @show aforw,aback
+        # @show bforw,bback
         # @show aforwplus,abackminus
         # @show bforwplus,bbackminus
         # @show aforwplus,aforwminus
@@ -1010,7 +1039,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
         # @show tt[i-1,j],tt[i,j],tt[i+1,j]
         # @show tt[i-1,j+1],tt[i,j+1],tt[i+1,j+1]
 
-        error("calcLAMBDA_hiord!(): denom==0, (i,j)=($i,$j)")
+        error("calcLAMBDA_hiord!(): denom==0, (i,j)=($i,$j), 2nd ord.: $(!isout2nd)")
     end
 
     return #lambda

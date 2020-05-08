@@ -97,13 +97,13 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
     ttGRPSRC = zeros(grdsph.nr,grdsph.nθ,nsrc)
 
     ## group of pre-selected sources
-    @inbounds for s=1:nsrc    
+    for s=1:nsrc    
 
         ## Compute traveltime and interpolation at receivers in one go for parallelization
         ttGRPSRC[:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grdsph)
 
         ## interpolate at receivers positions
-        @inbounds for i=1:nrec
+        for i=1:nrec
             ## ASSUMING that the function varies linearly between adjacent points in r and θ, along rays and "rings" 
             ttpicksGRPSRC[i,s] = bilinear_interp_sph( ttGRPSRC[:,:,s],grdsph,coordrec[i,1],coordrec[i,2])
         end
@@ -155,7 +155,7 @@ function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpo
         
         ## set ttime around source ONLY FOUR points!!!
         ijsrc = findall(onsrc)
-        @inbounds for lcart in ijsrc
+        for lcart in ijsrc
             i = lcart[1]
             j = lcart[2]
             ## regular grid
@@ -266,9 +266,9 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},
     cartid_nrnθ = CartesianIndices((nr,nθ))
     
     ## construct initial narrow band
-    @inbounds for l=1:naccinit ##
+    for l=1:naccinit ##
         
-        @inbounds for ne=1:4 ## four potential neighbors
+        for ne=1:4 ## four potential neighbors
 
             i = is[l] + neigh[ne,1]
             j = js[l] + neigh[ne,2]
@@ -296,7 +296,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},
     #-------------------------------
     ## main FMM loop
     totnpts = nr*nθ
-    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -315,7 +315,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},
         ttime[ia,ja] = tmptt
 
         ## try all neighbors of newly accepted point
-        @inbounds for ne=1:4 
+        for ne=1:4 
 
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
@@ -414,7 +414,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
     HUGE = 1.0e30
 
     ## 2 directions
-    @inbounds for axis=1:2
+    for axis=1:2
         
         use1stord = false
         use2ndord = false
@@ -422,7 +422,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
         chosenval2 = HUGE
 
         ## two sides for each direction
-        @inbounds for l=1:2
+        for l=1:2
 
             ## map the 4 cases to an integer as in linear indexing...
             lax = l + 2*(axis-1)
@@ -516,13 +516,13 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             gamma = - slowcurpt^2 ## !!!!
 
             ## 2 directions
-            @inbounds for axis=1:2
+            for axis=1:2
                 
                 use1stord = false
                 chosenval1 = HUGE
                 
                 ## two sides for each direction
-                @inbounds for l=1:2
+                for l=1:2
 
                     ## map the 4 cases to an integer as in linear indexing...
                     lax = l + 2*(axis-1)
@@ -697,8 +697,8 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
     ## Nearest neighbor interpolation for velocity on finer grid
     ## 
     velfinegrd = Array{Float64}(undef,nr,nθ)
-    @inbounds for j=1:nθ
-        @inbounds for i=1:nr
+    for j=1:nθ
+        for i=1:nr
             di=div(i-1,downscalefactor)
             ri=i-di*downscalefactor
             ii = ri>=downscalefactor/2+1 ? di+2 : di+1
@@ -749,8 +749,8 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
     cartid_nrnθ = CartesianIndices((nr,nθ))
     
     ## construct initial narrow band
-    @inbounds for l=1:naccinit ##        
-         @inbounds for ne=1:4 ## four potential neighbors
+    for l=1:naccinit ##        
+         for ne=1:4 ## four potential neighbors
 
             i = is[l] + neigh[ne,1]
             j = js[l] + neigh[ne,2]
@@ -778,7 +778,7 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
     ## main FMM loop
     firstwarning=true
     totnpts = nr*nθ
-    @inbounds for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
         
         ## if no top left exit the game...
         if bheap.Nh<1
@@ -822,7 +822,7 @@ function ttaroundsrc_sph!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float6
         ##########################################################
 
         ## try all neighbors of newly accepted point
-        @inbounds for ne=1:4 
+        for ne=1:4 
 
             i = ia + neigh[ne,1]
             j = ja + neigh[ne,2]
