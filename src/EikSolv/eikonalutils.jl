@@ -336,10 +336,10 @@ function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksob
     dobs = vec(ttpicksobs)
     stdobsv = vec(stdobs)
 
-    ## L2 norm
+    ## L2 norm^2
     diffcalobs = dcalc .- dobs 
-    misf = 0.5 .* sum( diffcalobs.^2 ./ stdobsv.^2 )
-    
+    misf = 0.5 * sum( diffcalobs.^2 ./ stdobsv.^2 )
+
     return misf
 end
 

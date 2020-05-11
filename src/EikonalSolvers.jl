@@ -23,6 +23,7 @@ export Grid3DSphere,traveltime3Dsphere,gradttime3Dsphere
 export ttmisfitfunc
 export EikonalProb
 
+# using LinearAlgebra
 ## For parallelisation
 using Distributed
 
