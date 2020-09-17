@@ -13,7 +13,7 @@ end
 
 ##--------------------------
 function setextraparams!(extrapars::ExtraParams ;
-                         allowfixsqarg::Bool, refinearoundsrc::Bool)
+                         allowfixsqarg::Bool=false, refinearoundsrc::Bool=true)
     extrapars.allowfixsqarg = allowfixsqarg
     extrapars.refinearoundsrc = refinearoundsrc
     warningextrapar(extrapars)
