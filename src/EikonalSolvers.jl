@@ -23,6 +23,8 @@ export Grid3DSphere,traveltime3Dsphere,gradttime3Dsphere
 export ttmisfitfunc
 export EikonalProb
 
+export setextraparams!
+
 # using LinearAlgebra
 ## For parallelisation
 using Distributed
@@ -58,22 +60,37 @@ using .HMCtraveltimes
 ## allowfixsqarg: if true, try to brute-force fix problems with
 ##                negative sqarg.
 ##    Use is discouraged...
-Base.@kwdef mutable struct ExtraParams
+Base.@kwdef struct ExtraParams
     ## brute-force fix negative sqarg
     allowfixsqarg::Bool
     ## refine grid around source?
     refinearoundsrc::Bool
 end
 
-extrapars = ExtraParams(allowfixsqarg=false,
-                        refinearoundsrc=true)
 
-if extrapars.allowfixsqarg==true
-    @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
+const extrapars = ExtraParams(allowfixsqarg=false,
+                        refinearoundsrc=true)
+warningextrapar(extrapars)
+
+##--------------------------
+function setextraparams!(extrapars::ExtraParams ;
+                         allowfixsqarga::Bool, refinearoundsrc::Bool)
+    extrapars.allowfixsqarg = allowfixsqarga
+    extrapars.refinearoundsrc = refinearoundsrc
+    warningextrapar(extrapars)
+    return nothing
 end
-if extrapars.refinearoundsrc==false
-    @warn("ExtraParams: refinearoundsrc==false, no grid refinement around source.")
+##--------------------------
+function warningextrapar(extrapars::ExtraParams)
+    if extrapars.allowfixsqarg==true
+        @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
+    end
+    if extrapars.refinearoundsrc==false
+        @warn("ExtraParams: refinearoundsrc==false, no grid refinement around source.")
+    end
+    return nothing
 end
+
 ##--------------------------------------------------------------
 
 
