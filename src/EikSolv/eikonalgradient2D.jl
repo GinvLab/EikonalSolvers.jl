@@ -105,7 +105,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         curnrec = size(coordrec[s],1) 
         ttpicks1 = zeros(curnrec)
-@show s
+
         ###########################################
         ## calc ttime
 
