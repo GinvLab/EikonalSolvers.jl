@@ -20,7 +20,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `vel`: the 2D velocity model 
 - `grd`: a struct specifying the geometry and size of the model
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array 
-- `coordrec`: the coordinates of the receiver(s) (x,y), a 2-column array 
+- `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays 
 - `pickobs`: observed traveltime picks
 - `stdobs`: standard deviation of error on observed traveltime picks, an array with same shape than `pickobs`
 - `gradttalgo`: the algorithm to use to compute the forward and gradient, one amongst the following
@@ -32,14 +32,16 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 2D array
 
 """
-function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                    pickobs::Array{Float64,2},stdobs::Array{Float64,2} ; gradttalgo::String="gradFMM_hiord")
+function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Vector{Array{Float64,2}},
+                    pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord")
 
     @assert size(coordsrc,2)==2
-    @assert size(coordrec,2)==2
+    #@assert size(coordrec,2)==2
     @assert all(vel.>0.0)
     @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
+
+    @assert size(coordsrc,1)==length(coordrec)
 
     nsrc=size(coordsrc,1)
     nw = nworkers()
@@ -56,8 +58,8 @@ function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,
         for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
             @async tmpgrad[:,:,s] = remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
-                                                     coordsrc[igrs,:],coordrec,
-                                                     grd,stdobs[:,igrs],pickobs[:,igrs],
+                                                     coordsrc[igrs,:],coordrec[igrs],
+                                                     grd,stdobs[igrs],pickobs[igrs],
                                                      gradttalgo )
         end
     end
@@ -72,15 +74,21 @@ end
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
-                         coordrec::Array{Float64,2},
+                         coordrec::Vector{Array{Float64,2}},
                          grd::Grid2D,
-                         stdobs::Array{Float64,2},pickobs1::Array{Float64,2},
+                         stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
                          adjalgo::String)
 
     nx,ny=size(vel)
     nsrc = size(xysrc,1)
-    nrec = size(coordrec,1)                
-    ttpicks1 = zeros(nrec)
+    #nrec = size(coordrec,1)                
+    #ttpicks1 = zeros(nrec)
+    # ttpicks1 = Vector{Vector{Float64}}(undef,nsrc)
+    # for i=1:nsrc
+    #     curnrec = size(coordrec[i],1) 
+    #     ttpicks1[i] = zeros(curnrec)
+    # end
+
     grad1 = zeros(nx,ny)
   
     if adjalgo=="ttFMM_hiord"
@@ -94,6 +102,8 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
+        curnrec = size(coordrec[s],1) 
+        ttpicks1 = zeros(curnrec)
 
         ###########################################
         ## calc ttime
@@ -113,9 +123,9 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
         end
             
         ## ttime at receivers
-        for i=1:size(coordrec,1)
+        for i=1:curnrec
             ttpicks1[i] = bilinear_interp( ttgrdonesrc,grd.hgrid,grd.xinit,
-                                           grd.yinit,coordrec[i,1],coordrec[i,2] )
+                                           grd.yinit,coordrec[s][i,1],coordrec[s][i,2] )
         end
 
         ###########################################
@@ -124,17 +134,17 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFS_podlec"
 
-            grad1 += eikgrad_FS_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec,grd,
-                                     pickobs1[:,s],ttpicks1,stdobs[:,s])
+            grad1 .+= eikgrad_FS_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],grd,
+                                     pickobs1[s],ttpicks1,stdobs[s])
 
         elseif adjalgo=="gradFMM_podlec"
 
-            grad1 += eikgrad_FMM_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec,
-                                          grd,pickobs1[:,s],ttpicks1,stdobs[:,s])
+            grad1 .+= eikgrad_FMM_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],
+                                          grd,pickobs1[s],ttpicks1,stdobs[s])
             
         elseif adjalgo=="gradFMM_hiord"
-            grad1 += eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec,
-                                                  grd,pickobs1[:,s],ttpicks1,stdobs[:,s])
+            grad1 .+= eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],
+                                                  grd,pickobs1[s],ttpicks1,stdobs[s])
 
         else
             println("Wrong adjalgo algo name: $(adjalgo)... ")

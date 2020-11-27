@@ -9,7 +9,7 @@
 ## @doc raw because of some backslashes in the string...
 @doc raw"""
     traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
-                 coordrec::Array{Float64,2} ; ttalgo::String="ttFMM_hiord", 
+                 coordrec::VectorArray{Float64,2}} ; ttalgo::String="ttFMM_hiord", 
                  returntt::Bool=false ) 
 
 Calculate traveltime for 2D velocity models. 
@@ -20,7 +20,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `vel`: the 2D velocity model
 - `grd`: a struct specifying the geometry and size of the model
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
-- `coordrec`: the coordinates of the receiver(s) (x,y), a 2-column array
+- `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
 - `ttalgo` (optional): the algorithm to use to compute the traveltime, one amongst the following
     * "ttFS\_podlec", fast sweeping method using Podvin-Lecomte stencils
     * "ttFMM\_podlec," fast marching method using Podvin-Lecomte stencils
@@ -51,7 +51,7 @@ function traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,
     end
 
     ## calculate how to subdivide the srcs among the workers
-    nsrc = size(coordsrc,1)
+    #nsrc = size(coordsrc,1)
     nw = nworkers()
     grpsrc = distribsrcs(nsrc,nw)
     nchu = size(grpsrc,1)
