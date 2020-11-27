@@ -102,9 +102,10 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
+
         curnrec = size(coordrec[s],1) 
         ttpicks1 = zeros(curnrec)
-
+@show s
         ###########################################
         ## calc ttime
 
@@ -164,7 +165,7 @@ function sourceboxlocgrad!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos:
     ##########################
     ##   Init source
     ##########################
-    mindistsrc = 1e-5
+    mindistsrc = 0.01*grd.hgrid
     xsrc,ysrc = srcpos[1],srcpos[2]
     dh = grd.hgrid
 
@@ -195,20 +196,25 @@ function sourceboxlocgrad!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos:
     halfg = 0.0    
     src_on_nodeedge = false   
 
+    ## Check if the source is on an edge/node
     ## loop to make sure we don't accidentally move the src to another node/edge
     while (sqrt(rx^2+ry^2)<=mindistsrc) || (abs(rx)<=mindistsrc) || (abs(ry)<=mindistsrc)
         src_on_nodeedge = true
-        
+
+        ## amount of shift
+        sft = 0.05*dh  #0.001*dh
+        clo = 0.02*dh
+
         ## shift the source 
-        if xsrc < max_x-0.002*dh
-            xsrc = xsrc+0.001*dh
+        if xsrc < max_x-clo
+            xsrc = xsrc+sft
         else #(make sure it's not already at the bottom y)
-            xsrc = xsrc-0.001*dh
+            xsrc = xsrc-sft
         end
-        if ysrc < max_y-0.002*dh
-            ysrc = ysrc+0.001*dh
+        if ysrc < max_y-clo
+            ysrc = ysrc+sft
         else #(make sure it's not already at the bottom y)
-            ysrc = ysrc-0.001*dh
+            ysrc = ysrc-sft
         end
 
         # print("new time at src:  $(tt[ix,iy]) ")
@@ -297,6 +303,7 @@ function recboxlocgrad!(ttime::Array{Float64,2},lambda::Array{Float64,2},ttpicks
     onarec[:,:] .= false
     nrec=size(rec,1)
 
+    fisttimereconbord = true
     for r=1:nrec
         if staggeredgrid==false
             i,j = findclosestnode(rec[r,1],rec[r,2],grd.xinit,grd.yinit,grd.hgrid)
@@ -320,10 +327,18 @@ function recboxlocgrad!(ttime::Array{Float64,2},lambda::Array{Float64,2},ttpicks
                 n∇T = (ttime[i,end]-ttime[i,end-1])/grd.hgrid 
             end
             onarec[i,j] = true
-            lambda[i,j] = (ttpicks[r]-pickobs[r])/(n∇T * stdobs[r]^2)
-            # println(" Receiver on border of model (i==1)||(i==nx)||(j==1)||(j==ny)")
-            # println(" Not yet implemented...")
-            # return []
+            #############################################
+            ##  FIX ME: receivers on the border...     ## <<<<===================#####
+            #############################################
+            if fisttimereconbord
+                @warn(" Receiver(s) on border of model, \n still untested, spurious results may be encountered.")
+                fisttimereconbord=false
+            end
+            ## Taking into account Neumann boundary condition
+            ## lambda[i,j] = (ttpicks[r]-pickobs[r])/(n∇T * stdobs[r]^2)
+            ## NOT taking into account Neumann boundary condition
+            lambda[i,j] =  (ttpicks[r]-pickobs[r])/stdobs[r]^2
+
         else
             ## Receivers within the model
             onarec[i,j] = true
@@ -1049,7 +1064,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
         # @show tt[i-1,j],tt[i,j],tt[i+1,j]
         # @show tt[i-1,j+1],tt[i,j+1],tt[i+1,j+1]
 
-        error("calcLAMBDA_hiord!(): denom==0, (i,j)=($i,$j), 2nd ord.: $(!isout2nd)")
+        error("calcLAMBDA_hiord!(): denom==0, (i,j)=($i,$j), onsrc: $(onsrc[i,j]), 2nd ord.: $(!isout2nd)")
     end
 
     return #lambda
