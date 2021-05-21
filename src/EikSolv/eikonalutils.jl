@@ -205,14 +205,17 @@ Trinilear interpolation.
 """
 function trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
                       xinit::Float64,yinit::Float64,zinit::Float64,
-                      x::Float64,y::Float64,z::Float64)
+                      xin::Float64,yin::Float64,zin::Float64)
     
-    xh = (x-xinit)/ttgrdspacing
-    yh = (y-yinit)/ttgrdspacing
-    zh = (z-zinit)/ttgrdspacing
+    xh = (xin-xinit)/ttgrdspacing
+    yh = (yin-yinit)/ttgrdspacing
+    zh = (zin-zinit)/ttgrdspacing
     i = floor(Int64,xh)
     j = floor(Int64,yh)
     k = floor(Int64,zh)
+    x = xin-xinit
+    y = yin-yinit
+    z = zin-zinit
 
     ## if at the edges of domain choose previous square...
     nx,ny,nz=size(ttime)
@@ -278,7 +281,10 @@ function trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
 
     ## Finally we interpolate these values along z(walking through a line):
     interpval = c0 * (1 - zd) + c1 * zd 
-      
+
+    # @show ii,jj,kk
+    # @show ttime[ii,jj,kk],interpval
+
     return interpval
 end
 

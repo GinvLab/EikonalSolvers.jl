@@ -1110,7 +1110,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
                 println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
                 println(" t? = chosenval1  if 1st order ")
                 
-                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant")
+                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j)")
             end
         end
     end ## if sqarg<0.0

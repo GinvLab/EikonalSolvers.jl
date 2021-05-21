@@ -142,14 +142,21 @@ end
 
 Trinilear interpolation in spherical coordinates.
 """
-function trilinear_interp_sph(ttime::Array{Float64,3},grdsph::Grid3DSphere,x::Float64,y::Float64,z::Float64)
+function trilinear_interp_sph(ttime::Array{Float64,3},grdsph::Grid3DSphere,xin::Float64,yin::Float64,zin::Float64)
+
+    ## All this function needs a check!!!  <<<<<=========####
+    ## Is it ok to do this interpolation in spherical coordinates??
     
-    xh = (x-grdsph.rinit)/grdsph.Δr
-    yh = (y-grdsph.θinit)/grdsph.Δθ
-    zh = (z-grdsph.φinit)/grdsph.Δφ
+    xh = (xin-grdsph.rinit)/grdsph.Δr
+    yh = (yin-grdsph.θinit)/grdsph.Δθ
+    zh = (zin-grdsph.φinit)/grdsph.Δφ
     i = floor(Int64,xh)
     j = floor(Int64,yh)
     k = floor(Int64,zh)
+
+    x = xin-grdsph.rinit
+    y = yin-grdsph.θinit
+    z = zin-grdsph.φinit
 
     ## if at the edges of domain choose previous square...
     nr,nθ,nφ=grdsph.nr,grdsph.nθ,grdsph.nφ
@@ -180,7 +187,7 @@ function trilinear_interp_sph(ttime::Array{Float64,3},grdsph::Grid3DSphere,x::Fl
     x1=(i+1)*grdsph.Δr
     y1=(j+1)*grdsph.Δθ
     z1=(k+1)*grdsph.Δφ
-
+    
     ## Fortran indices start from 1 while i,j,k from 0
     ii=i+1
     jj=j+1
