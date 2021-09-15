@@ -30,8 +30,8 @@ function creategridmod2D()
     coordsrc = [hgrid*LinRange(5.5,nx-15,nsrc)  (ny*hgrid-5.6).+(hgrid*LinRange(-1.0,1.0,nsrc))]
 
     nrec = 10
-    coordrec = [hgrid*LinRange(3.0,nx-2,nrec)  1.75*hgrid*LinRange(2.0,2.0,nrec)]
-    
+    coordrec = [[hgrid*LinRange(3.0,nx-2,nrec)  1.75*hgrid*LinRange(2.0,2.0,nrec)] for i=1:nsrc]
+       
     ######################################
         
     velmod = 2.5 .+ zeros(nx,ny) 
@@ -67,8 +67,9 @@ function creategridmod3D()
     coordsrc = [hgrid*LinRange(3.5,nx-15,nsrc)  hgrid*LinRange(3.5,ny-15,nsrc)  (nz*hgrid-6).+(hgrid*LinRange(-1.0,1.0,nsrc))]
 
     nrec = 10
-    coordrec = [hgrid*LinRange(2.0,nx-2,nrec)  1.75*hgrid*LinRange(2.0,2.0,nrec) 1.75*hgrid*LinRange(2.0,2.0,nrec)]
-    
+    coordrec = [hgrid*LinRange(2.0,nx-2,nrec)  1.75*hgrid*LinRange(2.0,2.0,nrec) 1.75*hgrid*LinRange(2.0,2.0,nrec)] 
+
+
     ######################################
         
     velmod = 2.5 .+ zeros(nx,ny,nz) 
@@ -151,7 +152,7 @@ function test_fwdtt_2D()
     for ttalgo in ttalgos
         i+=1
         println("Traveltime 2D using $ttalgo versus analytic solution")
-        ttpicks,ttime = traveltime2D(velanaly,grd,coordsrc[1:1,:],coordrec,ttalgo=ttalgo,returntt=true)
+        ttpicks,ttime = traveltime2D(velanaly,grd,coordsrc[1:1,:],coordrec[1:1],ttalgo=ttalgo,returntt=true)
         # mean average error
         if ttalgo in ["ttFS_podlec","ttFMM_podlec"]
             ttime = (ttime[1:end-1,1:end-1].+ttime[2:end,1:end-1] .+
@@ -199,10 +200,13 @@ function test_gradtt_2D()
 
     #--------------------------------------
     # Gradient of misfit
-    stdobs = 0.15.*ones(size(coordrec,1),size(coordsrc,1))
     ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
-    noise = stdobs.^2 .* randn(size(ttpicks))
-    dobs = ttpicks .+ noise
+    stdobs = deepcopy(ttpicks)
+    dobs = deepcopy(ttpicks)
+    for i=1:length(ttpicks)
+        stdobs[i] .= 0.15
+        dobs[i] = ttpicks[i] .+ stdobs[i].^2 .* randn(size(ttpicks[i]))
+    end
     flatmod = 2.8 .+ zeros(grd.nx,grd.ny) 
     
     gradalgos = ["gradFS_podlec","gradFMM_podlec","gradFMM_hiord"]

@@ -41,7 +41,6 @@ function traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,
     @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
 
-
     @assert size(coordsrc,1)==length(coordrec)
     nsrc = size(coordsrc,1)
     ttpicks = Vector{Vector{Float64}}(undef,nsrc)
