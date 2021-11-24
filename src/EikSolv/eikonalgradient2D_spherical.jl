@@ -115,7 +115,7 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},src
     ##########################
     ##   Init source
     ##########################
-    mindistsrc = 1e-5
+    mindistsrc = 0.01*grd.Δr
     rsrc,θsrc = srcpos[1],srcpos[2]
 
     ## regular grid
@@ -137,15 +137,15 @@ function sourceboxlocgrad_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},src
         src_on_nodeedge = true
         
         ## shift the source 
-        if rsrc < max_r-0.002*grd.Δr
-            rsrc = rsrc+0.001*grd.Δr
+        if rsrc < max_r-0.02*grd.Δr
+            rsrc = rsrc+0.01*grd.Δr
         else #(make sure it's not already at the bottom θ)
-            rsrc = rsrc-0.001*grd.Δr
+            rsrc = rsrc-0.01*grd.Δr
         end
-        if θsrc < max_θ-0.002*grd.Δθ
-            θsrc = θsrc+0.001*grd.Δθ
+        if θsrc < max_θ-0.02*grd.Δθ
+            θsrc = θsrc+0.01*grd.Δθ
         else #(make sure it's not alreadθ at the bottom θ)
-            θsrc = θsrc-0.001*grd.Δθ
+            θsrc = θsrc-0.01*grd.Δθ
         end
 
         # print("new time at src:  $(tt[ir,iθ]) ")
@@ -216,7 +216,8 @@ function recboxlocgrad_sph!(ttime::Array{Float64,2},lambda::Array{Float64,2},ttp
 
     deltar = grd.Δr
     deltaθ = deg2rad(grd.Δθ)  ## DEG to RAD !!!!
-    
+
+    fisttimereconbord = true
     for r=1:nrec
         i,j = findclosestnode_sph(rec[r,1],rec[r,2],grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
 
@@ -237,10 +238,18 @@ function recboxlocgrad_sph!(ttime::Array{Float64,2},lambda::Array{Float64,2},ttp
                 n∇T = (ttime[i,end]-ttime[i,end-1])/(grd.r[i]*deltaθ)
             end
             onarec[i,j] = true
-            lambda[i,j] = (ttpicks[r]-pickobs[r])/(n∇T * stdobs[r]^2)
-            # println(" Receiver on border of model (i==1)||(i==nx)||(j==1)||(j==ny)")
-            # println(" Not yet implemented...")
-            # return []
+            #############################################
+            ##  FIX ME: receivers on the border...     ## <<<<===================#####
+            #############################################
+            if fisttimereconbord
+                @warn(" Receiver(s) on border of model, \n still untested, spurious results may be encountered.")
+                fisttimereconbord=false
+            end
+            ## Taking into account Neumann boundary condition
+            ## lambda[i,j] = (ttpicks[r]-pickobs[r])/(n∇T * stdobs[r]^2)
+            ## NOT taking into account Neumann boundary condition
+            lambda[i,j] =  (ttpicks[r]-pickobs[r])/stdobs[r]^2
+
         else
             ## Receivers within the model
             onarec[i,j] = true

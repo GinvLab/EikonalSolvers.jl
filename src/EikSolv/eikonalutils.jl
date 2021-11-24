@@ -205,14 +205,17 @@ Trinilear interpolation.
 """
 function trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
                       xinit::Float64,yinit::Float64,zinit::Float64,
-                      x::Float64,y::Float64,z::Float64)
+                      xin::Float64,yin::Float64,zin::Float64)
     
-    xh = (x-xinit)/ttgrdspacing
-    yh = (y-yinit)/ttgrdspacing
-    zh = (z-zinit)/ttgrdspacing
+    xh = (xin-xinit)/ttgrdspacing
+    yh = (yin-yinit)/ttgrdspacing
+    zh = (zin-zinit)/ttgrdspacing
     i = floor(Int64,xh)
     j = floor(Int64,yh)
     k = floor(Int64,zh)
+    x = xin-xinit
+    y = yin-yinit
+    z = zin-zinit
 
     ## if at the edges of domain choose previous square...
     nx,ny,nz=size(ttime)
@@ -278,16 +281,19 @@ function trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
 
     ## Finally we interpolate these values along z(walking through a line):
     interpval = c0 * (1 - zd) + c1 * zd 
-      
+
+    # @show ii,jj,kk
+    # @show ttime[ii,jj,kk],interpval
+
     return interpval
 end
 
 ###################################################################
 
 @doc raw"""
-     ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Array{Float64,2},
-                  stdobs::Array{Float64,2},coordsrc::Array{Float64,2},
-                  coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2Dsphere,Grid3Dsphere});
+     ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Vector{Vector{Float64}},
+                  stdobs::Vector{Vector{Float64}},coordsrc::Array{Float64,2},
+                  coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid3D,Grid2Dsphere,Grid3Dsphere});
                   ttalgo::String="ttFMM_hiord" )
 
 Calculate the misfit functional 
@@ -296,10 +302,10 @@ Calculate the misfit functional
 ```
 # Arguments
     - `velmod`: velocity model, either a 2D or 3D array.
-    - `ttpicksobs`: the traveltimes at the receivers.
-    - `stdobs`: a vector of standard deviations representing the error on the measured traveltimes.
-    - `coordsrc`: coordinates of the sources
-    - `coordrec`: coordinates of the receivers
+    - `ttpicksobs`: a vector of vectors of the traveltimes at the receivers.
+    - `stdobs`: a vector of vectors standard deviations representing the error on the measured traveltimes.
+    - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
+    - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
     - `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
     - `ttalgo` (optional): the algorithm to use to compute the traveltime, one amongst the following
         * "ttFS\_podlec", fast sweeping method using Podvin-Lecomte stencils
@@ -310,35 +316,51 @@ Calculate the misfit functional
     The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
 
 """
-function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Array{Float64,2},
-                      stdobs::Array{Float64,2},coordsrc::Array{Float64,2},
-                      coordrec::Array{Float64,2},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
+# function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Vector{Vector{Float64}},
+#                       stdobs::Vector{Vector{Float64}},coordsrc::Array{Float64,2},
+#                       coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
+#                       ttalgo::String="ttFMM_hiord")
+function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs,
+                      stdobs,coordsrc,
+                      coordrec,grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
                       ttalgo::String="ttFMM_hiord")
 
     if typeof(grd)==Grid2D 
         # compute the forward response
         ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
+
     elseif typeof(grd)==Grid2DSphere
         # compute the forward response
-        ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
+        ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
+
     elseif typeof(grd)==Grid3D 
         # compute the forward response
-        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
+        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
+
     elseif typeof(grd)==Gride3DSphere
         # compute the forward response
         ttpicks = traveltime3Dsphere(velmod,grd,coordsrc,coordrec)
+
     else
         error("Input velocity model has wrong dimensions.")
     end
 
-    # flatten traveltime array
-    dcalc = vec(ttpicks)
-    dobs = vec(ttpicksobs)
-    stdobsv = vec(stdobs)
+    nsrc = size(coordsrc,1)
+    #nrecs1 = size.(coordrec,1)
+    #totlen = sum(nrec1)
+    misf = 0.0
+    for s=1:nsrc
+        misf += sum( (ttpicks[s].-ttpicksobs[s]).^2 ./ stdobs[s].^2)
+    end
+    misf *= 0.5
 
-    ## L2 norm^2
-    diffcalobs = dcalc .- dobs 
-    misf = 0.5 * sum( diffcalobs.^2 ./ stdobsv.^2 )
+    # flatten traveltime array
+    # dcalc = vec(ttpicks)
+    # dobs = vec(ttpicksobs)
+    # stdobsv = vec(stdobs)
+    # ## L2 norm^2
+    # diffcalobs = dcalc .- dobs 
+    # misf = 0.5 * sum( diffcalobs.^2 ./ stdobsv.^2 )
 
     return misf
 end

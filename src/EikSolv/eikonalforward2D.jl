@@ -9,7 +9,7 @@
 ## @doc raw because of some backslashes in the string...
 @doc raw"""
     traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
-                 coordrec::Array{Float64,2} ; ttalgo::String="ttFMM_hiord", 
+                 coordrec::VectorArray{Float64,2}} ; ttalgo::String="ttFMM_hiord", 
                  returntt::Bool=false ) 
 
 Calculate traveltime for 2D velocity models. 
@@ -20,7 +20,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `vel`: the 2D velocity model
 - `grd`: a struct specifying the geometry and size of the model
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
-- `coordrec`: the coordinates of the receiver(s) (x,y), a 2-column array
+- `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
 - `ttalgo` (optional): the algorithm to use to compute the traveltime, one amongst the following
     * "ttFS\_podlec", fast sweeping method using Podvin-Lecomte stencils
     * "ttFMM\_podlec," fast marching method using Podvin-Lecomte stencils
@@ -32,22 +32,25 @@ The computations are run in parallel depending on the number of workers (nworker
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 
 """
-function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
-                       coordrec::Array{Float64,2} ; ttalgo::String="ttFMM_hiord", returntt::Bool=false) 
+function traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
+                       coordrec::Vector{Array{Float64,2}} ; ttalgo::String="ttFMM_hiord", returntt::Bool=false) 
         
     @assert size(coordsrc,2)==2
-    @assert size(coordrec,2)==2
+    #@assert size(coordrec,2)==2
     @assert all(vel.>0.0)
     @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
-    
 
+    @assert size(coordsrc,1)==length(coordrec)
     nsrc = size(coordsrc,1)
-    nrec = size(coordrec,1)    
-    ttpicks = zeros(nrec,nsrc)
+    ttpicks = Vector{Vector{Float64}}(undef,nsrc)
+    for i=1:nsrc
+        curnrec = size(coordrec[i],1) 
+        ttpicks[i] = zeros(curnrec)
+    end
 
     ## calculate how to subdivide the srcs among the workers
-    nsrc=size(coordsrc,1)
+    #nsrc = size(coordsrc,1)
     nw = nworkers()
     grpsrc = distribsrcs(nsrc,nw)
     nchu = size(grpsrc,1)
@@ -71,18 +74,18 @@ function traveltime2D( vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64
             # return ONLY traveltime picks at receivers
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
+                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                           vel,coordsrc[igrs,:],
-                                                          coordrec,grd,ttalgo,
+                                                          coordrec[igrs],grd,ttalgo,
                                                           returntt=returntt )
             end
         elseif returntt
             # return both traveltime picks at receivers and at all grid points
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttime[:,:,igrs],ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
+                @async ttime[:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                                           vel,coordsrc[igrs,:],
-                                                                          coordrec,grd,ttalgo,
+                                                                          coordrec[igrs],grd,ttalgo,
                                                                           returntt=returntt )
             end
         end
@@ -105,13 +108,20 @@ end
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
-                      coordrec::Array{Float64,2},grd::Grid2D,
+                      coordrec::Vector{Array{Float64,2}},grd::Grid2D,
                       ttalgo::String ; returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
-    nrec = size(coordrec,1)                
-    ttpicksGRPSRC = zeros(nrec,nsrc) 
+    #nrec = size(coordrec,1)                
+    #ttpicksGRPSRC = zeros(nrec,nsrc)
+    
+    ttpicksGRPSRC = Vector{Vector{Float64}}(undef,nsrc)
+    for i=1:nsrc
+        curnrec = size(coordrec[i],1) 
+        ttpicksGRPSRC[i] = zeros(curnrec)
+    end
 
+    
     if ttalgo=="ttFMM_hiord"
         # in this case velocity and time arrays have the same shape
         ttGRPSRC = zeros(grd.nx,grd.ny,nsrc)
@@ -140,9 +150,9 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
         end
 
         ## interpolate at receivers positions
-        for i=1:nrec
-            ttpicksGRPSRC[i,s] = bilinear_interp( ttGRPSRC[:,:,s], grd.hgrid,grd.xinit,
-                                                grd.yinit,coordrec[i,1],coordrec[i,2])
+        for i=1:size(coordrec[s],1) 
+            ttpicksGRPSRC[s][i] = bilinear_interp( ttGRPSRC[:,:,s], grd.hgrid,grd.xinit,
+                                                grd.yinit,coordrec[s][i,1],coordrec[s][i,2])
         end
     end
     
@@ -186,7 +196,6 @@ function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::V
         ix,iy = findclosestnode(xsrc,ysrc,grd.xinit-hgr,grd.yinit-hgr,grd.hgrid)
         rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
         ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-
     end
 
     halfg = 0.0 #hgrid/2.0
@@ -985,7 +994,6 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
         # elseif axis==2
         #     deltah = dy
         # end
-
         if use2ndord && use1stord # second order
             tmpa2 = 1.0/3.0 * (4.0*chosenval1-chosenval2)
             ## curalpha: make sure you multiply only times the
@@ -1099,7 +1107,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
                 println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
                 println(" t? = chosenval1  if 1st order ")
                 
-                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant")
+                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j)")
             end
         end
     end ## if sqarg<0.0

@@ -101,7 +101,7 @@ function traveltime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,
             # return both traveltime picks at receivers and at all grid points
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttime[:,:,igrs],ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
+                @async ttime[:,:,:,igrs],ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
                                                                           vel,coordsrc[igrs,:],
                                                                           coordrec,grd,ttalgo,
                                                                           returntt=returntt )
@@ -1666,7 +1666,7 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Grid
                 println(" where tx,ty can be")
                 println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
                 println(" t? = chosenval1  if 1st order ")
-                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant")
+                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j, k=$k)")
             end
         end
     end ## if sqarg<0.0
