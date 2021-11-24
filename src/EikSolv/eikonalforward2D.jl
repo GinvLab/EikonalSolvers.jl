@@ -196,7 +196,6 @@ function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::V
         ix,iy = findclosestnode(xsrc,ysrc,grd.xinit-hgr,grd.yinit-hgr,grd.hgrid)
         rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
         ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-
     end
 
     halfg = 0.0 #hgrid/2.0
@@ -995,7 +994,6 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
         # elseif axis==2
         #     deltah = dy
         # end
-
         if use2ndord && use1stord # second order
             tmpa2 = 1.0/3.0 * (4.0*chosenval1-chosenval2)
             ## curalpha: make sure you multiply only times the

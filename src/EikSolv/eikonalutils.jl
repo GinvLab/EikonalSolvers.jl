@@ -316,23 +316,31 @@ Calculate the misfit functional
     The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
 
 """
-function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Vector{Vector{Float64}},
-                      stdobs::Vector{Vector{Float64}},coordsrc::Array{Float64,2},
-                      coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
+# function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Vector{Vector{Float64}},
+#                       stdobs::Vector{Vector{Float64}},coordsrc::Array{Float64,2},
+#                       coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
+#                       ttalgo::String="ttFMM_hiord")
+function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs,
+                      stdobs,coordsrc,
+                      coordrec,grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
                       ttalgo::String="ttFMM_hiord")
 
     if typeof(grd)==Grid2D 
         # compute the forward response
         ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
+
     elseif typeof(grd)==Grid2DSphere
         # compute the forward response
-        ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
+        ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
+
     elseif typeof(grd)==Grid3D 
         # compute the forward response
-        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
+        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
+
     elseif typeof(grd)==Gride3DSphere
         # compute the forward response
         ttpicks = traveltime3Dsphere(velmod,grd,coordsrc,coordrec)
+
     else
         error("Input velocity model has wrong dimensions.")
     end
