@@ -1,9 +1,9 @@
 # EikonalSolvers.jl
 
-[![Build Status](https://travis-ci.com/inverseproblem/EikonalSolvers.jl.svg?branch=master)](https://travis-ci.com/inverseproblem/EikonalSolvers.jl)
-[![CodeCov](https://codecov.io/gh/inverseproblem/EikonalSolvers.jl/branch/master/graph/badge.svg)](https://codecov.io/inverseproblem/EikonalSolvers.jl)
-[![Docs Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://inverseproblem.github.io/EikonalSolvers.jl/stable)
-[![Docs Latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://inverseproblem.github.io/EikonalSolvers.jl/latest)
+#[![Build Status](https://travis-ci.com/inverseproblem/EikonalSolvers.jl.svg?branch=master)](https://travis-ci.com/inverseproblem/EikonalSolvers.jl)
+#[![CodeCov](https://codecov.io/gh/inverseproblem/EikonalSolvers.jl/branch/master/graph/badge.svg)](https://codecov.io/inverseproblem/EikonalSolvers.jl)
+#[![Docs Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://inverseproblem.github.io/EikonalSolvers.jl/stable)
+#[![Docs Latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://inverseproblem.github.io/EikonalSolvers.jl/latest)
 
 Docs: <https://inverseproblem.github.io/EikonalSolvers.jl/latest>
 
