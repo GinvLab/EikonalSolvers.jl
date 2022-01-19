@@ -1,14 +1,17 @@
 
-image: julia:1.6                # image comes from Docker hub
+## see https://gitlab.com/tkpapp/GitlabJuliaDemo.jl/-/blob/master/.gitlab-ci.yml
+
+image: julia:1.7        # image comes from Docker hub
 
 before_script:
-  - julia --project=@. -e "import Pkg; Pkg.build()"
+    # - apt-get -qq update; apt-get -y install git
+    - julia --project=@. -e "import Pkg; Pkg.build()"
 
-# default:
-#  script:
-#    - julia --project=@. -e "import Pkg; Pkg.test(; coverage = false)"
-#   # - julia --project=test/coverage -e 'import Pkg; Pkg.instantiate()'
-#   # - julia --project=test/coverage test/coverage/coverage-summary.jl
+default:
+   script:
+    - julia --project=@. -e "import Pkg; Pkg.test(; coverage = false)"
+    # - julia --project=test/coverage -e 'import Pkg; Pkg.instantiate()'
+    # - julia --project=test/coverage test/coverage/coverage-summary.jl
 
 pages:
   stage: deploy

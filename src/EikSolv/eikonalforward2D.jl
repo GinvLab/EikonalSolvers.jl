@@ -9,7 +9,7 @@
 ## @doc raw because of some backslashes in the string...
 @doc raw"""
     traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
-                 coordrec::VectorArray{Float64,2}} ; ttalgo::String="ttFMM_hiord", 
+                 coordrec::Vector{Array{Float64,2}} ; ttalgo::String="ttFMM_hiord", 
                  returntt::Bool=false ) 
 
 Calculate traveltime for 2D velocity models. 

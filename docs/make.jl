@@ -2,7 +2,6 @@
 
 using Documenter, EikonalSolvers 
 
-#modules = [EikonalSolvers],
 makedocs(modules = [EikonalSolvers],
          #repo = "../../{path}",
          sitename="EikonalSolvers.jl",
@@ -16,5 +15,5 @@ makedocs(modules = [EikonalSolvers],
          )
 
 deploydocs(
-    repo="github.com/inverseproblem/EikonalSolvers.jl.git",
+    repo="https://gitlab.com/JuliaGeoph/EikonalSolvers.jl.git",
 )
