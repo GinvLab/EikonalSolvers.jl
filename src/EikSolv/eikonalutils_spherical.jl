@@ -1,7 +1,7 @@
 
 ######################################################
 """
-    Grid2DSphere(; Δr::Float64,Δθ::Float64,rinit::Float64,θinit::Float64,nr::Int64,nθ::Int64)
+$(TYPEDSIGNATURES)
 
 A structure holding the 2D SPHERICAL grid parameters, geometry and size.
 
@@ -44,8 +44,7 @@ end
 ######################################################
 
 """
-    Grid3DSphere(; Δr::Float64,Δθ::Float64,Δφ::Float64,rinit::Float64,
-                   θinit::Float64,φinit::Float64,nr::Int64,nθ::Int64,nφ::Int64)
+$(TYPEDSIGNATURES)
 
 A structure holding the 3D SPHERICAL grid parameters, geometry and size.
 
@@ -97,8 +96,7 @@ end
 ######################################################
 
 """
-     bilinear_interp_sph(f::Array{Float64,2},grdsph::Grid2DSphere,
-                             xreq::Float64,yreq::Float64)
+$(TYPEDSIGNATURES)
 
 Bilinear interpolation (spherical coordinates).
 """
@@ -137,8 +135,7 @@ end
 
 #############################################################
 """
-    trilinear_interp_sph(ttime::Array{Float64,3},grdsph::Grid2DSphere,
-                          x::Float64,y::Float64,z::Float64)
+$(TYPEDSIGNATURES)
 
 Trinilear interpolation in spherical coordinates.
 """
@@ -228,8 +225,7 @@ end
 #########################################################################
 
 """
-    findclosestnode_sph(x::Float64,y::Float64,z::Float64,xinit::Float64,
-                        yinit::Float64,zinit::Float64,Δr::Float64,Δθ::Float64) 
+$(TYPEDSIGNATURES)
 
 Find closest node on a 2D grid to a given point in spherical/polar coordinates.
 """
@@ -259,8 +255,7 @@ end
 #####################################################################
 
 """
-    findclosestnode_sph(r::Float64,θ::Float64,φ::Float64,rinit::Float64,
-                    θinit::Float64,φinit::Float64,Δr::Float64,Δθ::Float64,Δφ::Float64) 
+$(TYPEDSIGNATURES)
 
 Find closest node on a 3D grid to a given point in spherical coordinates.
 """

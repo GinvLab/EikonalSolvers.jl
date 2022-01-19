@@ -145,11 +145,13 @@ grd = Grid2D(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)  # create the Grid2D s
 ```
 Then define the coordinates of the sources, a two-column array (since we are in 2D) representing the \$x\$ and \$y\$ coordinates
 ```@example parts
+nsrc = 4
 coordsrc = [grd.hgrid.*LinRange(10.0,290.0,4)   grd.hgrid.*200.0.*ones(4)] 
 ```
-and the receivers, again a two-column array (since we are in 2D) representing the \$x\$ and \$y\$ coordinates
+and the receivers, a "vector of arrays", i.e., a vector where each element (one element per each source) is a two-column array (since we are in 2D) representing the \$x\$ and \$y\$ coordinates
 ```@example parts
-coordrec = [grd.hgrid.*LinRange(8.0,200.0,10)  grd.hgrid.*20.0.*ones(10)] 
+nrec = 10
+coordrec = [ [grd.hgrid.*LinRange(8.0,200.0,nrec) grd.hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
 ```
 The velocity model is defined as a 2D array with size (`grd.nx` \$\times\$ `grd.ny`)
 ```@example parts
@@ -217,8 +219,10 @@ Here a synthetic example of 2D gradient computations in Cartesian coordinates is
 using EikonalSolvers
 hgrid=0.5
 grd = Grid2D(hgrid=hgrid,xinit=0.0,yinit=0.0,nx=300,ny=220)         # create the Grid2D struct
-coordsrc = [hgrid.*LinRange(10.0,290.0,4)   hgrid.*200.0.*ones(4)] # coordinates of the sources (4 sources)
-coordrec = [hgrid.*LinRange(8.0,200.0,10)  hgrid.*20.0.*ones(10)] # coordinates of the receivers (10 receivers)
+nsrc = 4
+nrec = 10
+coordsrc = [hgrid.*LinRange(10.0,290.0,nsrc)   hgrid.*200.0.*ones(nsrc)] # coordinates of the sources (4 sources)
+coordrec = [[hgrid.*LinRange(8.0,200.0,nrec)  hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
 velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
 # increasing velocity with depth...
 for i=1:grd.ny 
@@ -232,9 +236,9 @@ nothing # hide
 Then the "observed" traveltime data are created by adding some Gaussian noise to the traveltimes computed above to simulate real measurements.
 ```@example grad1
 # standard deviation of error on observed data
-stdobs = 0.15.*ones(size(coordrec,1),size(coordsrc,1))
+stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
 # generate a "noise" array to simulate real data
-noise = stdobs.^2 .* randn(size(ttpicks))
+noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
 # add the noise to the synthetic traveltime data
 dobs = ttpicks .+ noise
 nothing # hide

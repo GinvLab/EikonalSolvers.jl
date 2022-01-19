@@ -6,8 +6,7 @@
 
 ## @doc raw because of some backslashes in the string...
 @doc raw"""
-    traveltime2Dsphere(vel::Array{Float64,2},grd::Grid2DSphere,coordsrc::Array{Float64,2},
-                 coordrec::Array{Float64,2} ; returntt::Bool=false ) 
+$(TYPEDSIGNATURES)
 
 Calculate traveltime for 2D velocity models in a structured spherical grid (polar coordinates). 
 Returns the traveltime at receivers and optionally the array(s) of traveltime on the entire gridded model.
@@ -118,6 +117,9 @@ end
 
 #################################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
                          grd::Grid2DSphere )
 
@@ -178,6 +180,9 @@ end
 #################################################################################
 #################################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},
                      grd::Grid2DSphere) 
     
@@ -353,6 +358,9 @@ end
 
 ##====================================================================##
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function isonbord_sph(ib::Int64,jb::Int64,nr::Int64,nθ::Int64)
     isonb1st = false
     isonb2nd = false
@@ -370,6 +378,8 @@ end
 ##====================================================================##
 
 """
+$(TYPEDSIGNATURES)
+
    Compute the traveltime at a given node using 2nd order stencil 
     where possible, otherwise revert to 1st order.
 """
@@ -613,6 +623,8 @@ end
 
 
 """
+$(TYPEDSIGNATURES)
+
   Refinement of the grid around the source. FMM calculated inside a finer grid 
     and then passed on to coarser grid
 """
@@ -860,8 +872,6 @@ end
 
 
 #######################################################################################
+#########################################################
 
-#########################################################
-#end                                                    #
-#########################################################
 

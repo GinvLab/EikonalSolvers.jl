@@ -5,6 +5,7 @@ version = "0.2.1"
 
 [deps]
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 
 [compat]
 julia = "1"

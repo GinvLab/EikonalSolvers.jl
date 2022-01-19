@@ -8,8 +8,7 @@
 
 ## @doc raw because of some backslashes in the string...
 @doc raw"""
-    gradttime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                pickobs::Array{Float64,2},stdobs::Array{Float64,2} ; gradttalgo::String="gradFMM_hiord")
+$(TYPEDSIGNATURES)
 
 Calculate the gradient using the adjoint state method for 2D velocity models. 
 Returns the gradient of the misfit function with respect to velocity calculated at the given point (velocity model). 
@@ -71,6 +70,9 @@ end
 ###############################################################################
 
 """
+$(TYPEDSIGNATURES)
+
+
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
@@ -159,6 +161,9 @@ end
 
 #############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function sourceboxlocgrad!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
                            grd::Grid2D; staggeredgrid::Bool )
     
@@ -281,6 +286,9 @@ end
 
 ##############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function recboxlocgrad!(ttime::Array{Float64,2},lambda::Array{Float64,2},ttpicks::Vector{Float64},grd::Grid2D,
                         rec::Array{Float64,2},pickobs::Vector{Float64},stdobs::Vector{Float64}; staggeredgrid::Bool)
 
@@ -351,6 +359,9 @@ end
 
 #############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function adjderivonsource(tt::Array{Float64,2},onsrc::Array{Bool,2},i::Int64,j::Int64,
                           xinit::Float64,yinit::Float64,dh::Float64,xsrc::Float64,ysrc::Float64;
                           staggeredgrid::Bool)        
@@ -431,6 +442,9 @@ end
 
 #############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function eikgrad_FS_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                          src::Vector{Float64},rec::Array{Float64,2},
                          grd::Grid2D,pickobs::Vector{Float64},
@@ -554,6 +568,9 @@ end
 
 ###############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                          src::Vector{Float64},rec::Array{Float64,2},
                          grd::Grid2D,pickobs::Vector{Float64},
@@ -711,6 +728,9 @@ end # eikadj_FMM_SINGLESRC
 
 ##--------------------------------------------
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function calcLAMBDA!(tt::Array{Float64,2},status::Array{Int64,2},onsrc::Array{Bool,2},
                      onarec::Array{Bool,2},dh::Float64,xinit::Float64,yinit::Float64,
                      xsrc::Float64,ysrc::Float64,lambda::Array{Float64,2},i::Int64,j::Int64)
@@ -760,9 +780,11 @@ function calcLAMBDA!(tt::Array{Float64,2},status::Array{Int64,2},onsrc::Array{Bo
 end
 
 ###############################################################################
-
 ###############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                          src::Vector{Float64},rec::Array{Float64,2},
                          grd::Grid2D,pickobs::Vector{Float64},
@@ -918,6 +940,9 @@ end # eikadj_FMM_hiord_SINGLESRC
 
 ##====================================================================##
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function isoutrange(ib::Int64,jb::Int64,nx::Int64,ny::Int64)
     isoutb1st = false
     isoutb2nd = false
@@ -934,6 +959,9 @@ end
 
 ##------------------------------------------------------------------------
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
                              onsrc::Array{Bool,2},onarec::Array{Bool,2},
                              dh::Float64,xinit::Float64,yinit::Float64,
@@ -1071,7 +1099,5 @@ function calcLAMBDA_hiord!(tt::Array{Float64,2},status::Array{Int64},
 end
 
 
-
 ##################################################
-#end # module EikonalGrad2D                      ##
 ##################################################

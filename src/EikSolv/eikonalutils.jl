@@ -5,7 +5,7 @@
 
 ######################################################
 """
-    distribsrcs(nsrc::Integer,nw::Integer)
+$(TYPEDSIGNATURES)
 
 Calculate how to subdivide the sources among workers for parallel jobs.
 """
@@ -32,7 +32,7 @@ end
 
 ######################################################
 """
-    Grid2D(hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
+$(TYPEDSIGNATURES)
 
 A structure holding the 2D grid parameters, geometry and size.
 
@@ -67,10 +67,13 @@ end
 ######################################################
 
 """
-     Grid3D(hgrid::Float64,xinit::Float64,yinit::Float64,zinit::Float64,
-            nx::Int64,ny::Int64,nz::Int64)
+$(TYPEDEF)
 
 A structure holding the 3D grid parameters, geometry and size.
+
+# Fields 
+
+$(TYPEDFIELDS)
 
 The fields are:    
 - `hgrid`: spacing of the grid nodes (same for x, y and z)
@@ -108,8 +111,7 @@ end
 ########################################################
 
 """
-    findclosestnode(x::Float64,y::Float64,xinit::Float64,
-                    yinit::Float64,h::Float64) 
+$(TYPEDSIGNATURES)
 
 Find closest node on a grid to a given point.
 """
@@ -133,8 +135,7 @@ end
 #####################################################################
 
 """
-    findclosestnode(x::Float64,y::Float64,z::Float64,xinit::Float64,
-                    yinit::Float64,zinit::Float64,h::Float64) 
+$(TYPEDSIGNATURES)
 
 Find closest node on a grid to a given point.
 """
@@ -164,8 +165,7 @@ end
 #############################################################
 
 """
-     bilinear_interp(f::Array{Float64,2},hgrid::Float64,
-                         xinit::Float64,yinit::Float64, xreq::Float64,yreq::Float64)
+$(TYPEDSIGNATURES)
 
 Bilinear interpolation.
 """
@@ -197,9 +197,7 @@ end
 #############################################################
 
 """
-    trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
-                      xinit::Float64,yinit::Float64,zinit::Float64,
-                      x::Float64,y::Float64,z::Float64)
+$(TYPEDSIGNATURES)
 
 Trinilear interpolation.
 """
@@ -291,10 +289,7 @@ end
 ###################################################################
 
 @doc raw"""
-     ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Vector{Vector{Float64}},
-                  stdobs::Vector{Vector{Float64}},coordsrc::Array{Float64,2},
-                  coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid3D,Grid2Dsphere,Grid3Dsphere});
-                  ttalgo::String="ttFMM_hiord" )
+$(TYPEDSIGNATURES)
 
 Calculate the misfit functional 
 ```math
@@ -316,14 +311,14 @@ Calculate the misfit functional
     The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
 
 """
-# function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Vector{Vector{Float64}},
-#                       stdobs::Vector{Vector{Float64}},coordsrc::Array{Float64,2},
-#                       coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
-#                       ttalgo::String="ttFMM_hiord")
 function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs,
                       stdobs,coordsrc,
                       coordrec,grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
                       ttalgo::String="ttFMM_hiord")
+# function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Vector{Vector{Float64}},
+#                       stdobs::Vector{Vector{Float64}},coordsrc::Array{Float64,2},
+#                       coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
+#                       ttalgo::String="ttFMM_hiord")
 
     if typeof(grd)==Grid2D 
         # compute the forward response

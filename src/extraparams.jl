@@ -4,6 +4,13 @@
 ## allowfixsqarg: if true, try to brute-force fix problems with
 ##                negative sqarg.
 ##    Use is discouraged...
+"""
+$(TYPEDEF)
+
+# Fields 
+
+$(TYPEDFIELDS)
+"""
 Base.@kwdef mutable struct ExtraParams
     ## brute-force fix negative sqarg
     allowfixsqarg::Bool
@@ -12,6 +19,11 @@ Base.@kwdef mutable struct ExtraParams
 end
 
 ##--------------------------
+"""
+$(TYPEDSIGNATURES)
+
+Set some additional parameter for EikonalSolvers
+"""
 function setextraparams!(extrapars::ExtraParams ;
                          allowfixsqarg::Bool=false, refinearoundsrc::Bool=true)
     extrapars.allowfixsqarg = allowfixsqarg
@@ -20,6 +32,10 @@ function setextraparams!(extrapars::ExtraParams ;
     return 
 end
 ##--------------------------
+"""
+$(TYPEDSIGNATURES)
+
+"""
 function warningextrapar(extrapars::ExtraParams)
     if extrapars.allowfixsqarg==true
         @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")

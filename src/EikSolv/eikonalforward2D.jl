@@ -8,9 +8,7 @@
 
 ## @doc raw because of some backslashes in the string...
 @doc raw"""
-    traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
-                 coordrec::Vector{Array{Float64,2}} ; ttalgo::String="ttFMM_hiord", 
-                 returntt::Bool=false ) 
+$(TYPEDSIGNATURES)
 
 Calculate traveltime for 2D velocity models. 
 Returns the traveltime at receivers and optionally the array(s) of traveltime on the entire gridded model.
@@ -101,9 +99,7 @@ end
 
 ###########################################################################
 """
-     ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
-                      coordrec::Array{Float64,2},grd::Grid2D,
-                      ttalgo::String ; returntt::Bool=false )
+$(TYPEDSIGNATURES)
 
   Compute the forward problem for a group of sources.
 """
@@ -166,8 +162,7 @@ end
 #################################################################################
 
 """
-    sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
-                   grd::Grid2D; staggeredgrid::Bool )
+$(TYPEDSIGNATURES)
 
  Define the "box" of nodes around/including the source.
 """
@@ -247,7 +242,7 @@ end
 #################################################################################
 
 """
-      ttFS_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
+$(TYPEDSIGNATURES)
  
  Fast sweeping method for a single source in 2D using using Podvin-Lecomte stencils on a staggered grid.
 """
@@ -427,7 +422,7 @@ end ## ttFS_podlec
 ###############################################################################
 
 """
-     ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
+$(TYPEDSIGNATURES)
  
  Fast marching method for a single source in 2D using using Podvin-Lecomte stencils on a staggered grid.
 """
@@ -613,6 +608,8 @@ end
 ##====================================================================##
 
 """
+$(TYPEDSIGNATURES)
+
  Compute the traveltime at requested node using Podvin-Lecomte stencils on a staggered grid.
 """
 function calcttpt!(ttime::Array{Float64,2},ttlocmin::Vector{Float64},inittt::Float64,
@@ -700,7 +697,7 @@ end
 #########################################################################
 
 """
-    ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
+$(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid. 
 """
@@ -874,6 +871,8 @@ end
 ##====================================================================##
 
 """
+$(TYPEDSIGNATURES)
+
  Test if point is on borders of domain.
 """
 function isonbord(ib::Int64,jb::Int64,nx::Int64,ny::Int64)
@@ -893,6 +892,8 @@ end
 ##====================================================================##
 
 """
+$(TYPEDSIGNATURES)
+
    Compute the traveltime at a given node using 2nd order stencil 
     where possible, otherwise revert to 1st order.
 """
@@ -1126,6 +1127,8 @@ end
 ##====================================================================##
 
 """
+$(TYPEDSIGNATURES)
+
   Refinement of the grid around the source. FMM calculated inside a finer grid 
     and then passed on to coarser grid
 """

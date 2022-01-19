@@ -8,10 +8,17 @@
 ################################################################
 
 """
+HMCtraveltimes
+
 A convenience module to facilitate the use of `EikonalSolvers` within the framework of Hamiltonian Monte Carlo inversion by employing the package `HMCtomo`. 
+
+# Exports
+
+$(EXPORTS)
 """
 module HMCtraveltimes
 
+using DocStringExtensions
 using EikonalSolvers
 
 export EikonalProb
@@ -20,6 +27,13 @@ export EikonalProb
 #################################################################
 
 ## create the problem type for traveltime tomography
+"""
+$(TYPEDEF)
+
+# Fields 
+
+$(TYPEDFIELDS)
+"""
 Base.@kwdef struct EikonalProb
     ##mstart::Vector{Float64} # required
     grd::Union{Grid2D,Grid3D}
@@ -32,6 +46,10 @@ end
 ## use  x.T * C^-1 * x  = ||L^-1 * x ||^2 ?
 
 ## make the type callable
+"""
+$(TYPEDSIGNATURES)
+
+"""
 function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
 
     if typeof(eikprob.grd)==Grid2D

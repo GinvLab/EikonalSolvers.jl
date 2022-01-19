@@ -9,9 +9,7 @@
 ########################################################################################
 ## @doc raw because of some backslashes in the string...
 @doc raw""" 
-    gradttime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Array{Float64,2},
-                coordrec::Array{Float64,2},pickobs::Array{Float64,2},
-                pickcalc::Array{Float64,2}, stdobs::Array{Float64,2} )                
+$(TYPEDSIGNATURES)
 
 Calculate the gradient using the adjoint state method for 3D velocity models in spherical coordinates. 
 Returns the gradient of the misfit function with respect to velocity calculated at the given point (velocity model).
@@ -65,6 +63,8 @@ end
 ################################################################3
 
 """
+$(TYPEDSIGNATURES)
+
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc3D(vel::Array{Float64,3},xθsrc::Array{Float64,2},coordrec::Array{Float64,2},
@@ -105,7 +105,9 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xθsrc::Array{Float64,2},coordr
 end
 
 ############################################################################
-
+"""
+$(TYPEDSIGNATURES)
+"""
 function sourceboxlocgrad_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},
                                grd::Grid3DSphere )
 
@@ -236,6 +238,9 @@ end
 
 ############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function recboxlocgrad_sph!(ttime::Array{Float64,3},lambda::Array{Float64,3},ttpicks::Vector{Float64},grd::Grid3DSphere,
                         rec::Array{Float64,2},pickobs::Vector{Float64},stdobs::Vector{Float64} )
 
@@ -309,6 +314,9 @@ end
 
 ###################################################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function adjderivonsource_sph(tt::Array{Float64,3},onsrc::Array{Bool,3},i::Int64,j::Int64,k::Int64,
                               grd::Grid3DSphere,rsrc::Float64,θsrc::Float64,φsrc::Float64)
 
@@ -452,6 +460,9 @@ end
 
 #############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
                                      src::Vector{Float64},rec::Array{Float64,2},
                                      grd::Grid3DSphere,pickobs::Vector{Float64},
@@ -614,6 +625,9 @@ end # eikadj_FMM_hiord_SINGLESRC
 
 ##====================================================================##
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function isoutrange_sph(ib::Int64,jb::Int64,kb::Int64,nr::Int64,nθ::Int64,nφ::Int64)
     isoutb1st = false
     isoutb2nd = false
@@ -630,6 +644,9 @@ end
 
 ##====================================================================##
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},onsrc::Array{Bool,3},onarec::Array{Bool,3},
                            grd::Grid3DSphere,rsrc::Float64,θsrc::Float64,φsrc::Float64,lambda::Array{Float64,3},
                            i::Int64,j::Int64,k::Int64)
