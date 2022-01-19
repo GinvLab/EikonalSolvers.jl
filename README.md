@@ -1,11 +1,9 @@
 # EikonalSolvers.jl
 
-#[![Build Status](https://travis-ci.com/inverseproblem/EikonalSolvers.jl.svg?branch=master)](https://travis-ci.com/inverseproblem/EikonalSolvers.jl)
-#[![CodeCov](https://codecov.io/gh/inverseproblem/EikonalSolvers.jl/branch/master/graph/badge.svg)](https://codecov.io/inverseproblem/EikonalSolvers.jl)
-#[![Docs Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://inverseproblem.github.io/EikonalSolvers.jl/stable)
-#[![Docs Latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://inverseproblem.github.io/EikonalSolvers.jl/latest)
+[![Docs Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://juliageoph.gitlab.io/EikonalSolvers.jl/stable)
+[![Docs Latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://juliageoph.gitlab.io/EikonalSolvers.jl/latest)
 
-Docs: <https://inverseproblem.github.io/EikonalSolvers.jl/latest>
+Docs: <https://juliageoph.gitlab.io/EikonalSolvers.jl>
 
 A library to perform __seismic traveltime__ computations by solving the eikonal equation in two (__2D__) and three dimensions (__3D__) with the possibility of computing the __gradient of a misfit function__ with respect to the velocity model.
 Different eikonal solvers are available, based either on the fast marching (FMM) method (1st and 2nd order) or the fast sweeping (FS) method for global updates with different local stencils. 
