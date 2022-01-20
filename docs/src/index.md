@@ -202,7 +202,7 @@ The grid setup and forward computations are carried out as shown in the followin
 using EikonalSolvers
 grd = Grid2DSphere(Δr=2.0,Δθ=0.2,nr=40,nθ=70,rinit=500.0,θinit=10.0) # create the Grid2DSphere struct
 coordsrc = [grd.rinit.+grd.Δr*3  grd.θinit.+grd.Δθ*(grd.nθ-5)] # coordinates of the sources (1 source)
-coordrec = [grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3 ] # coordinates of the receivers (1 receiver)
+coordrec = [[grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3] ] # coordinates of the receivers (1 receiver), vector of arrays
 velmod = 2.5 .* ones(grd.nr,grd.nθ)                           # velocity model
 
 # run the traveltime computation 
@@ -273,7 +273,8 @@ Here a synthetic example of 2D gradient computations in spherical coordinates is
 using EikonalSolvers
 grd = Grid2DSphere(Δr=2.0,Δθ=0.2,nr=40,nθ=70,rinit=500.0,θinit=10.0) # create the Grid2DSphere struct
 coordsrc = [grd.rinit.+grd.Δr*3  grd.θinit.+grd.Δθ*(grd.nθ-5)] # coordinates of the sources (1 source)
-coordrec = [grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3 ] # coordinates of the receivers (1 receiver)
+nsrc = size(coordsrc,1)
+coordrec = [[grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3] for i=1:nsrc] # coordinates of the receivers (1 receiver)
 
 # velocity model
 velmod = 2.5 .* ones(grd.nr,grd.nθ) 
@@ -281,9 +282,9 @@ velmod = 2.5 .* ones(grd.nr,grd.nθ)
 ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
 
 # standard deviation of error on observed data
-stdobs = 0.15.*ones(size(coordrec,1),size(coordsrc,1))
+stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
 # generate a "noise" array to simulate real data
-noise = stdobs.^2 .* randn(size(ttpicks))
+noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
 # add the noise to the synthetic traveltime data
 dobs = ttpicks .+ noise
 
