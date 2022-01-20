@@ -11,11 +11,15 @@
     Binary heaps (min/max)
 
      IMPORTANT: make sure the handle is unique!
-      Check is commented out because slows things down...
+      Check is commented out because it slows things down...
 
+# Exports
+
+$(EXPORTS)
 """
 module BinHeaps
 
+using DocStringExtensions
 
 export BinHeapMax,BinHeapMin
 export topval_heap,build_maxheap!,build_minheap!,insert_maxheap!,
@@ -25,6 +29,14 @@ export topval_heap,build_maxheap!,build_minheap!,insert_maxheap!,
 
 ##=============================================================
 
+
+"""
+$(TYPEDEF)
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
 mutable struct BinHeapMax
     Nmax::Int64
     Nh::Int64
@@ -34,6 +46,13 @@ mutable struct BinHeapMax
 end
 
 
+"""
+$(TYPEDEF)
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
 mutable struct BinHeapMin
     Nmax::Int64
     Nh::Int64
@@ -44,10 +63,17 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 index_parent(i::Integer) = div(i,2) 
-
+"""
+$(TYPEDSIGNATURES)
+"""
 index_leftchild(i::Integer) = 2*i ## shift bits???
-
+"""
+$(TYPEDSIGNATURES)
+"""
 index_rightchild(i::Integer) = 2*i+1 ## shift bits???
 
 ##=============================================================
@@ -57,6 +83,9 @@ index_rightchild(i::Integer) = 2*i+1 ## shift bits???
 ##            General stuff
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function swap_nodes_heap!(h::Union{BinHeapMax,BinHeapMin},p::Integer,q::Integer)
     #                     h::{Union{BinHeapMax,BinHeapMin} means:
     #                       call if h is either of the two types
@@ -82,6 +111,9 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function topval_heap(h::Union{BinHeapMax,BinHeapMin})
     return h.nodes[1],h.handles[1]
 end
@@ -94,6 +126,9 @@ end
 ##               MAX stuff
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function build_maxheap!(values::Array{Float64,1},Nmax::Integer,
                          handles::Array{Int64,1})
     @assert size(values,1)==size(handles,1)
@@ -127,6 +162,9 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function max_heapify!(h::BinHeapMax,i::Int64)
     ## Go DOWN the tree (max heap)...
     # get children indices
@@ -155,6 +193,9 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_node_maxheap!(h::BinHeapMax,val::Float64,handle::Int64)
     ## find index of node given handle
     # idxh = find(h.handles.==handle)
@@ -188,6 +229,9 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function insert_maxheap!(h::BinHeapMax,val::Float64,handle::Int64)
     ## Go UP the tree (max heap) from the bottom...
     # extend heap
@@ -215,6 +259,9 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function pop_maxheap!(h::BinHeapMax)
     # save handle and values of top to return them
     poppedtophandle = h.handles[1]
@@ -245,6 +292,9 @@ end
 ##               MIN stuff
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function build_minheap!(values::Array{Float64,1},Nmax::Integer,
                          handles::Array{Int64,1})
     @assert size(values,1)==size(handles,1)
@@ -307,6 +357,9 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function update_node_minheap!(h::BinHeapMin,val::Float64,handle::Int64)
     ## find index of node given handle
     ## faster than Julia findfirst ??
@@ -347,6 +400,9 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function insert_minheap!(h::BinHeapMin,val::Float64,handle::Int64)
     ## Go UP the tree (min heap) from the bottom...
     # extend heap
@@ -374,6 +430,9 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function pop_minheap!(h::BinHeapMin)
     # save handle and values of top to return them
     poppedtophandle = h.handles[1]

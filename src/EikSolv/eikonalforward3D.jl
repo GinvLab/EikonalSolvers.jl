@@ -24,7 +24,7 @@ end
 
 ###########################################################################
 
-@doc raw"""
+"""
 $(TYPEDSIGNATURES)
 
 Calculate traveltime for 3D velocity models. 
@@ -37,9 +37,9 @@ The computations are run in parallel depending on the number of workers (nworker
 - `coordsrc`: the coordinates of the source(s) (x,y,z), a 3-column array 
 - `coordrec`: the coordinates of the receiver(s) (x,y,z), a 3-column array
 - `ttalgo` (optional): the algorithm to use to compute the traveltime, one amongst the following
-    * "ttFS\_podlec", fast sweeping method using Podvin-Lecomte stencils
-    * "ttFMM\_podlec", fast marching method using Podvin-Lecomte stencils
-    * "ttFMM\_hiord", second order fast marching method, the default algorithm 
+    * "ttFS\\_podlec", fast sweeping method using Podvin-Lecomte stencils
+    * "ttFMM\\_podlec", fast marching method using Podvin-Lecomte stencils
+    * "ttFMM\\_hiord", second order fast marching method, the default algorithm 
 - `returntt` (optional): whether to return the 3D array(s) of traveltimes for the entire model
 
 # Returns

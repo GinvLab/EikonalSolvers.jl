@@ -7,15 +7,14 @@
 
 ###############################################################################
 ########################################################################################
-## @doc raw because of some backslashes in the string...
-@doc raw""" 
+"""
 $(TYPEDSIGNATURES)
 
 Calculate the gradient using the adjoint state method for 3D velocity models in spherical coordinates. 
 Returns the gradient of the misfit function with respect to velocity calculated at the given point (velocity model).
 The gradient is calculated using the adjoint state method. 
 The computations are run in parallel depending on the number of workers (nworkers()) available.
-The algorithm used is "gradFMM\_hiord", a second order fast marching method for forward, high order fast marching method for adjoint.  
+The algorithm used is "gradFMM\\_hiord", a second order fast marching method for forward, high order fast marching method for adjoint.  
 
 # Arguments
 - `vel`: the 3D velocity model 

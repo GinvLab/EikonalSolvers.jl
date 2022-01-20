@@ -47,11 +47,11 @@ ttmisfitfunc
 ## HMCtomo wrapper
 ```@docs
 EikonalSolvers.HMCtraveltimes
+EikonalSolvers.HMCtraveltimes.EikonalProb
 ```
 
-## Binary heap(s)
+## Extra parameters
+Use at your own risk...
 ```@docs
-EikonalSolvers.BinHeaps
+setextraparams!
 ```
-
-

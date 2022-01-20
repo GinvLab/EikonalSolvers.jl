@@ -4,14 +4,13 @@
 ##        Eikonal forward 2D                         ## 
 #######################################################
 
-## @doc raw because of some backslashes in the string...
-@doc raw"""
+"""
 $(TYPEDSIGNATURES)
 
 Calculate traveltime for 2D velocity models in a structured spherical grid (polar coordinates). 
 Returns the traveltime at receivers and optionally the array(s) of traveltime on the entire gridded model.
 The computations are run in parallel depending on the number of workers (nworkers()) available.
-The algorithm used is "ttFMM\_hiord".
+The algorithm used is "ttFMM\\_hiord".
 
 # Arguments
 - `vel`: the 2D velocity model

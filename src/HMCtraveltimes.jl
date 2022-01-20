@@ -1,7 +1,7 @@
 
 #
 # MIT License
-# Copyright (c) 2019 Andrea Zunino
+# Copyright (c)  Andrea Zunino
 # 
 
 ################################################################
@@ -10,7 +10,8 @@
 """
 HMCtraveltimes
 
-A convenience module to facilitate the use of `EikonalSolvers` within the framework of Hamiltonian Monte Carlo inversion by employing the package `HMCtomo`. 
+A convenience module to facilitate the use of `EikonalSolvers` within the 
+ framework of Hamiltonian Monte Carlo inversion by employing the package `HMCtomo`. 
 
 # Exports
 

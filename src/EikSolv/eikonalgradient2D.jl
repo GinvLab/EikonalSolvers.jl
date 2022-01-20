@@ -6,8 +6,7 @@
 
 ###############################################################################
 
-## @doc raw because of some backslashes in the string...
-@doc raw"""
+"""
 $(TYPEDSIGNATURES)
 
 Calculate the gradient using the adjoint state method for 2D velocity models. 
@@ -23,9 +22,9 @@ The computations are run in parallel depending on the number of workers (nworker
 - `pickobs`: observed traveltime picks
 - `stdobs`: standard deviation of error on observed traveltime picks, an array with same shape than `pickobs`
 - `gradttalgo`: the algorithm to use to compute the forward and gradient, one amongst the following
-    * "gradFS\_podlec", fast sweeping method using Podvin-Lecomte stencils for forward, fast sweeping method for adjoint   
-    * "gradFMM\_podlec," fast marching method using Podvin-Lecomte stencils for forward, fast marching method for adjoint 
-    * "gradFMM\_hiord", second order fast marching method for forward, high order fast marching method for adjoint  
+    * "gradFS\\_podlec", fast sweeping method using Podvin-Lecomte stencils for forward, fast sweeping method for adjoint   
+    * "gradFMM\\_podlec," fast marching method using Podvin-Lecomte stencils for forward, fast marching method for adjoint 
+    * "gradFMM\\_hiord", second order fast marching method for forward, high order fast marching method for adjoint  
 
 # Returns
 - `grad`: the gradient as a 2D array

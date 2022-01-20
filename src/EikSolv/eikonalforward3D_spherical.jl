@@ -6,14 +6,13 @@
 
 ###########################################################################
 
-@doc raw"""
-    traveltime3Dsphere(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},
-                 coordrec::Array{Float64,2} , returntt::Bool=false)
+"""
+$(TYPEDSIGNATURES)
 
 Calculate traveltime for 3D velocity models. 
 Returns the traveltime at receivers and optionally the array(s) of traveltime on the gridded model.
 The computations are run in parallel depending on the number of workers (nworkers()) available.
-The algorithm used is "ttFMM\_hiord", second order fast marching method. 
+The algorithm used is "ttFMM\\_hiord", second order fast marching method. 
 
 # Arguments
 - `vel`: the 3D velocity model 
@@ -95,6 +94,9 @@ end
 
 #########################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
                          coordrec::Array{Float64,2},grd::Grid3DSphere ;
                          returntt::Bool=false )
@@ -127,6 +129,9 @@ end
 
 ###############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function sourceboxloctt_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},grd::Grid3DSphere )
     ## staggeredgrid keyword required!
 
@@ -206,6 +211,9 @@ end
 
 ###############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3DSphere) 
 
     ## Sizes
@@ -389,6 +397,9 @@ end  # ttFMM_hiord
 
 ###################################################################
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function isonbord_sph(ib::Int64,jb::Int64,kb::Int64,nr::Int64,nθ::Int64,nφ::Int64)
     isonb1 = false
     isonb2 = false
@@ -406,6 +417,8 @@ end
 ###################################################################
 
 """
+$(TYPEDSIGNATURES)
+
    Compute the traveltime at a given node using 2nd order stencil 
     where possible, otherwise revert to 1st order.
 """
@@ -685,6 +698,8 @@ end
 
 
 """
+$(TYPEDSIGNATURES)
+
   Refinement of the grid around the source. Traveltime calculated (FMM) inside a finer grid 
     and then passed on to coarser grid
 """

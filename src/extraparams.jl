@@ -12,9 +12,9 @@ $(TYPEDEF)
 $(TYPEDFIELDS)
 """
 Base.@kwdef mutable struct ExtraParams
-    ## brute-force fix negative sqarg
+    "brute-force fix negative sqarg"
     allowfixsqarg::Bool
-    ## refine grid around source?
+    "refine grid around source?"
     refinearoundsrc::Bool
 end
 
@@ -22,7 +22,11 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Set some additional parameter for EikonalSolvers
+Set some additional parameter for EikonalSolvers for testing in special conditions.
+
+- `allowfixsqarg`: brute-force fix negative sqarg. Default `false`.
+- `refinearoundsrc`: refine grid around source? Default `true`.
+
 """
 function setextraparams!(extrapars::ExtraParams ;
                          allowfixsqarg::Bool=false, refinearoundsrc::Bool=true)

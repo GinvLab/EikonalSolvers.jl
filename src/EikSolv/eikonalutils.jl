@@ -32,7 +32,7 @@ end
 
 ######################################################
 """
-$(TYPEDSIGNATURES)
+$(TYPEDEF)
 
 A structure holding the 2D grid parameters, geometry and size.
 
@@ -288,12 +288,12 @@ end
 
 ###################################################################
 
-@doc raw"""
+"""
 $(TYPEDSIGNATURES)
 
 Calculate the misfit functional 
 ```math
-    S = \dfrac{1}{2} \sum_i \dfrac{\left( \mathbf{\tau}_i^{\rm{calc}}(\mathbf{v})-\mathbf{\tau}_i^{\rm{obs}} \right)^2}{\sigma_i^2} \, .
+    S = \\dfrac{1}{2} \\sum_i \\dfrac{\\left( \\mathbf{\\tau}_i^{\\rm{calc}}(\\mathbf{v})-\\mathbf{\\tau}_i^{\\rm{obs}} \\right)^2}{\\sigma_i^2} \\, .
 ```
 # Arguments
     - `velmod`: velocity model, either a 2D or 3D array.
@@ -303,9 +303,9 @@ Calculate the misfit functional
     - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
     - `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
     - `ttalgo` (optional): the algorithm to use to compute the traveltime, one amongst the following
-        * "ttFS\_podlec", fast sweeping method using Podvin-Lecomte stencils
-        * "ttFMM\_podlec," fast marching method using Podvin-Lecomte stencils
-        * "ttFMM\_hiord", second order fast marching method, the default algorithm 
+        * "ttFS\\_podlec", fast sweeping method using Podvin-Lecomte stencils
+        * "ttFMM\\_podlec," fast marching method using Podvin-Lecomte stencils
+        * "ttFMM\\_hiord", second order fast marching method, the default algorithm 
 
 # Returns
     The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.

@@ -20,13 +20,17 @@ Both forward and gradient computations are parallelised using Julia's distribute
 
 To install the package simple enter into the package manager mode in Julia by typing "`]`" at the REPL prompt and then use `add`, i.e.,
 ```
-(v1.2) pkg> add EikonalSolvers
+(v1.7) pkg> add EikonalSolvers
 ```
 The package will be automatically downloaded from the web and installed.
 
-Alternatively, use the path where the directory of the package is located, be it local or remote (Github):
+Alternatively, use the path where the directory of the package is located, be it remote (GitLab)
 ```
-(v1.2) pkg> add /path/to/EikonalSolvers.jl
+(v1.7) pkg> add /path/to/EikonalSolvers.jl
+```
+or local
+```
+(v1.7) pkg> add https://gitlab.com/JuliaGeoph/EikonalSolvers.jl
 ```
 
 
@@ -130,7 +134,7 @@ velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity mo
 ttimepicks = traveltime2D(velmod,grd,coordsrc,coordrec)
 nothing # hide
 ```
-The output will be a 10\$\times\$4 array (number of receivers times number of sources):
+The output will be a vector of vectors with 4 elements (number of sources) each of which being a 10-element array (number of receivers):
 ```@example full
 ttimepicks
 ```
