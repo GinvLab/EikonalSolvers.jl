@@ -29,7 +29,7 @@ The algorithm to use to compute the forward and gradient is "gradFMM\\_hiord", s
 
 """
 function gradttime2Dsphere(vel::Array{Float64,2}, grd::Grid2DSphere,coordsrc::Array{Float64,2},
-                           coordrec::Vector{Array{Float64,2}},pickobs::Array{Float64,2},stdobs::Array{Float64,2})
+                           coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}})
 
     @assert size(coordsrc,2)==2
     #@assert size(coordrec,2)==2
@@ -55,7 +55,7 @@ function gradttime2Dsphere(vel::Array{Float64,2}, grd::Grid2DSphere,coordsrc::Ar
             igrs = grpsrc[s,1]:grpsrc[s,2]
             @async tmpgrad[:,:,s] = remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
                                                      coordsrc[igrs,:],coordrec[igrs],
-                                                     grd,stdobs[:,igrs],pickobs[:,igrs])
+                                                     grd,stdobs[igrs],pickobs[igrs])
         end
     end
     grad = dropdims(sum(tmpgrad,dims=3),dims=3)
@@ -69,7 +69,7 @@ $(TYPEDSIGNATURES)
 
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc2D(vel::Array{Float64,2},xθsrc::Array{Float64,2},coordrec::Array{Float64,2},
+function calcgradsomesrc2D(vel::Array{Float64,2},xθsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                            grd::Grid2DSphere,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}})
                           
     nx,ny=size(vel)

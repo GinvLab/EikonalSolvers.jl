@@ -29,7 +29,7 @@ The algorithm used is "gradFMM\\_hiord", a second order fast marching method for
 
 """
 function gradttime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Array{Float64,2},
-                           coordrec::Vector{Vector{Float64}},pickobs::Vector{Vector{Float64}},
+                           coordrec::Vector{Matrix{Float64}},pickobs::Vector{Vector{Float64}},
                            stdobs::Vector{Vector{Float64}})
    
     @assert size(coordsrc,2)==3
@@ -68,7 +68,7 @@ $(TYPEDSIGNATURES)
 
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc3D(vel::Array{Float64,3},xθsrc::Array{Float64,2},coordrec::Vector{Vector{Float64}},
+function calcgradsomesrc3D(vel::Array{Float64,3},xθsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                            grd::Grid3DSphere,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}} )
 
     nr,nθ,nφ=size(vel)

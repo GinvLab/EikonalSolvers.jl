@@ -67,7 +67,7 @@ function creategridmod3D()
     coordsrc = [hgrid*LinRange(3.5,nx-15,nsrc)  hgrid*LinRange(3.5,ny-15,nsrc)  (nz*hgrid-6).+(hgrid*LinRange(-1.0,1.0,nsrc))]
 
     nrec = 10
-    coordrec = [hgrid*LinRange(2.0,nx-2,nrec)  1.75*hgrid*LinRange(2.0,2.0,nrec) 1.75*hgrid*LinRange(2.0,2.0,nrec)] 
+    coordrec = [[hgrid*LinRange(2.0,nx-2,nrec)  1.75*hgrid*LinRange(2.0,2.0,nrec) 1.75*hgrid*LinRange(2.0,2.0,nrec)]  for i=1:nsrc]
 
 
     ######################################
@@ -228,10 +228,13 @@ function test_gradtt_3D()
 
     #--------------------------------------
     # Gradient of misfit
-    stdobs = 0.15 .* ones(size(coordrec,1),size(coordsrc,1))
     ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
-    noise = stdobs.^2 .* randn(size(ttpicks))
+
+    nsrc = 3
+    stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
+    noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
     dobs = ttpicks .+ noise
+    
     flatmod = 2.8 .+ zeros(grd.nx,grd.ny,grd.nz) 
     
     gradalgos = ["gradFS_podlec","gradFMM_podlec","gradFMM_hiord"]
@@ -279,7 +282,7 @@ function creategridmod2Dsphere()
     coordsrc = [LinRange(rinit+5,rmax-15,nsrc)  (nθ*Δθ-5.6).+(Δθ*LinRange(-1.0,1.0,nsrc))]
 
     nrec = 10
-    coordrec = [LinRange(rinit+3.0,rmax-2,nrec)  1.75*Δθ*LinRange(2.0,2.0,nrec)]
+    coordrec = [[LinRange(rinit+3.0,rmax-2,nrec)  1.75*Δθ*LinRange(2.0,2.0,nrec)] for i=1:nsrc]
     
     ######################################
         
@@ -319,7 +322,7 @@ function creategridmod3Dsphere()
     coordsrc = [LinRange(rinit+3.5,rmax-15,nsrc)  LinRange(θinit+3.5,θmax-15,nsrc)  (nφ*Δφ-6).+(Δφ*LinRange(-1.0,1.0,nsrc))]
 
     nrec = 10
-    coordrec = [LinRange(rinit+2.0,rmax-2,nrec)  θinit.+1.75*Δθ*LinRange(2.0,2.0,nrec) 1.75*Δφ*LinRange(2.0,2.0,nrec)]
+    coordrec = [[LinRange(rinit+2.0,rmax-2,nrec)  θinit.+1.75*Δθ*LinRange(2.0,2.0,nrec) 1.75*Δφ*LinRange(2.0,2.0,nrec)] for i=1:nsrc]
     
     ######################################
         
@@ -373,10 +376,13 @@ function test_gradtt_2Dsphere()
 
     #--------------------------------------
     # Gradient of misfit
-    stdobs = 0.15.*ones(size(coordrec,1),size(coordsrc,1))
     ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
-    noise = stdobs.^2 .* randn(size(ttpicks))
+
+    nsrc = 3
+    stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
+    noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
     dobs = ttpicks .+ noise
+
     flatmod = 2.8 .+ zeros(grd.nr,grd.nθ) 
     
     println("Gradient 2D in spherical coordinates")
@@ -395,10 +401,13 @@ function test_gradtt_3Dsphere()
 
     #--------------------------------------
     # Gradient of misfit
-    stdobs = 0.15 .* ones(size(coordrec,1),size(coordsrc,1))
     ttpicks = traveltime3Dsphere(velmod,grd,coordsrc,coordrec)
-    noise = stdobs.^2 .* randn(size(ttpicks))
+
+    nsrc = 3
+    stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
+    noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
     dobs = ttpicks .+ noise
+
     flatmod = 2.8 .+ zeros(grd.nr,grd.nθ,grd.nφ) 
     
     println("Gradient 3D using in spherical coordinates")

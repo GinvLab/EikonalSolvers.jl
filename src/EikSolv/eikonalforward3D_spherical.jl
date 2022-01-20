@@ -70,8 +70,8 @@ function traveltime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Ar
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
-                                                        vel,coordsrc[igrs],
-                                                        coordrec[s],grd,
+                                                        vel,coordsrc[igrs,:],
+                                                        coordrec[igrs],grd,
                                                         returntt=returntt )
             end
         elseif returntt
@@ -79,8 +79,8 @@ function traveltime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Ar
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttime[:,:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
-                                                                          vel,coordsrc[igrs],
-                                                                          coordrec[s],grd,
+                                                                          vel,coordsrc[igrs,:],
+                                                                          coordrec[igrs],grd,
                                                                           returntt=returntt )
             end
         end

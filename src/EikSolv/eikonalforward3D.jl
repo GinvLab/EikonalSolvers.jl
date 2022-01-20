@@ -143,10 +143,10 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
 
     if ttalgo=="ttFMM_hiord" 
         # in this case velocity and time arrays have the same shape
-        ttime = zeros(grd.nx,grd.ny,grd.nz,nsrc)
+        ttimeGRPSRC = zeros(grd.nx,grd.ny,grd.nz,nsrc)
     else
         # in this case the time array has shape(velocity)+1
-        ttime = zeros(grd.ntx,grd.nty,grd.ntz,nsrc)
+        ttimeGRPSRC = zeros(grd.ntx,grd.nty,grd.ntz,nsrc)
     end
     
     ## group of pre-selected sources
@@ -154,7 +154,7 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         ## Compute traveltime and interpolation at receivers in one go for parallelization
         
         if ttalgo=="ttFS_podlec"        
-            ttime[:,:,:,s] = ttFS_podlec(vel,coordsrc[s,:],grd)
+            ttimeGRPSRC[:,:,:,s] = ttFS_podlec(vel,coordsrc[s,:],grd)
         
 
         elseif ttalgo=="ttFMM_podlec"            
@@ -171,8 +171,8 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         end
         
         ## Interpolate at receivers positions
-        for i=1:length(coordrec[s])
-            ttpicks[s][i] = trilinear_interp( ttimeGRPSRC[:,:,:,s], grd.hgrid,
+        for i=1:size(coordrec[s],1)
+            ttpicksGRPSRC[s][i] = trilinear_interp( ttimeGRPSRC[:,:,:,s], grd.hgrid,
                                               grd.xinit,grd.yinit,grd.zinit,
                                               coordrec[s][i,1],coordrec[s][i,2],coordrec[s][i,3])
         end

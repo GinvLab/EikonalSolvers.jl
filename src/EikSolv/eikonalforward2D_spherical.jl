@@ -97,10 +97,9 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
     
     nsrc = size(coordsrc,1)
     nrec = size(coordrec,1)                
-    ttpicksGRPSRC = zeros(nrec,nsrc) 
 
     # in this case velocity and time arrays have the same shape
-    #ttGRPSRC = zeros(grdsph.nr,grdsph.nθ,nsrc)
+    ttGRPSRC = zeros(grdsph.nr,grdsph.nθ,nsrc)
     ttpicksGRPSRC = Vector{Vector{Float64}}(undef,nsrc)
     for i=1:nsrc
         curnrec = size(coordrec[i],1) 
