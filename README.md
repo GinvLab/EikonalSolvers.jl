@@ -16,10 +16,12 @@ Both forward and gradient (adjoint) computations are parallelised using Julia's 
 Here below an example of how to calculate traveltimes at receiver stations in 2D, given a grid geometry and positions of sources and receivers.
 ```julia
 using EikonalSolvers
-grd = Grid2D(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)      # create the Grid2D struct
-coordsrc = [LinRange(10.0,200.0,4)  LinRange(200.0,250.0,4)]   # coordinates of the sources (4 sources)
-coordrec = [LinRange(10.0,200.0,10)  LinRange(200.0,250.0,10)] # coordinates of the receivers (10 receivers)
-velmod = 2.5 .* ones(grd.nx,grd.ny)                            # velocity model
+grd = Grid2D(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)         # create the Grid2D struct
+nsrc = 4
+nrec = 10
+coordsrc = [grd.hgrid.*LinRange(10.0,290.0,nsrc)  grd.hgrid.*200.0.*ones(nsrc)] # coordinates of the sources (4 sources)
+coordrec = [ [grd.hgrid.*LinRange(8.0,200.0,nrec) grd.hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
+velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
 
 # run the traveltime computation with default algorithm ("ttFMM_hiord")
 ttimepicks = traveltime2D(velmod,grd,coordsrc,coordrec)
