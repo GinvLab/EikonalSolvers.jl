@@ -16,12 +16,16 @@ Both forward and gradient (adjoint) computations are parallelised using Julia's 
 Here below an example of how to calculate traveltimes at receiver stations in 2D, given a grid geometry and positions of sources and receivers.
 ```julia
 using EikonalSolvers
-grd = Grid2D(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)         # create the Grid2D struct
-nsrc = 4
-nrec = 10
-coordsrc = [grd.hgrid.*LinRange(10.0,290.0,nsrc)  grd.hgrid.*200.0.*ones(nsrc)] # coordinates of the sources (4 sources)
-coordrec = [ [grd.hgrid.*LinRange(8.0,200.0,nrec) grd.hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
-velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
+# create the Grid2D struct
+grd = Grid2D(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)         
+nsrc = 4 # number of sources
+nrec = 10 # number of receivers
+# coordinates of the sources (4 sources)
+coordsrc = [grd.hgrid.*LinRange(10.0,290.0,nsrc)  grd.hgrid.*200.0.*ones(nsrc)] 
+# coordinates of the receivers (10 receivers)
+coordrec = [ [grd.hgrid.*LinRange(8.0,200.0,nrec) grd.hgrid.*20.0.*ones(nrec)] for i=1:nsrc] 
+# velocity model
+velmod = 2.5 .* ones(grd.nx,grd.ny)                                
 
 # run the traveltime computation with default algorithm ("ttFMM_hiord")
 ttimepicks = traveltime2D(velmod,grd,coordsrc,coordrec)
@@ -52,7 +56,7 @@ An example of traveltimes and gradient in spherical coordinates (2D):
 
 # Calculations in 3D 
 
-Calculations in 3D for both Cartesian and spherical coordinates, are analogous to the 2D function, see the documentation at <https://inverseproblem.github.io/EikonalSolvers.jl/stable>.
+Calculations in 3D for both Cartesian and spherical coordinates, are analogous to the 2D function, see the documentation.
 
 <img src="docs/src/images/examplegrad3Dcarsph.png" alt="Example gradient 3D" height="300"/>
 
