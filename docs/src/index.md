@@ -1,6 +1,5 @@
 
 
-
 # Contents
 
 ```@contents
@@ -26,11 +25,11 @@ The package will be automatically downloaded from the web and installed.
 
 Alternatively, use the path where the directory of the package is located, be it remote (GitLab)
 ```
-(v1.7) pkg> add /path/to/EikonalSolvers.jl
+(v1.7) pkg> add https://gitlab.com/JuliaGeoph/EikonalSolvers.jl
 ```
 or local
 ```
-(v1.7) pkg> add https://gitlab.com/JuliaGeoph/EikonalSolvers.jl
+(v1.7) pkg> add /path/to/EikonalSolvers.jl
 ```
 
 

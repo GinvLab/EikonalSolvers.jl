@@ -28,23 +28,26 @@ The algorithm used is "ttFMM\\_hiord", second order fast marching method.
 
 """
 function traveltime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Array{Float64,2},
-                      coordrec::Array{Float64,2}; algo::String="ttFMM_hiord", returntt::Bool=false) 
+                            coordrec::Vector{Array{Float64,2}}; algo::String="ttFMM_hiord",
+                            returntt::Bool=false) 
     
     #println("Check the source/rec to be in bounds!!!")
     @assert size(coordsrc,2)==3
-    @assert size(coordrec,2)==3
+    #@assert size(coordrec,2)==3
     @assert all(vel.>0.0)
     @assert all(grd.rinit.<=coordsrc[:,1].<=((grd.nr-1)*grd.Δr+grd.rinit))
     @assert all(grd.θinit.<=coordsrc[:,2].<=((grd.nθ-1)*grd.Δθ+grd.θinit))
     @assert all(grd.φinit.<=coordsrc[:,3].<=((grd.nφ-1)*grd.Δφ+grd.φinit))
-
+    @assert size(coordsrc,1)==length(coordrec)
     
     ##------------------
     ## parallel version
     nsrc = size(coordsrc,1)
-    nrec = size(coordrec,1)    
-    ttpicks = zeros(nrec,nsrc)
-    
+    ttpicks = Vector{Vector{Float64}}(undef,nsrc)
+    for i=1:nsrc
+        curnrec = size(coordrec[i],1) 
+        ttpicks[i] = zeros(curnrec)
+    end
 
     ## calculate how to subdivide the srcs among the workers
     nsrc=size(coordsrc,1)
@@ -66,18 +69,18 @@ function traveltime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Ar
             # return ONLY traveltime picks at receivers
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
-                                                          vel,coordsrc[igrs,:],
-                                                          coordrec,grd,
-                                                          returntt=returntt )
+                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
+                                                        vel,coordsrc[igrs],
+                                                        coordrec[s],grd,
+                                                        returntt=returntt )
             end
         elseif returntt
             # return both traveltime picks at receivers and at all grid points
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttime[:,:,:,igrs],ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
-                                                                          vel,coordsrc[igrs,:],
-                                                                          coordrec,grd,
+                @async ttime[:,:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
+                                                                          vel,coordsrc[igrs],
+                                                                          coordrec[s],grd,
                                                                           returntt=returntt )
             end
         end
@@ -98,12 +101,16 @@ end
 $(TYPEDSIGNATURES)
 """
 function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
-                         coordrec::Array{Float64,2},grd::Grid3DSphere ;
+                         coordrec::Vector{Array{Float64,2}},grd::Grid3DSphere ;
                          returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
-    nrec = size(coordrec,1)                
-    ttpicks = zeros(nrec,nsrc)
+
+    ttpicks = Vector{Vector{Float64}}(undef,nsrc)
+    for i=1:nsrc
+        curnrec = size(coordrec[i],1) 
+        ttpicks[i] = zeros(curnrec)
+    end
 
     # in this case velocity and time arrays have the same shape
     ttime = zeros(grd.nr,grd.nθ,grd.nφ,nsrc)
@@ -114,16 +121,17 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         
         ##elseif algo=="ttFMM_hiord"        
         ttime[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
-                    
+        
         ## Interpolate at receivers positions
-        for i=1:nrec                
-            ttpicks[i,s] = trilinear_interp_sph( ttime[:,:,:,s],grd,coordrec[i,1],coordrec[i,2],coordrec[i,3])
+        for i=1:size(coordrec[s],1)
+            ttpicks[s][i] = trilinear_interp_sph( ttime[:,:,:,s],grd,coordrec[s][i,1],
+                                                  coordrec[s][i,2],coordrec[s][i,3])
         end
     end
 
-     if returntt
+    if returntt
         return ttime,ttpicks
-     end
+    end
     return ttpicks
 end
 

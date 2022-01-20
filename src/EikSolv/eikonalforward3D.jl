@@ -48,25 +48,29 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function traveltime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},
-                      coordrec::Array{Float64,2}; ttalgo::String="ttFMM_hiord", returntt::Bool=false) 
+                      coordrec::Vector{Array{Float64,2}}; ttalgo::String="ttFMM_hiord",
+                      returntt::Bool=false) 
     
     #println("Check the source/rec to be in bounds!!!")
     @assert size(coordsrc,2)==3
-    @assert size(coordrec,2)==3
+    #@assert size(coordrec,2)==3
     @assert all(vel.>0.0)
     @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
     @assert all(grd.zinit.<=coordsrc[:,3].<=((grd.nz-1)*grd.hgrid+grd.zinit))
     
+    @assert size(coordsrc,1)==length(coordrec)
+
     ##------------------
     ## parallel version
     nsrc = size(coordsrc,1)
-    nrec = size(coordrec,1)    
-    ttpicks = zeros(nrec,nsrc)
-    
+        ttpicks = Vector{Vector{Float64}}(undef,nsrc)
+    for i=1:nsrc
+        curnrec = size(coordrec[i],1) 
+        ttpicks[i] = zeros(curnrec)
+    end    
 
     ## calculate how to subdivide the srcs among the workers
-    nsrc=size(coordsrc,1)
     nw = nworkers()
     grpsrc = distribsrcs(nsrc,nw)
     nchu = size(grpsrc,1)
@@ -90,18 +94,18 @@ function traveltime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,
             # return ONLY traveltime picks at receivers
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
+                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
                                                           vel,coordsrc[igrs,:],
-                                                          coordrec,grd,ttalgo,
+                                                          coordrec[igrs],grd,ttalgo,
                                                           returntt=returntt )
             end
         elseif returntt
             # return both traveltime picks at receivers and at all grid points
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttime[:,:,:,igrs],ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
+                @async ttime[:,:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
                                                                           vel,coordsrc[igrs,:],
-                                                                          coordrec,grd,ttalgo,
+                                                                          coordrec[igrs],grd,ttalgo,
                                                                           returntt=returntt )
             end
         end
@@ -124,12 +128,18 @@ $(TYPEDSIGNATURES)
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
-                      coordrec::Array{Float64,2},grd::Grid3D,
+                      coordrec::Vector{Array{Float64,2}},grd::Grid3D,
                       ttalgo::String ; returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
-    nrec = size(coordrec,1)                
-    ttpicks = zeros(nrec,nsrc)
+    # nrec = size(coordrec,1)                
+    # ttpicks = zeros(nrec,nsrc)
+
+    ttpicksGRPSRC = Vector{Vector{Float64}}(undef,nsrc)
+    for i=1:nsrc
+        curnrec = size(coordrec[i],1) 
+        ttpicksGRPSRC[i] = zeros(curnrec)
+    end
 
     if ttalgo=="ttFMM_hiord" 
         # in this case velocity and time arrays have the same shape
@@ -148,11 +158,11 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         
 
         elseif ttalgo=="ttFMM_podlec"            
-            ttime[:,: ,:,s] = ttFMM_podlec(vel,coordsrc[s,:],grd)
+            ttimeGRPSRC[:,: ,:,s] = ttFMM_podlec(vel,coordsrc[s,:],grd)
         
 
         elseif ttalgo=="ttFMM_hiord"        
-            ttime[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
+            ttimeGRPSRC[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
                     
         else
             println("\n WRONG ttalgo name $algo .... \n")
@@ -161,17 +171,17 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         end
         
         ## Interpolate at receivers positions
-        for i=1:nrec                
-            ttpicks[i,s] = trilinear_interp( ttime[:,:,:,s], grd.hgrid,
-                                             grd.xinit,grd.yinit,grd.zinit,
-                                             coordrec[i,1],coordrec[i,2],coordrec[i,3])
+        for i=1:length(coordrec[s])
+            ttpicks[s][i] = trilinear_interp( ttimeGRPSRC[:,:,:,s], grd.hgrid,
+                                              grd.xinit,grd.yinit,grd.zinit,
+                                              coordrec[s][i,1],coordrec[s][i,2],coordrec[s][i,3])
         end
     end
 
      if returntt
-        return ttime,ttpicks
+        return ttime,ttpicksGRPSRC
      end
-    return ttpicks
+    return ttpicksGRPSRC
 end
 
 ###############################################################################

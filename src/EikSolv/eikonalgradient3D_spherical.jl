@@ -28,15 +28,17 @@ The algorithm used is "gradFMM\\_hiord", a second order fast marching method for
 - `grad`: the gradient as a 3D array
 
 """
-function gradttime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                           pickobs::Array{Float64,2},stdobs::Array{Float64,2})
+function gradttime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Array{Float64,2},
+                           coordrec::Vector{Vector{Float64}},pickobs::Vector{Vector{Float64}},
+                           stdobs::Vector{Vector{Float64}})
    
     @assert size(coordsrc,2)==3
-    @assert size(coordrec,2)==3
+    #@assert size(coordrec,2)==3
     @assert all(vel.>0.0)
     @assert all(grd.rinit.<=coordsrc[:,1].<=((grd.nr-1)*grd.Δr+grd.rinit))
     @assert all(grd.θinit.<=coordsrc[:,2].<=((grd.nθ-1)*grd.Δθ+grd.θinit))
     @assert all(grd.φinit.<=coordsrc[:,3].<=((grd.nφ-1)*grd.Δφ+grd.φinit))
+    @assert size(coordsrc,1)==length(coordrec)
 
     nsrc=size(coordsrc,1)
     nw = nworkers()
@@ -52,10 +54,10 @@ function gradttime3Dsphere(vel::Array{Float64,3},grd::Grid3DSphere,coordsrc::Arr
     @sync for s=1:nchu
         igrs = grpsrc[s,1]:grpsrc[s,2]
         @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
-                                                   coordsrc[igrs,:],coordrec,
-                                                   grd,stdobs[:,igrs],pickobs[:,igrs] )
+                                                   coordsrc[igrs,:],coordrec[igrs],
+                                                   grd,stdobs[igrs],pickobs[igrs] )
     end
-    grad = sum(tmpgrad,dims=4)
+    grad =  dropdims(sum(tmpgrad,dims=4),dims=4)
     return grad
 end
 
@@ -66,29 +68,30 @@ $(TYPEDSIGNATURES)
 
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc3D(vel::Array{Float64,3},xθsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                           grd::Grid3DSphere,stdobs::Array{Float64,2},pickobs1::Array{Float64,2} )
+function calcgradsomesrc3D(vel::Array{Float64,3},xθsrc::Array{Float64,2},coordrec::Vector{Vector{Float64}},
+                           grd::Grid3DSphere,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}} )
 
     nr,nθ,nφ=size(vel)
-    ttpicks1 = zeros(size(coordrec,1))
     nsrc = size(xθsrc,1)
     grad1 = zeros(nr,nθ,nφ)
-
 
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
 
+        curnrec = size(coordrec[s],1) 
+        ttpicks1 = zeros(curnrec)
+
         ###########################################
         ## calc ttime
  
         ## if adjalgo=="gradFMM_hiord"
-        ttonesrc = ttFMM_hiord(vel,xθsrc[s,:],grd)
+        ttgrpsrc = ttFMM_hiord(vel,xθsrc[s,:],grd)
 
         ## ttime at receivers
-        for i=1:size(coordrec,1)
-            ttpicks1[i] = trilinear_interp_sph( ttonesrc,grd,coordrec[i,1],
-                                                coordrec[i,2],coordrec[i,3] )
+        for i=1:curnrec
+            ttpicks1[i] = trilinear_interp_sph( ttgrpsrc,grd,coordrec[s][i,1],
+                                                coordrec[s][i,2],coordrec[s][i,3] )
         end
 
         ###########################################
@@ -96,8 +99,8 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xθsrc::Array{Float64,2},coordr
         ##  add gradients from different sources
 
         ## if adjalgo=="gradFMM_hiord"
-        grad1 += eikgrad_FMM_hiord_SINGLESRC(ttonesrc,vel,xθsrc[s,:],coordrec,
-                                             grd,pickobs1[:,s],ttpicks1,stdobs[:,s])
+        grad1 += eikgrad_FMM_hiord_SINGLESRC( ttgrpsrc,vel,xθsrc[s,:],coordrec[s],
+                                              grd,pickobs1[s],ttpicks1,stdobs[s])
     end
     
     return grad1

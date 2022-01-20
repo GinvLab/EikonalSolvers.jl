@@ -16,7 +16,7 @@ The algorithm used is "ttFMM\\_hiord".
 - `vel`: the 2D velocity model
 - `grd`: a struct specifying the geometry and size of the model
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
-- `coordrec`: the coordinates of the receiver(s) (x,y), a 2-column array
+- `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
 - `returntt` (optional): whether to return the 3D array(s) of traveltimes for the entire model
 
 # Returns
@@ -25,21 +25,24 @@ The algorithm used is "ttFMM\\_hiord".
 
 """
 function traveltime2Dsphere( vel::Array{Float64,2},grd::Grid2DSphere,coordsrc::Array{Float64,2},
-                       coordrec::Array{Float64,2} ; returntt::Bool=false ) 
+                             coordrec::Vector{Array{Float64,2}} ; returntt::Bool=false ) 
         
     @assert size(coordsrc,2)==2
-    @assert size(coordrec,2)==2
+    #@assert size(coordrec,2)==2
     @assert all(vel.>0.0)
     @assert all(grd.rinit.<=coordsrc[:,1].<=((grd.nr-1)*grd.Δr+grd.rinit))
     @assert all(grd.θinit.<=coordsrc[:,2].<=((grd.nθ-1)*grd.Δθ+grd.θinit))
     
-
+    @assert size(coordsrc,1)==length(coordrec)
     nsrc = size(coordsrc,1)
     nrec = size(coordrec,1)    
-    ttpicks = zeros(nrec,nsrc)
-
+    ttpicks = Vector{Vector{Float64}}(undef,nsrc)
+    for i=1:nsrc
+        curnrec = size(coordrec[i],1) 
+        ttpicks[i] = zeros(curnrec)
+    end
+    
     ## calculate how to subdivide the srcs among the workers
-    nsrc=size(coordsrc,1)
     nw = nworkers()
     grpsrc = distribsrcs(nsrc,nw)
     nchu = size(grpsrc,1)
@@ -57,18 +60,18 @@ function traveltime2Dsphere( vel::Array{Float64,2},grd::Grid2DSphere,coordsrc::A
             # return ONLY traveltime picks at receivers
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
+                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                           vel,coordsrc[igrs,:],
-                                                          coordrec,grd,
+                                                          coordrec[igrs],grd,
                                                           returntt=returntt )
             end
         elseif returntt
             # return both traveltime picks at receivers and at all grid points
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttime[:,:,igrs],ttpicks[:,igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
+                @async ttime[:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                                           vel,coordsrc[igrs,:],
-                                                                          coordrec,grd,
+                                                                          coordrec[igrs],grd,
                                                                           returntt=returntt )
             end
         end
@@ -84,15 +87,25 @@ end
 
 ###########################################################################
 
+"""
+$(TYPEDSIGNATURES)
+
+  Compute the forward problem for a group of sources.
+"""
 function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
-                         coordrec::Array{Float64,2},grdsph::Grid2DSphere ; returntt::Bool=false )
+                         coordrec::Vector{Array{Float64,2}},grdsph::Grid2DSphere ; returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
     nrec = size(coordrec,1)                
     ttpicksGRPSRC = zeros(nrec,nsrc) 
 
     # in this case velocity and time arrays have the same shape
-    ttGRPSRC = zeros(grdsph.nr,grdsph.nθ,nsrc)
+    #ttGRPSRC = zeros(grdsph.nr,grdsph.nθ,nsrc)
+    ttpicksGRPSRC = Vector{Vector{Float64}}(undef,nsrc)
+    for i=1:nsrc
+        curnrec = size(coordrec[i],1) 
+        ttpicksGRPSRC[i] = zeros(curnrec)
+    end
 
     ## group of pre-selected sources
     for s=1:nsrc    
@@ -101,9 +114,9 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
         ttGRPSRC[:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grdsph)
 
         ## interpolate at receivers positions
-        for i=1:nrec
+        for i=1:size(coordrec[s],1)
             ## ASSUMING that the function varies linearly between adjacent points in r and θ, along rays and "rings" 
-            ttpicksGRPSRC[i,s] = bilinear_interp_sph( ttGRPSRC[:,:,s],grdsph,coordrec[i,1],coordrec[i,2])
+            ttpicksGRPSRC[s][i] = bilinear_interp_sph( ttGRPSRC[:,:,s],grdsph,coordrec[s][i,1],coordrec[s][i,2])
         end
     end
     
@@ -120,7 +133,7 @@ end
 $(TYPEDSIGNATURES)
 """
 function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
-                         grd::Grid2DSphere )
+                             grd::Grid2DSphere )
 
     ## source location, etc.      
     mindistsrc = 1e-5   

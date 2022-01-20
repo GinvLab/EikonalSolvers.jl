@@ -30,7 +30,8 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
-                       coordrec::Vector{Array{Float64,2}} ; ttalgo::String="ttFMM_hiord", returntt::Bool=false) 
+                      coordrec::Vector{Array{Float64,2}} ; ttalgo::String="ttFMM_hiord",
+                      returntt::Bool=false) 
         
     @assert size(coordsrc,2)==2
     #@assert size(coordrec,2)==2
@@ -103,8 +104,8 @@ $(TYPEDSIGNATURES)
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
-                      coordrec::Vector{Array{Float64,2}},grd::Grid2D,
-                      ttalgo::String ; returntt::Bool=false )
+                         coordrec::Vector{Array{Float64,2}},grd::Grid2D,
+                         ttalgo::String ; returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
     #nrec = size(coordrec,1)                

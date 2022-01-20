@@ -61,7 +61,7 @@ function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,
                                                      gradttalgo )
         end
     end
-    grad = sum(tmpgrad,dims=3)[:,:]
+    grad = dropdims(sum(tmpgrad,dims=3),dims=3)
     #@assert !any(isnan.(grad))
     return grad
 end
@@ -75,8 +75,7 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
-                         coordrec::Vector{Array{Float64,2}},
-                         grd::Grid2D,
+                         coordrec::Vector{Array{Float64,2}},grd::Grid2D,
                          stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
                          adjalgo::String)
 
@@ -92,14 +91,6 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
     grad1 = zeros(nx,ny)
   
-    if adjalgo=="ttFMM_hiord"
-        # in this case velocity and time arrays have the same shape
-        ttgrdonesrc = zeros(grd.nx,grd.ny,nsrc)
-    else
-        # in this case the time array has shape(velocity)+1
-        ttgrdonesrc = zeros(grd.ntx,grd.nty,nsrc)
-    end
-    
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc

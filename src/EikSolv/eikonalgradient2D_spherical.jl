@@ -19,7 +19,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `vel`: the 2D velocity model 
 - `grd`: a struct specifying the geometry and size of the model
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array 
-- `coordrec`: the coordinates of the receiver(s) (x,y), a 2-column array 
+- `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays 
 - `pickobs`: observed traveltime picks
 - `stdobs`: standard deviation of error on observed traveltime picks, an array with same shape than `pickobs`
 The algorithm to use to compute the forward and gradient is "gradFMM\\_hiord", second order fast marching method for forward, high order fast marching method for adjoint calculations.
@@ -28,14 +28,16 @@ The algorithm to use to compute the forward and gradient is "gradFMM\\_hiord", s
 - `grad`: the gradient as a 2D array
 
 """
-function gradttime2Dsphere(vel::Array{Float64,2}, grd::Grid2DSphere,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                    pickobs::Array{Float64,2},stdobs::Array{Float64,2})
+function gradttime2Dsphere(vel::Array{Float64,2}, grd::Grid2DSphere,coordsrc::Array{Float64,2},
+                           coordrec::Vector{Array{Float64,2}},pickobs::Array{Float64,2},stdobs::Array{Float64,2})
 
     @assert size(coordsrc,2)==2
-    @assert size(coordrec,2)==2
+    #@assert size(coordrec,2)==2
     @assert all(vel.>0.0)
     @assert all(grd.rinit.<=coordsrc[:,1].<=((grd.nr-1)*grd.Δr+grd.rinit))
     @assert all(grd.θinit.<=coordsrc[:,2].<=((grd.nθ-1)*grd.Δθ+grd.θinit))
+
+    @assert size(coordsrc,1)==length(coordrec)
 
     nsrc=size(coordsrc,1)
     nw = nworkers()
@@ -52,11 +54,11 @@ function gradttime2Dsphere(vel::Array{Float64,2}, grd::Grid2DSphere,coordsrc::Ar
         for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
             @async tmpgrad[:,:,s] = remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
-                                                     coordsrc[igrs,:],coordrec,
+                                                     coordsrc[igrs,:],coordrec[igrs],
                                                      grd,stdobs[:,igrs],pickobs[:,igrs])
         end
     end
-    grad = sum(tmpgrad,dims=3)[:,:]
+    grad = dropdims(sum(tmpgrad,dims=3),dims=3)
     return grad
 end
 
@@ -68,12 +70,11 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc2D(vel::Array{Float64,2},xθsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                           grd::Grid2DSphere,stdobs::Array{Float64,2},pickobs1::Array{Float64,2})
+                           grd::Grid2DSphere,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}})
                           
     nx,ny=size(vel)
     nsrc = size(xθsrc,1)
-    nrec = size(coordrec,1)                
-    ttpicks1 = zeros(nrec)
+    #nrec = size(coordrec,1)                
     grad1 = zeros(nx,ny)
   
     ## adjalgo=="ttFMM_hiord"
@@ -84,6 +85,9 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xθsrc::Array{Float64,2},coordr
     #   passed to this routine
     for s=1:nsrc
 
+        curnrec = size(coordrec[s],1) 
+        ttpicks1 = zeros(curnrec)
+        
         ###########################################
         ## calc ttime
         ## adjalgo=="gradFMM_hiord"
@@ -91,7 +95,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xθsrc::Array{Float64,2},coordr
 
         ## ttime at receivers
         for i=1:size(coordrec,1)
-            ttpicks1[i] = bilinear_interp_sph( ttgrdonesrc,grd,coordrec[i,1],coordrec[i,2] )
+            ttpicks1[i] = bilinear_interp_sph( ttgrdonesrc,grd,coordrec[s][i,1],coordrec[s][i,2] )
         end
 
         ###########################################
@@ -99,8 +103,8 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xθsrc::Array{Float64,2},coordr
         ##  add gradients from different sources
 
         ## adjalgo=="gradFMM_hiord"
-        grad1 += eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xθsrc[s,:],coordrec,
-                                             grd,pickobs1[:,s],ttpicks1,stdobs[:,s])
+        grad1 += eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xθsrc[s,:],coordrec[s],
+                                             grd,pickobs1[s],ttpicks1,stdobs[s])
 
     end
 

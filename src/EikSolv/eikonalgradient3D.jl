@@ -32,14 +32,15 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},coordrec::Array{Float64,2},
-                     pickobs::Array{Float64,2},stdobs::Array{Float64,2} ; gradttalgo::String="gradFMM_hiord")
+                     pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord")
    
     @assert size(coordsrc,2)==3
-    @assert size(coordrec,2)==3
+    #@assert size(coordrec,2)==3
     @assert all(vel.>0.0)
     @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
     @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
     @assert all(grd.zinit.<=coordsrc[:,3].<=((grd.nz-1)*grd.hgrid+grd.zinit))
+    @assert size(coordsrc,1)==length(coordrec)
 
     nsrc=size(coordsrc,1)
     nw = nworkers()
@@ -55,11 +56,11 @@ function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2
     @sync for s=1:nchu
         igrs = grpsrc[s,1]:grpsrc[s,2]
         @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
-                                                   coordsrc[igrs,:],coordrec,
-                                                   grd,stdobs[:,igrs],pickobs[:,igrs],
+                                                   coordsrc[igrs,:],coordrec[igrs],
+                                                   grd,stdobs[igrs],pickobs[igrs],
                                                    gradttalgo )
     end
-    grad = sum(tmpgrad,dims=4)
+    grad = dropdims(sum(tmpgrad,dims=4),dims=4)
     return grad
 end
 
@@ -71,30 +72,31 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc3D(vel::Array{Float64,3},xysrc::Array{Float64,2},coordrec::Array{Float64,2},
-                         grd::Grid3D,stdobs::Array{Float64,2},pickobs1::Array{Float64,2},
+                         grd::Grid3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
                          adjalgo::String)
 
     nx,ny,nz=size(vel)
-    ttpicks1 = zeros(size(coordrec,1))
-    nsrc = size(xysrc,1)
+    nsrc = size(xyzsrc,1)
     grad1 = zeros(nx,ny,nz)
-
 
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
 
+        curnrec = size(coordrec[s],1) 
+        ttpicks1 = zeros(curnrec)
+
         ###########################################
         ## calc ttime
     
         if adjalgo=="gradFMM_podlec"
-            ttonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
+            ttonesrc = ttFMM_podlec(vel,xyzsrc[s,:],grd)
  
         elseif adjalgo=="gradFMM_hiord"
-            ttonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
+            ttonesrc = ttFMM_hiord(vel,xyzsrc[s,:],grd)
 
         elseif adjalgo=="gradFS_podlec"
-            ttonesrc = ttFS_podlec(vel,xysrc[s,:],grd)
+            ttonesrc = ttFS_podlec(vel,xyzsrc[s,:],grd)
  
         else
             println("\ncalcgradsomesrc(): Wrong adjalgo name: $(adjalgo)... \n")
@@ -102,10 +104,10 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xysrc::Array{Float64,2},coordre
         end
             
         ## ttime at receivers
-        for i=1:size(coordrec,1)
+        for i=1:curnrec
             ttpicks1[i] = trilinear_interp( ttonesrc,grd.hgrid,grd.xinit,
-                                            grd.yinit,grd.zinit,coordrec[i,1],
-                                            coordrec[i,2],coordrec[i,3] )
+                                            grd.yinit,grd.zinit,coordrec[s][i,1],
+                                            coordrec[s][i,2],coordrec[s][i,3] )
         end
 
         ###########################################
@@ -114,17 +116,17 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xysrc::Array{Float64,2},coordre
 
         if adjalgo=="gradFS_podlec"
 
-            grad1 += eikgrad_FS_SINGLESRC(ttonesrc,vel,xysrc[s,:],coordrec,grd,
-                                     pickobs1[:,s],ttpicks1,stdobs[:,s])
+            grad1 += eikgrad_FS_SINGLESRC(ttonesrc,vel,xyzsrc[s,:],coordrec[s],grd,
+                                          pickobs1[s],ttpicks1,stdobs[s])
 
         elseif adjalgo=="gradFMM_podlec"
 
-            grad1 += eikgrad_FMM_SINGLESRC(ttonesrc,vel,xysrc[s,:],coordrec,
-                                          grd,pickobs1[:,s],ttpicks1,stdobs[:,s])
+            grad1 += eikgrad_FMM_SINGLESRC(ttonesrc,vel,xyzsrc[s,:],coordrec[s],
+                                           grd,pickobs1[s],ttpicks1,stdobs[s])
             
         elseif adjalgo=="gradFMM_hiord"
-            grad1 += eikgrad_FMM_hiord_SINGLESRC(ttonesrc,vel,xysrc[s,:],coordrec,
-                                                  grd,pickobs1[:,s],ttpicks1,stdobs[:,s])
+            grad1 += eikgrad_FMM_hiord_SINGLESRC(ttonesrc,vel,xyzsrc[s,:],coordrec[s],
+                                                 grd,pickobs1[s],ttpicks1,stdobs[s])
 
         else
             println("Wrong adjalgo algo name: $(adjalgo)... ")
