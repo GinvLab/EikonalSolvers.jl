@@ -15,5 +15,5 @@ makedocs(modules = [EikonalSolvers],
          )
 
 deploydocs(
-    repo="https://gitlab.com/JuliaGeoph/EikonalSolvers.jl",
+    repo="https://gitlab.com/JuliaGeoph/EikonalSolvers.jl.git",
 )
