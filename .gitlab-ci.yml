@@ -1,10 +1,9 @@
-
 ## see https://gitlab.com/tkpapp/GitlabJuliaDemo.jl/-/blob/master/.gitlab-ci.yml
 
 image: julia:1.7        # image comes from Docker hub
 
 before_script:
-    # - apt-get -qq update; apt-get -y install git
+    - apt-get -qq update; apt-get -y install git
     - julia --project=@. -e "import Pkg; Pkg.build()"
 
 default:
