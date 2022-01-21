@@ -28,7 +28,7 @@ pages:
     - mv .git tmppub/
     - cd tmppub
     - echo $(ls ./) 
-    - git checkout -b gl-pages origin/gl-pages 
+    - git fetch; git checkout gl-pages ; git pull 
     - echo $(ls ./)
     - rsync -a --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../public/
     # - mv docs/build public # move to the directory picked up by Gitlab pages
