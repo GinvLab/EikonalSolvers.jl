@@ -19,8 +19,10 @@ pages:
     # - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd()))' # no instantiate...
     - julia --project=docs --color=yes docs/make.jl
     #- git checkout gl-pages
-    - echo $(ls -R ../)
-    - git branch
+    - echo $(ls -R ./)
+    - echo $(ls ../)
+    - echo $(pwd)
+    - git branch -a
     # - rsync -r --exclude=".git" --exclude=".gitignore" ./* public/
     # - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
