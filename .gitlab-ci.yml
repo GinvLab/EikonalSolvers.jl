@@ -30,7 +30,7 @@ pages:
     - echo $(ls ./) 
     - git checkout -b gl-pages origin/gl-pages 
     - echo $(ls ./)
-    - rsync -a --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../../public/
+    - rsync -a --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../public/
     # - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
     paths:
