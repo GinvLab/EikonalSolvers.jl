@@ -25,8 +25,8 @@ pages:
     - git branch -a
     - git checkout -b gl-pages origin/gl-pages
     - echo $(ls -R ./)
-    - rm -r public/*
-    #- rsync -r --exclude=".git" --exclude=".gitignore" ./* public/
+    #- rm -r public/*
+    - rsync -r --exclude=".git" --exclude=".gitignore" ./* public/
     # - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
     paths:
