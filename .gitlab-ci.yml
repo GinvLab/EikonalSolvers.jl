@@ -24,12 +24,11 @@ pages:
     #- echo $(ls ../)
     - echo $(pwd)
     #- git branch -a
-    - mkdir tmppub
-    - mv .git tmppub/
+    - mkdir tmppub ; mv .git tmppub/
     - cd tmppub
-    - echo $(ls ./) 
+    - echo $(ls -a) 
     - git fetch; git checkout gl-pages ; git pull 
-    - echo $(ls ./)
+    - echo $(ls )
     - rsync -a --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../public/
     # - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
