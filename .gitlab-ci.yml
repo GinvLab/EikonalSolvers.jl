@@ -24,10 +24,15 @@ pages:
     #- echo $(ls ../)
     - echo $(pwd)
     #- git branch -a
+    - mkdir tmppub
+    - mv .git tmppub/
+    - cd tmppub
+    - ls 
     - git checkout -b gl-pages origin/gl-pages # Git shallow clone = 0 to get all branches
     - echo $(ls ./)  # ouput = Manifest.toml dev docs index.html stable v0.4 v0.4.1 versions.js
+    - mv ./* ../public
     #- rm -r public/*
-    - rsync -a --exclude=".git" --exclude=".gitignore" --exclude="Manifest.toml" --exclude="docs"  ./*  ../public/
+    #- rsync -a --exclude=".git" --exclude=".gitignore" --exclude="Manifest.toml" --exclude="docs"  ./*  ../public/
     # - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
     paths:
