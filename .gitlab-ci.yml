@@ -18,12 +18,12 @@ pages:
     - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
     # - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd()))' # no instantiate...
     - julia --project=docs --color=yes docs/make.jl
-    - echo $(ls -R ./)
+    - echo $(ls ./)
     #- echo $(ls ../)
     - echo $(pwd)
     #- git branch -a
     - git checkout -b gl-pages origin/gl-pages # Git shallow clone = 0 to get all branches
-    - echo $(ls -R ./)
+    - echo $(ls ./)
     #- rm -r public/*
     - rsync -r --exclude=".git" --exclude=".gitignore" ./* public/
     # - mv docs/build public # move to the directory picked up by Gitlab pages
