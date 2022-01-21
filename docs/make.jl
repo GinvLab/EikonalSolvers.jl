@@ -12,9 +12,6 @@ makedocs(modules = [EikonalSolvers],
          ]
          )
 
-@show ENV["CI_COMMIT_BRANCH"]
-@show ENV["CI_COMMIT_TAG"]
-
 deploydocs(
     repo="gitlab.com/JuliaGeoph/EikonalSolvers.jl.git",   #EikonalSolvers.jl/blob/{commit}{path}#{line}",
     #repo="../../EikonalSolvers.jl",
