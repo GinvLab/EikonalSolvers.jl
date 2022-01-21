@@ -32,8 +32,10 @@ pages:
   artifacts:
     paths:
       - public
-  only:
-    - main  # triggered only on branch "main"
-    - tags  # triggered when tagging
-  variables:
-    if: $CI_COMMIT_BRANCH == CI_DEFAULT_BRANCH
+  only: 
+    refs:
+      - master
+      - tags
+    variables:
+      - $CI_COMMIT_BRANCH == "main"
+
