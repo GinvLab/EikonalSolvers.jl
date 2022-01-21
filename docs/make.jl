@@ -18,6 +18,7 @@ deploydocs(
     #repo="../../EikonalSolvers.jl",
     devbranch = "main",
     deploy_config = Documenter.GitLab(),
+    branch = "gl-pages"
 )
 
 
