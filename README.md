@@ -1,7 +1,7 @@
 # EikonalSolvers.jl
 
 [![Docs Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://juliageoph.gitlab.io/EikonalSolvers.jl/stable)
-[![Docs Latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://juliageoph.gitlab.io/EikonalSolvers.jl/latest)
+[![Docs Latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://juliageoph.gitlab.io/EikonalSolvers.jl/dev)
 
 Docs: <https://juliageoph.gitlab.io/EikonalSolvers.jl>
 
