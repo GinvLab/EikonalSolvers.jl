@@ -32,10 +32,12 @@ pages:
   artifacts:
     paths:
       - public
-  only: 
-    refs:
-      - master
-      - tags
-    variables:
-      - $CI_COMMIT_BRANCH == "main"
+  only:
+    - master
+    - tags 
+    #refs:
+    #  - master
+    #  - tags
+    #variables:
+    #  - $CI_COMMIT_BRANCH == "main"
 
