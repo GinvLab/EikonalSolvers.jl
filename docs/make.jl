@@ -1,4 +1,3 @@
-
 using Documenter, EikonalSolvers 
 
 makedocs(modules = [EikonalSolvers],
@@ -12,6 +11,9 @@ makedocs(modules = [EikonalSolvers],
              "Private stuff" => "privatestuff.md"
          ]
          )
+
+@show ENV["CI_COMMIT_BRANCH"]
+@show ENV["CI_COMMIT_TAG"]
 
 deploydocs(
     repo="gitlab.com/JuliaGeoph/EikonalSolvers.jl.git",   #EikonalSolvers.jl/blob/{commit}{path}#{line}",
