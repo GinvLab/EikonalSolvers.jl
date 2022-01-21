@@ -34,3 +34,4 @@ pages:
       - public
   only:
     - main  # triggered only on branch "main"
+    - tags  # triggered when tagging
