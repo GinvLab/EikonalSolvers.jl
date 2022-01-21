@@ -20,6 +20,7 @@ pages:
     - julia --project=docs --color=yes docs/make.jl
     #- git checkout gl-pages
     - echo $(ls -R ../)
+    - echo $(git branch)
     # - rsync -r --exclude=".git" --exclude=".gitignore" ./* public/
     # - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
