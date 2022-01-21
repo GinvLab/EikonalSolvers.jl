@@ -12,9 +12,11 @@ default:
     # - julia --project=test/coverage -e 'import Pkg; Pkg.instantiate()'
     # - julia --project=test/coverage test/coverage/coverage-summary.jl
 
+
 pages:
   stage: deploy
   script:
+    - export # show all GitLab variables
     - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
     # - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd()))' # no instantiate...
     - julia --project=docs --color=yes docs/make.jl
