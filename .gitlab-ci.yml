@@ -6,11 +6,11 @@ before_script:
     - apt-get -qq update; apt-get -y install git rsync
     - julia --project=@. -e "import Pkg; Pkg.build()"
 
-# default:
-#    script:
-#     - julia --project=@. -e "import Pkg; Pkg.test(; coverage = false)"
-#     # - julia --project=test/coverage -e 'import Pkg; Pkg.instantiate()'
-#     # - julia --project=test/coverage test/coverage/coverage-summary.jl
+default:
+  script:
+    - julia --project=@. -e "import Pkg; Pkg.test(; coverage = false)"
+    # - julia --project=test/coverage -e 'import Pkg; Pkg.instantiate()'
+    # - julia --project=test/coverage test/coverage/coverage-summary.jl
 
 pages:
   stage: deploy
@@ -18,12 +18,11 @@ pages:
     - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
     # - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd()))' # no instantiate...
     - julia --project=docs --color=yes docs/make.jl
-    #- git checkout gl-pages
     - echo $(ls -R ./)
-    - echo $(ls ../)
+    #- echo $(ls ../)
     - echo $(pwd)
-    - git branch -a
-    - git checkout -b gl-pages origin/gl-pages
+    #- git branch -a
+    - git checkout -b gl-pages origin/gl-pages # Git shallow clone = 0 to get all branches
     - echo $(ls -R ./)
     #- rm -r public/*
     - rsync -r --exclude=".git" --exclude=".gitignore" ./* public/
