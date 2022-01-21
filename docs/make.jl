@@ -1,5 +1,4 @@
 
-
 using Documenter, EikonalSolvers 
 
 makedocs(modules = [EikonalSolvers],
@@ -15,7 +14,7 @@ makedocs(modules = [EikonalSolvers],
          )
 
 deploydocs(
-    repo="gitlab.com/JuliaGeoph/EikonalSolvers.jl/blob/{commit}{path}#{line}",
+    repo="gitlab.com/JuliaGeoph/EikonalSolvers.jl.git"   #EikonalSolvers.jl/blob/{commit}{path}#{line}",
     #repo="../../EikonalSolvers.jl",
     devbranch = "main",
     deploy_config = Documenter.GitLab(),
