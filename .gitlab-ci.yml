@@ -27,7 +27,7 @@ pages:
     - git checkout -b gl-pages origin/gl-pages # Git shallow clone = 0 to get all branches
     - echo $(ls ./)
     #- rm -r public/*
-    - rsync -r --exclude=".git" --exclude=".gitignore" ./* public/
+    - rsync -a --exclude=".git" --exclude=".gitignore" ./* public/
     # - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
     paths:
