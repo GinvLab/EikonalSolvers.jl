@@ -36,9 +36,7 @@ pages:
     refs:
       - main
       - tags
-    variables:
-      - $CI_COMMIT_BRANCH == "main"
-
+  
   #only:
   #  - main
   #  - tags 
