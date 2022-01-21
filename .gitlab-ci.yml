@@ -6,9 +6,9 @@ before_script:
     - apt-get -qq update; apt-get -y install git rsync
     - julia --project=@. -e "import Pkg; Pkg.build()"
 
-default:
-  script:
-    - julia --project=@. -e "import Pkg; Pkg.test(; coverage = false)"
+#default:
+#  script:
+#    - julia --project=@. -e "import Pkg; Pkg.test(; coverage = false)"
     # - julia --project=test/coverage -e 'import Pkg; Pkg.instantiate()'
     # - julia --project=test/coverage test/coverage/coverage-summary.jl
 
