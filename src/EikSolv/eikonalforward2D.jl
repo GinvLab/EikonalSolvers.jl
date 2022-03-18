@@ -1088,10 +1088,10 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
                 end
             end
             
-        end ## begin...
+            ## recompute sqarg
+            sqarg = beta^2-4.0*alpha*gamma
 
-        ## recompute sqarg
-        sqarg = beta^2-4.0*alpha*gamma
+        end ## begin...
 
         if sqarg<0.0
 
@@ -1099,7 +1099,7 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
             
                 gamma = beta^2/(4.0*alpha)
                 sqarg = beta^2-4.0*alpha*gamma
-                println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###\n")
+                println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
                 
             else
                 println("\n To get a non-negative discriminant, need to fulfil: ")

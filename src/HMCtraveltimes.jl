@@ -38,10 +38,11 @@ $(TYPEDFIELDS)
 Base.@kwdef struct EikonalProb
     ##mstart::Vector{Float64} # required
     grd::Union{Grid2D,Grid3D}
-    dobs::Array{Float64,2}
-    stdobs::Array{Float64,2}
+    dobs::Vector{Vector{Float64}}
+    stdobs::Vector{Vector{Float64}}
     coordsrc::Array{Float64,2}
-    coordrec::Array{Float64,2}
+    coordrec::Vector{Array{Float64,2}}
+    logVel::Bool=false
 end
 
 ## use  x.T * C^-1 * x  = ||L^-1 * x ||^2 ?
@@ -51,7 +52,14 @@ end
 $(TYPEDSIGNATURES)
 
 """
-function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
+function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
+
+    if eikprob.logVel==true 
+        vecvel = exp.(inpvecvel)
+    else
+        vecvel = inpvecvel
+    end
+
 
     if typeof(eikprob.grd)==Grid2D
         # reshape vector to 2D array
@@ -63,17 +71,18 @@ function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
         error("typeof(eikprob.grd)== ?? ")
     end
 
-    if kind=="nlogpdf"
+    if kind==:nlogpdf
         #############################################
         ## compute the logdensity value for vecvel ##
         #############################################
         #println("logpdf")
         misval = ttmisfitfunc(velnd,eikprob.dobs,eikprob.stdobs,eikprob.coordsrc,
                               eikprob.coordrec,eikprob.grd) 
+
         return misval
         
 
-    elseif kind=="gradnlogpdf"
+    elseif kind==:gradnlogpdf
         #################################################
         ## compute the gradient of the misfit function ##
         #################################################
@@ -84,9 +93,14 @@ function (eikprob::EikonalProb)(vecvel::Vector{Float64},kind::String)
             grad = gradttime3D(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs)
         end
+
+        if eikprob.logVel==true
+            # derivative of ln(vel)
+            vecgrad = (1.0./velnd) .* grad
+        end
+
         # flatten traveltime array
         vecgrad = vec(grad) 
-
         # return flattened gradient
         return  vecgrad
         

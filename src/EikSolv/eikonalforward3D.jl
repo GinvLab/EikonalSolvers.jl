@@ -173,8 +173,8 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         ## Interpolate at receivers positions
         for i=1:size(coordrec[s],1)
             ttpicksGRPSRC[s][i] = trilinear_interp( ttimeGRPSRC[:,:,:,s], grd.hgrid,
-                                              grd.xinit,grd.yinit,grd.zinit,
-                                              coordrec[s][i,1],coordrec[s][i,2],coordrec[s][i,3])
+                                                    grd.xinit,grd.yinit,grd.zinit,
+                                                    coordrec[s][i,1],coordrec[s][i,2],coordrec[s][i,3])
         end
     end
 

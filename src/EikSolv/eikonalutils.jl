@@ -56,11 +56,15 @@ struct Grid2D #Base.@kwdef
     ny::Int64
     ntx::Int64
     nty::Int64
+    x::Vector{Float64}
+    y::Vector{Float64}
 
     function Grid2D(; hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
-        new(hgrid,xinit,yinit,nx,ny,ntx,nty)
+        x = [xinit+(nx-i)*hgrid for i=1:nx]
+        y = [yinit+(ny-i)*hgrid for i=1:ny]
+        new(hgrid,xinit,yinit,nx,ny,ntx,nty,x,y)
     end
 end
 
@@ -98,13 +102,20 @@ struct Grid3D #Base.@kwdef
     ntx::Int64
     nty::Int64
     ntz::Int64
+    x::Vector{Float64}
+    y::Vector{Float64}
+    z::Vector{Float64}
+    
     ## constructor function
     function Grid3D(; hgrid::Float64,xinit::Float64,yinit::Float64, zinit::Float64,
                     nx::Int64,ny::Int64,nz::Int64)
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
         ntz::Int64 = nz+1
-        new(hgrid,xinit,yinit,zinit,nx,ny,nz,ntx,nty,ntz)
+        x = [xinit+(nx-i)*hgrid for i=1:nx]
+        y = [yinit+(ny-i)*hgrid for i=1:ny]
+        z = [zinit+(nz-i)*hgrid for i=1:nz]
+        new(hgrid,xinit,yinit,zinit,nx,ny,nz,ntx,nty,ntz,x,y,z)
     end
 end
 
@@ -211,12 +222,13 @@ function trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
     i = floor(Int64,xh)
     j = floor(Int64,yh)
     k = floor(Int64,zh)
-    x = xin-xinit
+    x = xin-xinit  
     y = yin-yinit
     z = zin-zinit
 
     ## if at the edges of domain choose previous square...
     nx,ny,nz=size(ttime)
+
     if i==nx
         i=i-1
     end
@@ -226,13 +238,13 @@ function trilinear_interp(ttime::Array{Float64,3},ttgrdspacing::Float64,
     if k==nz
         k=k-1
     end
-    
+
     if ((i>xh) | (j>yh) | (k>zh)) 
-        println("Interpolation failed...")
+        println("trilinear_interp(): Interpolation failed...")
         println("$i,$xh,$j,$yh,$k,$zh")
         return
     elseif ((i+1<xh)|(j+1<yh)|(k+1<zh))
-        println("Interpolation failed...")
+        println("trilinear_interp(): Interpolation failed...")
         println("$i,$xh,$j,$yh,$k,$zh")
         return
     end 

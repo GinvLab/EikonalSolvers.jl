@@ -52,7 +52,7 @@ The fields are:
 - `Δr`: spacing of the grid nodes along the radial coordinate r
 - `Δθ`: spacing of the grid nodes along the θ coordinate
 - `Δφ`: spacing of the grid nodes along the θ coordinate
-- `rinit, θinit,θinit`: origin of the coordinates of the grid
+- `rinit, θinit,φinit`: origin of the coordinates of the grid
 - `nr, nθ, nφ`: number of nodes along r, θ and φ for the velocity array (structured grid)
 
 # Example
@@ -102,8 +102,8 @@ Bilinear interpolation (spherical coordinates).
 """
 function bilinear_interp_sph(f::Array{Float64,2},grdsph::Grid2DSphere,
                              xreq::Float64,yreq::Float64)
-    xinit = grdsph.rinit
-    yinit = grdsph.θinit
+    xmin = grdsph.rinit
+    ymin = grdsph.θinit
     dx = grdsph.Δr
     dy = grdsph.Δθ
     nx = grdsph.nr
@@ -111,8 +111,8 @@ function bilinear_interp_sph(f::Array{Float64,2},grdsph::Grid2DSphere,
     
     nx,ny = size(f)
     ## rearrange such that the coordinates of corners are (0,0), (0,1), (1,0), and (1,1)
-    xh=(xreq-xinit)/dx
-    yh=(yreq-yinit)/dy
+    xh=(xreq-xmin)/dx
+    yh=(yreq-ymin)/dy
     i=floor(Int64,xh+1) # indices starts from 1
     j=floor(Int64,yh+1) # indices starts from 1
   
