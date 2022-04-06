@@ -1627,7 +1627,7 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Grid
                     end
                     
                     ## check if on boundaries
-                    isonb1,isonb2 = isonbord_sph(i+ish,j+jsh,k+ksh,nr,nθ,nφ)
+                    isonb1,isonb2 = isonbord(i+ish,j+jsh,k+ksh,nx,ny,nz)
                     
                     ## 1st order
                     if !isonb1 && status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted

@@ -62,8 +62,8 @@ struct Grid2D #Base.@kwdef
     function Grid2D(; hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
-        x = [xinit+(nx-i)*hgrid for i=1:nx]
-        y = [yinit+(ny-i)*hgrid for i=1:ny]
+        x = [xinit+(i-1)*hgrid for i=1:nx]
+        y = [yinit+(i-1)*hgrid for i=1:ny]
         new(hgrid,xinit,yinit,nx,ny,ntx,nty,x,y)
     end
 end
@@ -112,9 +112,9 @@ struct Grid3D #Base.@kwdef
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
         ntz::Int64 = nz+1
-        x = [xinit+(nx-i)*hgrid for i=1:nx]
-        y = [yinit+(ny-i)*hgrid for i=1:ny]
-        z = [zinit+(nz-i)*hgrid for i=1:nz]
+        x = [xinit+(i-1)*hgrid for i=1:nx]
+        y = [yinit+(i-1)*hgrid for i=1:ny]
+        z = [zinit+(i-1)*hgrid for i=1:nz]
         new(hgrid,xinit,yinit,zinit,nx,ny,nz,ntx,nty,ntz,x,y,z)
     end
 end

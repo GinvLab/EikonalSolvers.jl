@@ -355,12 +355,13 @@ function recboxlocgrad!(ttime::Array{Float64,3},lambda::Array{Float64,3},ttpicks
             #############################################
             if fisttimereconbord
                 @warn(" Receiver(s) on border of model, \n still untested, spurious results may be encountered.")
+                @show i,j,k,nxmax,nymax,nzmax
                 fisttimereconbord=false
             end
             ## Taking into account Neumann boundary condition
             ## lambda[i,j] = (ttpicks[r]-pickobs[r])/(n∇T * stdobs[r]^2)
             ## NOT taking into account Neumann boundary condition
-            lambda[i,j] =  (ttpicks[r]-pickobs[r])/stdobs[r]^2
+            lambda[i,j,k] =  (ttpicks[r]-pickobs[r])/stdobs[r]^2
 
         else
             ## Receivers within the model
