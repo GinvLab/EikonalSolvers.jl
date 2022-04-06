@@ -179,7 +179,7 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
     end
 
      if returntt
-        return ttime,ttpicksGRPSRC
+        return ttimeGRPSRC,ttpicksGRPSRC
      end
     return ttpicksGRPSRC
 end
