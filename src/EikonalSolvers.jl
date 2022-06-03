@@ -43,9 +43,11 @@ using .BinHeaps
 ## general utils
 include("EikSolv/eikonalutils_spherical.jl")
 include("EikSolv/eikonalutils.jl")
+include("EikSolv/utils.jl")
 
 ## 2D stuff
 include("EikSolv/eikonalforward2D.jl")
+include("EikSolv/tt_and_jacobian-vector_prod.jl")
 include("EikSolv/eikonalgradient2D.jl")
 # spherical/polar coodinates
 include("EikSolv/eikonalforward2D_spherical.jl")

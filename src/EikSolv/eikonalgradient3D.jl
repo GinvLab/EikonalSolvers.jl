@@ -26,13 +26,14 @@ The computations are run in parallel depending on the number of workers (nworker
     * "gradFS\\_podlec", fast sweeping method using Podvin-Lecomte stencils for forward, fast sweeping method for adjoint   
     * "gradFMM\\_podlec," fast marching method using Podvin-Lecomte stencils for forward, fast marching method for adjoint 
     * "gradFMM\\_hiord", second order fast marching method for forward, high order fast marching method for adjoint  
+- `smoothgrad`: smooth the gradient? true or false
 
 # Returns
 - `grad`: the gradient as a 3D array
 
 """
 function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
-                     pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord")
+                     pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord",smoothgrad::Bool=true)
    
     @assert size(coordsrc,2)==3
     #@assert size(coordrec,2)==3
@@ -61,6 +62,12 @@ function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2
                                                    gradttalgo )
     end
     grad = dropdims(sum(tmpgrad,dims=4),dims=4)
+
+    ## smooth gradient
+    if smoothgrad
+        l = 5  # 5 pixels kernel
+        grad = smoothgradient(l,grad)
+    end
     return grad
 end
 

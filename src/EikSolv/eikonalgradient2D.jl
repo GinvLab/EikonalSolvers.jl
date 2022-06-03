@@ -24,14 +24,15 @@ The computations are run in parallel depending on the number of workers (nworker
 - `gradttalgo`: the algorithm to use to compute the forward and gradient, one amongst the following
     * "gradFS\\_podlec", fast sweeping method using Podvin-Lecomte stencils for forward, fast sweeping method for adjoint   
     * "gradFMM\\_podlec," fast marching method using Podvin-Lecomte stencils for forward, fast marching method for adjoint 
-    * "gradFMM\\_hiord", second order fast marching method for forward, high order fast marching method for adjoint  
+    * "gradFMM\\_hiord", second order fast marching method for forward, high order fast marching method for adjoint 
+- `smoothgrad`: smooth the gradient? true or false
 
 # Returns
 - `grad`: the gradient as a 2D array
 
 """
 function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Vector{Array{Float64,2}},
-                    pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord")
+                    pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord",smoothgrad::Bool=true)
 
     @assert size(coordsrc,2)==2
     #@assert size(coordrec,2)==2
@@ -63,6 +64,13 @@ function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,
     end
     grad = dropdims(sum(tmpgrad,dims=3),dims=3)
     #@assert !any(isnan.(grad))
+
+    ## smooth gradient
+    if smoothgrad
+        l = 5  # 5 pixels kernel
+        grad = smooothgradient(l,grad)
+    end
+
     return grad
 end
 
