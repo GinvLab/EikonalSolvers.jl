@@ -181,7 +181,8 @@ $(TYPEDSIGNATURES)
 Bilinear interpolation.
 """
 function bilinear_interp(f::Array{Float64,2},hgrid::Float64,
-                         xinit::Float64,yinit::Float64, xreq::Float64,yreq::Float64)
+                         xinit::Float64,yinit::Float64, xreq::Float64,yreq::Float64;
+                         return_coeffonly::Bool=false)
     nx,ny = size(f)
     ## rearrange such that the coordinates of corners are (0,0), (0,1), (1,0), and (1,1)
     xh=(xreq-xinit)/hgrid
@@ -199,9 +200,25 @@ function bilinear_interp(f::Array{Float64,2},hgrid::Float64,
 
     xd=xh-(i-1) # indices starts from 1
     yd=yh-(j-1) # indices starts from 1
-    intval = f[i,j]*(1.0-xd)*(1.0-yd)+f[i+1,j]*(1.0-yd)*xd +
-        f[i,j+1]*(1.0-xd)*yd+f[i+1,j+1]*xd*yd
-    
+
+    if return_coeffonly
+        coeff = [(1.0-xd)*(1.0-yd),
+                 (1.0-yd)*xd, 
+                 (1.0-xd)*yd,
+                 xd*yd]
+        ijs = [i   j;
+               i+1 j;
+               i j+1;
+               i+1 j+1]
+        return coeff,ijs
+
+    else
+        intval = f[i,j]*(1.0-xd)*(1.0-yd)+f[i+1,j]*(1.0-yd)*xd +
+            f[i,j+1]*(1.0-xd)*yd+f[i+1,j+1]*xd*yd
+        return intval
+
+    end
+
     return intval
 end
 

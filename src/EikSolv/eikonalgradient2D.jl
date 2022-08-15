@@ -113,9 +113,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
         if adjalgo=="gradFMM_hiord_discradj"
             # Discrete adjoint formulation
             # Variables ordered according to FMM order
-            idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
-
-            display(Dx_fmmord1)
+            ttgrdonesrc,idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
 
 
         elseif adjalgo=="gradFMM_podlec"
@@ -135,7 +133,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFMM_hiord_discradj"
             # projection operator P ordered according to FMM order
-            P_fmmord1,pickobs_fmmord1,stdobs_fmmord1 = calcprojttfmmord(idx_fmmord1,coordrec[s],pickobs1[s],stdobs[s])
+            P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idx_fmmord1,coordrec[s])
 
         else
             ## ttime at receivers
@@ -151,8 +149,8 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFMM_hiord_discradj"
             # discrete adjoint formulation
-            grad1 .+= discradjoint_hiord_SINGLESRC(tt_fmmord,Dx_fmmord1,Dy_fmmord1,P_fmmord1,
-                                                   pickobs_fmmord1,stdobs_fmmord1)
+            grad1 .+= discradjoint_hiord_SINGLESRC(tt_fmmord,Dx_fmmord1,Dy_fmmord1,
+                                                   P_fmmord1,pickobs1[s],stdobs[s])
 
         elseif adjalgo=="gradFS_podlec"
 

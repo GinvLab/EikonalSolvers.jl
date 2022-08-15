@@ -18,6 +18,7 @@ end
 
 function addentry!(D::VecSPDerivMat,i::Integer,j::Integer,v::Float64)
     p = D.Nnnz[]+1
+    #@show D.Nsize,p,i,j
     D.i[p] = i
     D.j[p] = j
     D.v[p] = v
@@ -26,63 +27,88 @@ function addentry!(D::VecSPDerivMat,i::Integer,j::Integer,v::Float64)
 end
 
 
+
 ##############################################################################
 
-function setcoeffderiv!(D,irow,curidx,code,cartid_nxny,linid_nxny,dh; direction)
+function setcoeffderiv!(D::VecSPDerivMat,irow,idx_fmmord,codeDxy_orig,
+                        cartid_nxny,linid_nxny,dh; axis)
 
-    cij = cartid_nxny[curidx]
+    # get the linear index in the original grid
+    iptorig = idx_fmmord[irow]
+    # get the (i,j) indices in the original grid
+    cij = cartid_nxny[iptorig]
     i,j = cij[1],cij[2]
+    # get the codes of the derivatives (+1,-2,...)
+    codes_orig = codeDxy_orig[iptorig,:]
 
-    if direction=="X"
+    if codes_orig == [0,0]
+        # no derivatives have been used...
+        return
+    end
+
+    ##--------------------------
+    # closure over idx_fmmord
+    function orig2fmmord(i,j)
+        iorig = linid_nxny[i,j]
+        ifmmord = findfirst(idx_fmmord.==iorig)
+        return ifmmord
+    end
+    ##--------------------------
+
+    #@show i,j,irow,code
+
+    if axis=="X"
+        code = codes_orig[1]
 
         if code==0
             nothing
 
         elseif code==-2
-            addentry!(D, irow, linid_nxny[i,j],    3.0/(2.0*dh) ) #  0                        
-            addentry!(D, irow, linid_nxny[i-1,j], -4.0*(2.0*dh) ) # -1
-            addentry!(D, irow, linid_nxny[i-2,j],  1.0*(2.0*dh) ) # -2
+            addentry!(D, irow, orig2fmmord(i,j),    3.0/(2.0*dh) ) #  0   
+            addentry!(D, irow, orig2fmmord(i-1,j), -4.0*(2.0*dh) ) # -1
+            addentry!(D, irow, orig2fmmord(i-2,j),  1.0*(2.0*dh) ) # -2
 
         elseif code==-1
-            addentry!(D, irow, linid_nxny[i,j],     1.0/dh ) #  0
-            addentry!(D, irow, linid_nxny[i-1,j], -1.0/dh ) # -1
+            addentry!(D, irow, orig2fmmord(i,j),    1.0/dh ) #  0
+            addentry!(D, irow, orig2fmmord(i-1,j), -1.0/dh ) # -1
 
         elseif code==1
-            addentry!(D, irow, linid_nxny[i,j],  -1.0/dh ) #  0
-            addentry!(D, irow, linid_nxny[i+1,j], 1.0/dh ) # +1
+            addentry!(D, irow, orig2fmmord(i,j),  -1.0/dh ) #  0
+            addentry!(D, irow, orig2fmmord(i+1,j), 1.0/dh ) # +1
 
         elseif code==2
-            addentry!(D, irow, linid_nxny[i,j],   -3.0/(2.0*dh) ) #  0
-            addentry!(D, irow, linid_nxny[i+1,j],  4.0*(2.0*dh) ) # +1
-            addentry!(D, irow, linid_nxny[i+2,j], -1.0*(2.0*dh) ) # +2
+            addentry!(D, irow, orig2fmmord(i,j),   -3.0/(2.0*dh) ) #  0
+            addentry!(D, irow, orig2fmmord(i+1,j),  4.0*(2.0*dh) ) # +1
+            addentry!(D, irow, orig2fmmord(i+2,j), -1.0*(2.0*dh) ) # +2
 
         else
             error("setcoeffderiv(): Wrong code...")
 
         end
 
-    elseif direction=="Y"
+    elseif axis=="Y"
+        code = codes_orig[2]
 
         if code==0
             nothing
 
         elseif code==-2
-            addentry!(D, irow, linid_nxny[i,j],   -3.0/(2.0*dh) ) #  0                        
-            addentry!(D, irow, linid_nxny[i,j-1],  4.0*(2.0*dh) ) # -1
-            addentry!(D, irow, linid_nxny[i,j-2], -1.0*(2.0*dh) ) # -2
+            addentry!(D, irow, orig2fmmord(i,j),   -3.0/(2.0*dh) ) #  0                        
+            addentry!(D, irow, orig2fmmord(i,j-1),  4.0*(2.0*dh) ) # -1
+            addentry!(D, irow, orig2fmmord(i,j-2), -1.0*(2.0*dh) ) # -2
 
         elseif code==-1
-            addentry!(D, irow, linid_nxny[i,j],    1.0/dh ) #  0
-            addentry!(D, irow, linid_nxny[i,j-1], -1.0/dh ) # -1
+            addentry!(D, irow, orig2fmmord(i,j),    1.0/dh ) #  0
+            addentry!(D, irow, orig2fmmord(i,j-1), -1.0/dh ) # -1
 
         elseif code==1
-            addentry!(D, irow, linid_nxny[i,j],  -1.0/dh ) #  0
-            addentry!(D, irow, linid_nxny[i,j+1], 1.0/dh ) # +1
+            addentry!(D, irow, orig2fmmord(i,j),  -1.0/dh ) #  0
+            addentry!(D, irow, orig2fmmord(i,j+1), 1.0/dh ) # +1
 
         elseif code==2
-            addentry!(D, irow, linid_nxny[i,j],   -3.0/(2.0*dh) ) #  0
-            addentry!(D, irow, linid_nxny[i,j+1],  4.0*(2.0*dh) ) # +1
-            addentry!(D, irow, linid_nxny[i,j+2], -1.0*(2.0*dh) ) # +2
+            addentry!(D, irow, orig2fmmord(i,j),   -3.0/(2.0*dh) ) #  0
+            addentry!(D, irow, orig2fmmord(i,j+1),  4.0*(2.0*dh) ) # +1
+            addentry!(D, irow, orig2fmmord(i,j+2), -1.0*(2.0*dh) ) # +2
 
         else
             error("setcoeffderiv(): Wrong code...")
@@ -90,7 +116,7 @@ function setcoeffderiv!(D,irow,curidx,code,cartid_nxny,linid_nxny,dh; direction)
         end
 
     else
-        error("setcoeffderiv(): Wrong direction...")
+        error("setcoeffderiv(): Wrong axis...")
     end
 
     return
@@ -190,7 +216,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
     idx_fmmord = zeros(Int64,nxXny)
     tt_fmmord  = zeros(nxXny)
     idD = zeros(Int64,2)
-    idDxy = zeros(Int64,nxXny,2)
+    codeDxy = zeros(Int64,nxXny,2)
     vecDx_fmmord = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3), v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )
     vecDy_fmmord = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3), v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )                 
     
@@ -225,7 +251,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
         #
         #################################################################
 
-        @show is[p],js[p],ttime[is[p],js[p]],idx_fmmord[l]
+        #@show is[p],js[p],ttime[is[p],js[p]],idx_fmmord[l]
     end
     
 
@@ -263,7 +289,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
                 status[i,j]=1
 
                 # codes of chosen derivatives for adjoint
-                idDxy[han,:] .= idD
+                codeDxy[han,:] .= idD
             end
         end
     end
@@ -314,7 +340,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
                 status[i,j]=1                
 
                 # codes of chosen derivatives for adjoint
-                idDxy[han,:] .= idD
+                codeDxy[han,:] .= idD
                 
             elseif status[i,j]==1 ## narrow band                
                 # update the traveltime for this point
@@ -326,34 +352,60 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
                 update_node_minheap!(bheap,tmptt,han)
 
                 # codes of chosen derivatives for adjoint 
-                idDxy[han,:] .= idD
+                codeDxy[han,:] .= idD
             end
         end
         ##-------------------------------
     end
 
     
-    for p=1:nxXny
+    for irow=1:nxXny
         
         # reorder the derivative codes (+-1,+-2) according to the FMM order from idx_fmmord
-        curidx = idx_fmmord[p]
-        codes = idDxy[curidx,:]
+        icol = irow
+
+        #@show irow,icol,cartid_nxny[icol]
 
         # compute the coefficients for X  derivatives
-        irow = p
-        setcoeffderiv!(vecDx_fmmord,irow,curidx,codes[1],cartid_nxny,linid_nxny,hgrid,direction="X")
+        setcoeffderiv!(vecDx_fmmord,irow,idx_fmmord,codeDxy,
+                       cartid_nxny,linid_nxny,hgrid,axis="X")
 
         # compute the coefficients for Y derivatives
-        irow = p
-        setcoeffderiv!(vecDx_fmmord,irow,curidx,codes[2],cartid_nxny,linid_nxny,hgrid,direction="Y")
+        setcoeffderiv!(vecDy_fmmord,irow,idx_fmmord,codeDxy,
+                       cartid_nxny,linid_nxny,hgrid,axis="Y")
 
     end
 
     # create the actual sparse arrays from the vectors
-    Dx_fmmord = sparse(vecDx_fmmord.i, vecDx_fmmord.j, vecDx_fmmord.v, vecDx_fmmord.Nsize[1], vecDx_fmmord.Nsize[2] ) 
-    Dy_fmmord = sparse(vecDy_fmmord.i, vecDx_fmmord.j, vecDx_fmmord.v, vecDx_fmmord.Nsize[1], vecDx_fmmord.Nsize[2] ) 
+    Nxnnz = vecDx_fmmord.Nnnz[]
+    @show extrema(vecDx_fmmord.i[1:Nxnnz]), extrema(vecDx_fmmord.j[1:Nxnnz])
+    Dx_fmmord = sparse(vecDx_fmmord.i[1:Nxnnz],
+                       vecDx_fmmord.j[1:Nxnnz],
+                       vecDx_fmmord.v[1:Nxnnz],
+                       vecDx_fmmord.Nsize[1], vecDx_fmmord.Nsize[2] )
 
-    return idx_fmmord,tt_fmmord,Dx_fmmord,Dy_fmmord
+    Nynnz = vecDy_fmmord.Nnnz[]
+    Dy_fmmord = sparse(vecDy_fmmord.i[1:Nynnz],
+                       vecDy_fmmord.j[1:Nynnz],
+                       vecDy_fmmord.v[1:Nynnz],
+                       vecDy_fmmord.Nsize[1], vecDy_fmmord.Nsize[2] ) 
+
+    #########################
+    display(Dx_fmmord)
+    display(Dy_fmmord)
+
+    # for i=1:size(Dx_fmmord,1)
+    #     cnnz_X = count(Dx_fmmord[i,:].!=0.0)
+    #     cnnz_Y = count(Dy_fmmord[i,:].!=0.0)
+    #     if cnnz_X==0
+    #         @show i,cnnz_X,cnnz_Y
+    #     end
+    #     if cnnz_Y==0
+    #         @show i,cnnz_X,cnnz_Y
+    #     end
+    # end
+
+    return ttime,idx_fmmord,tt_fmmord,Dx_fmmord,Dy_fmmord
 end
 
 ##====================================================================##
@@ -609,6 +661,49 @@ function calcttpt_2ndord_discradj!(ttime::Array{Float64,2},vel::Array{Float64,2}
 
     return soughtt
 
+end
+
+##############################################################################
+
+
+# projection operator P ordered according to FMM order
+function calcprojttfmmord(ttime,grd,idx_fmmord,coordrec)
+
+    linid_nxny = LinearIndices((grd.nx,grd.ny))
+    nxXny = grd.nx*grd.ny
+
+    # calculate the coefficients and their indices using bilinear interpolation
+    nrec = size(coordrec,1)    
+    P = zeros(nrec,nxXny)
+    for r=1:nrec
+        coeff,ijcoe = bilinear_interp( ttime,grd.hgrid,grd.xinit,
+                                       grd.yinit,coordrec[r,1],coordrec[r,2],
+                                       return_coeffonly=true)
+
+        # convert (i,j) from original grid to fmmord
+        for l=1:size(ijcoe,1)
+            i,j = ijcoe[l,1],ijcoe[l,2]
+            iorig = linid_nxny[i,j]
+            jfmmord = findfirst(idx_fmmord.==iorig)
+            # the order for P is:
+            #   rows: according to coordrec, stdobs, pickobs
+            #   columns: according to the FMM order 
+            P[r,jfmmord] = coeff[l]
+        end
+
+    end
+
+    return P_fmmord1
+end
+
+##############################################################################
+
+function discradjoint_hiord_SINGLESRC(tt_fmmord,Dx_fmmord1,Dy_fmmord1,
+                                      P_fmmord1,pickobs1,stdobs)
+
+    
+
+    return grad1
 end
 
 ##############################################################################
