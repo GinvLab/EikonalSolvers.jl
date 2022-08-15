@@ -7,32 +7,31 @@ struct VecSPDerivMat
     i::Vector{Int64}
     j::Vector{Int64}
     v::Vector{Float64}
-    Nnnz::Vector{Float64}
+    Nnnz::Base.RefValue{Int64}
     Nsize::Vector{Int64}
 
-    function SPDerivMat(; i,j,v,Nsize)
-        Nnnz = Vector{Float64}(undef,0)
-        Nnnz = 0
-        @assert size(Nnnz)==()
+    function VecSPDerivMat(; i,j,v,Nsize)
+        Nnnz = Ref(0)
         new(i,j,v,Nnnz,Nsize) 
     end
 end
 
-function addentry!(Dx::SPDerivMat,i::Integer,j::Integer,v::Float64)
-    p = Nnnz+1
-    Dx.i[p] = i
-    Dx.j[p] = j
-    Dx.v[p] = v
-    Dx.Nnnz = Dx.Nnnz+1
+function addentry!(D::VecSPDerivMat,i::Integer,j::Integer,v::Float64)
+    p = D.Nnnz[]+1
+    D.i[p] = i
+    D.j[p] = j
+    D.v[p] = v
+    D.Nnnz[] = p 
     return
 end
 
 
 ##############################################################################
 
-function setcoeffderiv!(D,curidx,irow,curidx,code,cartid_nxny,linid_nxny; direction)
+function setcoeffderiv!(D,irow,curidx,code,cartid_nxny,linid_nxny,dh; direction)
 
-    i,j = cartid_nxny(curidx)
+    cij = cartid_nxny[curidx]
+    i,j = cij[1],cij[2]
 
     if direction=="X"
 
@@ -46,7 +45,7 @@ function setcoeffderiv!(D,curidx,irow,curidx,code,cartid_nxny,linid_nxny; direct
 
         elseif code==-1
             addentry!(D, irow, linid_nxny[i,j],     1.0/dh ) #  0
-            addentry!(D, irow, linid_nxny[i-1,j]], -1.0/dh ) # -1
+            addentry!(D, irow, linid_nxny[i-1,j], -1.0/dh ) # -1
 
         elseif code==1
             addentry!(D, irow, linid_nxny[i,j],  -1.0/dh ) #  0
@@ -118,10 +117,11 @@ $(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid. 
 """
-function ttFMM_hiord_discradj!(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
+function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
                                      
     ## Sizes
     nx,ny = grd.nx,grd.ny #size(vel)  ## NOT A STAGGERED GRID!!!
+    hgrid = grd.hgrid
     nxXny = nx*ny
     epsilon = 1e-6
 
@@ -190,8 +190,9 @@ function ttFMM_hiord_discradj!(vel::Array{Float64,2},src::Vector{Float64},grd::G
     idx_fmmord = zeros(Int64,nxXny)
     tt_fmmord  = zeros(nxXny)
     idD = zeros(Int64,2)
+    idDxy = zeros(Int64,nxXny,2)
     vecDx_fmmord = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3), v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )
-    vecDx_fmmord = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3), v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )                 
+    vecDy_fmmord = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3), v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )                 
     
     
     ########################
@@ -334,27 +335,23 @@ function ttFMM_hiord_discradj!(vel::Array{Float64,2},src::Vector{Float64},grd::G
     
     for p=1:nxXny
         
-        # reorder the derivative codes according to the FMM order from idx_fmmord
+        # reorder the derivative codes (+-1,+-2) according to the FMM order from idx_fmmord
         curidx = idx_fmmord[p]
-        idDxy_fmmord[p,:] .= idDxy[curidx,:]
-
+        codes = idDxy[curidx,:]
 
         # compute the coefficients for X  derivatives
         irow = p
-        code = idDxy_fmmord[p,1]
-        setcoeffderiv!(vecDx_fmmord,irow,curidx,code,cartid_nxny,linid_nxny,dir="X")
+        setcoeffderiv!(vecDx_fmmord,irow,curidx,codes[1],cartid_nxny,linid_nxny,hgrid,direction="X")
 
         # compute the coefficients for Y derivatives
         irow = p
-        code = idDxy_fmmord[p,2]
-        setcoeffderiv!(vecDx_fmmord,irow,curidx,code,cartid_nxny,linid_nxny,dir="Y")
+        setcoeffderiv!(vecDx_fmmord,irow,curidx,codes[2],cartid_nxny,linid_nxny,hgrid,direction="Y")
 
     end
 
     # create the actual sparse arrays from the vectors
     Dx_fmmord = sparse(vecDx_fmmord.i, vecDx_fmmord.j, vecDx_fmmord.v, vecDx_fmmord.Nsize[1], vecDx_fmmord.Nsize[2] ) 
     Dy_fmmord = sparse(vecDy_fmmord.i, vecDx_fmmord.j, vecDx_fmmord.v, vecDx_fmmord.Nsize[1], vecDx_fmmord.Nsize[2] ) 
-
 
     return idx_fmmord,tt_fmmord,Dx_fmmord,Dy_fmmord
 end
@@ -367,7 +364,7 @@ $(TYPEDSIGNATURES)
    Compute the traveltime at a given node using 2nd order stencil 
     where possible, otherwise revert to 1st order.
 """
-function calcttpt_2ndord_discradj(ttime::Array{Float64,2},vel::Array{Float64,2},
+function calcttpt_2ndord_discradj!(ttime::Array{Float64,2},vel::Array{Float64,2},
                                   grd::Grid2D, status::Array{Int64,2},i::Int64,j::Int64,
                                   idD::Vector{<:Integer})
     

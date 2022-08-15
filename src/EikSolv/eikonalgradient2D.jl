@@ -115,10 +115,12 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
             # Variables ordered according to FMM order
             idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
 
+            display(Dx_fmmord1)
+
+
         elseif adjalgo=="gradFMM_podlec"
             ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
- 
-     
+      
         elseif adjalgo=="gradFMM_hiord"
             ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
 
