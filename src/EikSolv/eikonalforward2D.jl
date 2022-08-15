@@ -705,7 +705,8 @@ $(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid. 
 """
-function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D )
+function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
+                     
                       
     ## Sizes
     nx,ny=grd.nx,grd.ny #size(vel)  ## NOT A STAGGERED GRID!!!
@@ -851,7 +852,6 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D )
 
                 ## add tt of point to binary heap and give handle
                 tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j)
-
                 han = linid_nxny[i,j]
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band

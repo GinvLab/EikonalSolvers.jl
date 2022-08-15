@@ -32,7 +32,8 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Vector{Array{Float64,2}},
-                    pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord",smoothgrad::Bool=true)
+                     pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord_discradj",
+                     smoothgrad::Bool=true)
 
     @assert size(coordsrc,2)==2
     #@assert size(coordrec,2)==2
@@ -109,9 +110,15 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
         ###########################################
         ## calc ttime
 
-        if adjalgo=="gradFMM_podlec"
+        if adjalgo=="gradFMM_hiord_discradj"
+            # Discrete adjoint formulation
+            # Variables ordered according to FMM order
+            idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
+
+        elseif adjalgo=="gradFMM_podlec"
             ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
  
+     
         elseif adjalgo=="gradFMM_hiord"
             ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
 
@@ -123,17 +130,29 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
             return nothing
         end
             
-        ## ttime at receivers
-        for i=1:curnrec
-            ttpicks1[i] = bilinear_interp( ttgrdonesrc,grd.hgrid,grd.xinit,
-                                           grd.yinit,coordrec[s][i,1],coordrec[s][i,2] )
+
+        if adjalgo=="gradFMM_hiord_discradj"
+            # projection operator P ordered according to FMM order
+            P_fmmord1,pickobs_fmmord1,stdobs_fmmord1 = calcprojttfmmord(idx_fmmord1,coordrec[s],pickobs1[s],stdobs[s])
+
+        else
+            ## ttime at receivers
+            for i=1:curnrec
+                ttpicks1[i] = bilinear_interp( ttgrdonesrc,grd.hgrid,grd.xinit,
+                                               grd.yinit,coordrec[s][i,1],coordrec[s][i,2] )
+            end
         end
 
         ###########################################
         ## compute gradient for last ttime
         ##  add gradients from different sources
 
-        if adjalgo=="gradFS_podlec"
+        if adjalgo=="gradFMM_hiord_discradj"
+            # discrete adjoint formulation
+            grad1 .+= discradjoint_hiord_SINGLESRC(tt_fmmord,Dx_fmmord1,Dy_fmmord1,P_fmmord1,
+                                                   pickobs_fmmord1,stdobs_fmmord1)
+
+        elseif adjalgo=="gradFS_podlec"
 
             grad1 .+= eikgrad_FS_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],grd,
                                      pickobs1[s],ttpicks1,stdobs[s])
