@@ -31,7 +31,7 @@ The computations are run in parallel depending on the number of workers (nworker
 """
 function traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
                       coordrec::Vector{Array{Float64,2}} ; ttalgo::String="ttFMM_hiord",
-                      returntt::Bool=false, calcjacvecprod::Bool=false) 
+                      returntt::Bool=false) 
         
     @assert size(coordsrc,2)==2
     #@assert size(coordrec,2)==2
@@ -55,9 +55,6 @@ function traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,
     ## array of workers' ids
     wks = workers()
 
-    if calcjacvecprod
-        jacvec_all = zeros(grd.nx*grd.ny,nchu)
-    end
 
     if returntt
         # return traveltime array and picks at receivers
@@ -72,36 +69,14 @@ function traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,
 
     @sync begin
 
-        if returntt && calcjacvecprod
-            # return traveltime picks at receivers and at all grid points and jacobian-vector product
-            for s=1:nchu
-                igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttime[:,:,igrs],ttpicks[igrs],jacvec_all[:,s] = remotecall_fetch(ttforwsomesrc2D,wks[s],
-                                                                                      vel,coordsrc[igrs,:],
-                                                                                      coordrec[igrs],grd,ttalgo,
-                                                                                           returntt=returntt,
-                                                                                           calcjacvecprod=calcjacvecprod )
-            end
-
-        elseif returntt && !calcjacvecprod
-            # return both traveltime picks at receivers and at all grid points
+        if returntt 
+            # return traveltime picks at receivers and at all grid points 
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttime[:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                                         vel,coordsrc[igrs,:],
                                                                         coordrec[igrs],grd,ttalgo,
                                                                         returntt=returntt )
-            end
-
-        elseif !returntt && calcjacvecprod
-            # return ONLY traveltime picks at receivers and jacobian-vector product
-            for s=1:nchu
-                igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttpicks[igrs],jacvec_all[:,s] = remotecall_fetch(ttforwsomesrc2D,wks[s],
-                                                                      vel,coordsrc[igrs,:],
-                                                                      coordrec[igrs],grd,ttalgo,
-                                                                           returntt=returntt,
-                                                                           calcjacvecprod=calcjacvecprod)
             end
 
         else
@@ -118,16 +93,9 @@ function traveltime2D(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,
 
     end # sync
 
-    if calcjacvecprod
-        jacvec = sum(jacvec_all,dims=2)
-    end
 
-    if returntt && calcjacvecprod
-        return ttpicks,ttime,jacvec
-    elseif returntt && !calcjacvecprod
+    if returntt 
         return ttpicks,ttime
-    elseif !returntt && calcjacvecprod
-        return ttpicks,jacvec
     end
     return ttpicks
 end
@@ -140,8 +108,7 @@ $(TYPEDSIGNATURES)
 """
 function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
                          coordrec::Vector{Array{Float64,2}},grd::Grid2D,
-                         ttalgo::String ; returntt::Bool=false,
-                         calcjacvecprod::Bool=false )
+                         ttalgo::String ; returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
     #nrec = size(coordrec,1)                
@@ -157,9 +124,6 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
     if ttalgo=="ttFMM_hiord"
         # in this case velocity and time arrays have the same shape
         ttGRPSRC = zeros(grd.nx,grd.ny,nsrc)
-        if calcjacvecprod
-            jacvec_all = zeros(grd.nx*grd.ny,nsrc)
-        end
     else
         # in this case the time array has shape(velocity)+1
         ttGRPSRC = zeros(grd.ntx,grd.nty,nsrc)
@@ -177,12 +141,8 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
             ttGRPSRC[:,:,s] = ttFMM_podlec(vel,coordsrc[s,:],grd)
 
         elseif ttalgo=="ttFMM_hiord"
-            if calcjacvecprod
-                ttGRPSRC[:,:,s],jacvec_all[:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd,
-                                                              calcjacvec=true)
-            else
-                ttGRPSRC[:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
-            end
+            ttGRPSRC[:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
+
         else
             println("\nttforwsomesrc(): Wrong ttalgo name... \n")
             return nothing
@@ -195,16 +155,9 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
         end
     end
 
-    if calcjacvecprod
-        jacvec = sum(jacvec_all,dims=2)
-    end
     
-    if returntt && calcjacvecprod
-        return ttGRPSRC,ttpicksGRPSRC,jacvec
-    elseif returntt && !calcjacvecprod
-        return ttGRPSRC,ttpicksGRPSR
-    elseif !returntt && calcjacvecprod
-        return ttpicksGRPSRC,jacvec
+    if returntt 
+        return ttGRPSRC,ttpicksGRPSRC
     end
     return ttpicksGRPSRC 
 end
@@ -752,9 +705,8 @@ $(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid. 
 """
-function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D;
-                     calcjacvec::Bool=false) 
- 
+function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D )
+                      
     ## Sizes
     nx,ny=grd.nx,grd.ny #size(vel)  ## NOT A STAGGERED GRID!!!
     epsilon = 1e-6
@@ -809,15 +761,6 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D;
     end # if refinearoundsrc
     ###################################################### 
 
-    ##-------------------------------------
-    if calcjacvec
-        jacvec = zeros(grd.nx*grd.ny)
-        ## jacobian vector on source nodes
-        #linind ??? ??status.==2]
-        #jacvec[ ]= 0.0
-    end
-
-
     #-------------------------------
     ## init FMM 
     neigh = [1  0;
@@ -859,11 +802,8 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D;
             if status[i,j]==0 ## far
 
                 ## add tt of point to binary heap and give handle
-                if calcjacvec
-                    tmptt = calcttpt_2ndord_jacobian!(ttime,vel,grd,status,i,j,jacvec)
-                else
-                    tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j)
-                end
+                tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j)
+
                 # get handle
                 # han = sub2ind((nx,ny),i,j)
                 han = linid_nxny[i,j]
@@ -910,11 +850,8 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D;
             if status[i,j]==0 ## far, active
 
                 ## add tt of point to binary heap and give handle
-                if calcjacvec
-                    tmptt = calcttpt_2ndord_jacobian!(ttime,vel,grd,status,i,j,jacvec)
-                else
-                    tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j)
-                end
+                tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j)
+
                 han = linid_nxny[i,j]
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
@@ -923,11 +860,8 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D;
             elseif status[i,j]==1 ## narrow band                
 
                 # update the traveltime for this point
-                if calcjacvec
-                    tmptt = calcttpt_2ndord_jacobian!(ttime,vel,grd,status,i,j,jacvec)
-                else
-                    tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j)
-                end
+                tmptt = calcttpt_2ndord(ttime,vel,grd,status,i,j)
+
                 # get handle
                 han = linid_nxny[i,j]
                 # update the traveltime for this point in the heap
@@ -938,9 +872,6 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D;
         ##-------------------------------
     end
 
-    if calcjacvec
-        return ttime,jacvec
-    end
     return ttime
 end
 

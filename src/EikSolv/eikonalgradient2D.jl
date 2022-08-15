@@ -68,9 +68,9 @@ function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,
     ## smooth gradient
     if smoothgrad
         l = 5  # 5 pixels kernel
-        grad = smooothgradient(l,grad)
+        grad = smoothgradient(l,grad)
     end
-
+ 
     return grad
 end
 
