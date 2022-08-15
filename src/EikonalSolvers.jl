@@ -19,7 +19,6 @@ $(EXPORTS)
 """
 module EikonalSolvers
 
-using DocStringExtensions
 
 export Grid2D,traveltime2D,gradttime2D
 export Grid2DSphere,traveltime2Dsphere,gradttime2Dsphere
@@ -31,6 +30,10 @@ export ttmisfitfunc
 export EikonalProb
 
 export setextraparams!
+
+
+using DocStringExtensions
+using OffsetArrays
 
 # using LinearAlgebra
 ## For parallelisation
