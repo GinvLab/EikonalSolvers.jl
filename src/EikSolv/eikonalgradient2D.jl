@@ -149,9 +149,9 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFMM_hiord_discradj"
             # discrete adjoint formulation
-            grad1 .+= discradjoint_hiord_SINGLESRC(tt_fmmord,Dx_fmmord1,Dy_fmmord1,
-                                                   P_fmmord1,pickobs1[s],stdobs[s])
-
+            grad1 .+= discradjoint_hiord_SINGLESRC(idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
+                                                   P_fmmord1,pickobs1[s],stdobs[s],grd,vel)
+           
         elseif adjalgo=="gradFS_podlec"
 
             grad1 .+= eikgrad_FS_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],grd,

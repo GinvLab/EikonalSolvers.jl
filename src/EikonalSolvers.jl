@@ -32,9 +32,11 @@ export EikonalProb
 export setextraparams!
 
 
-using DocStringExtensions
+using LinearAlgebra
 using OffsetArrays
 using SparseArrays
+using DocStringExtensions
+
 
 # using LinearAlgebra
 ## For parallelisation

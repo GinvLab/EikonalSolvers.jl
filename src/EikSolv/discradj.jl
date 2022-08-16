@@ -65,8 +65,8 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_fmmord,codeDxy_orig,
 
         elseif code==-2
             addentry!(D, irow, orig2fmmord(i,j),    3.0/(2.0*dh) ) #  0   
-            addentry!(D, irow, orig2fmmord(i-1,j), -4.0*(2.0*dh) ) # -1
-            addentry!(D, irow, orig2fmmord(i-2,j),  1.0*(2.0*dh) ) # -2
+            addentry!(D, irow, orig2fmmord(i-1,j), -4.0/(2.0*dh) ) # -1
+            addentry!(D, irow, orig2fmmord(i-2,j),  1.0/(2.0*dh) ) # -2
 
         elseif code==-1
             addentry!(D, irow, orig2fmmord(i,j),    1.0/dh ) #  0
@@ -78,8 +78,8 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_fmmord,codeDxy_orig,
 
         elseif code==2
             addentry!(D, irow, orig2fmmord(i,j),   -3.0/(2.0*dh) ) #  0
-            addentry!(D, irow, orig2fmmord(i+1,j),  4.0*(2.0*dh) ) # +1
-            addentry!(D, irow, orig2fmmord(i+2,j), -1.0*(2.0*dh) ) # +2
+            addentry!(D, irow, orig2fmmord(i+1,j),  4.0/(2.0*dh) ) # +1
+            addentry!(D, irow, orig2fmmord(i+2,j), -1.0/(2.0*dh) ) # +2
 
         else
             error("setcoeffderiv(): Wrong code...")
@@ -94,8 +94,8 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_fmmord,codeDxy_orig,
 
         elseif code==-2
             addentry!(D, irow, orig2fmmord(i,j),   -3.0/(2.0*dh) ) #  0                        
-            addentry!(D, irow, orig2fmmord(i,j-1),  4.0*(2.0*dh) ) # -1
-            addentry!(D, irow, orig2fmmord(i,j-2), -1.0*(2.0*dh) ) # -2
+            addentry!(D, irow, orig2fmmord(i,j-1),  4.0/(2.0*dh) ) # -1
+            addentry!(D, irow, orig2fmmord(i,j-2), -1.0/(2.0*dh) ) # -2
 
         elseif code==-1
             addentry!(D, irow, orig2fmmord(i,j),    1.0/dh ) #  0
@@ -107,8 +107,8 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_fmmord,codeDxy_orig,
 
         elseif code==2
             addentry!(D, irow, orig2fmmord(i,j),   -3.0/(2.0*dh) ) #  0
-            addentry!(D, irow, orig2fmmord(i,j+1),  4.0*(2.0*dh) ) # +1
-            addentry!(D, irow, orig2fmmord(i,j+2), -1.0*(2.0*dh) ) # +2
+            addentry!(D, irow, orig2fmmord(i,j+1),  4.0/(2.0*dh) ) # +1
+            addentry!(D, irow, orig2fmmord(i,j+2), -1.0/(2.0*dh) ) # +2
 
         else
             error("setcoeffderiv(): Wrong code...")
@@ -317,6 +317,8 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
 
         # store the linear index of FMM order 
         idx_fmmord[node] = linid_nxny[ia,ja]
+        # store arrival time for first points in FMM order
+        tt_fmmord[node] = tmptt
 
 
         ## try all neighbors of newly accepted point
@@ -378,7 +380,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
 
     # create the actual sparse arrays from the vectors
     Nxnnz = vecDx_fmmord.Nnnz[]
-    @show extrema(vecDx_fmmord.i[1:Nxnnz]), extrema(vecDx_fmmord.j[1:Nxnnz])
+
     Dx_fmmord = sparse(vecDx_fmmord.i[1:Nxnnz],
                        vecDx_fmmord.j[1:Nxnnz],
                        vecDx_fmmord.v[1:Nxnnz],
@@ -391,8 +393,8 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
                        vecDy_fmmord.Nsize[1], vecDy_fmmord.Nsize[2] ) 
 
     #########################
-    display(Dx_fmmord)
-    display(Dy_fmmord)
+    # display(Dx_fmmord)
+    # display(Dy_fmmord)
 
     # for i=1:size(Dx_fmmord,1)
     #     cnnz_X = count(Dx_fmmord[i,:].!=0.0)
@@ -673,37 +675,75 @@ function calcprojttfmmord(ttime,grd,idx_fmmord,coordrec)
     nxXny = grd.nx*grd.ny
 
     # calculate the coefficients and their indices using bilinear interpolation
-    nrec = size(coordrec,1)    
-    P = zeros(nrec,nxXny)
+    nrec = size(coordrec,1)
+    Ncoe = 4
+    ##P = zeros(nrec,nxXny)
+    P_i = zeros(Int64,nrec*Ncoe)
+    P_j = zeros(Int64,nrec*Ncoe)
+    P_v = zeros(nrec*Ncoe)
+
+    q::Int64=1
     for r=1:nrec
         coeff,ijcoe = bilinear_interp( ttime,grd.hgrid,grd.xinit,
                                        grd.yinit,coordrec[r,1],coordrec[r,2],
-                                       return_coeffonly=true)
+                                       return_coeffonly=true )
+        @assert size(ijcoe,1)==4
 
         # convert (i,j) from original grid to fmmord
-        for l=1:size(ijcoe,1)
+        for l=1:Ncoe
             i,j = ijcoe[l,1],ijcoe[l,2]
             iorig = linid_nxny[i,j]
             jfmmord = findfirst(idx_fmmord.==iorig)
             # the order for P is:
             #   rows: according to coordrec, stdobs, pickobs
-            #   columns: according to the FMM order 
-            P[r,jfmmord] = coeff[l]
+            #   columns: according to the FMM order
+            ## P[r,jfmmord] =
+            P_i[q] = r
+            P_j[q] = jfmmord
+            P_v[q] = coeff[l]
+            q+=1
         end
 
     end
 
-    return P_fmmord1
+    P = sparse(P_i,P_j,P_v,nrec,nxXny)
+    return P
 end
 
 ##############################################################################
 
-function discradjoint_hiord_SINGLESRC(tt_fmmord,Dx_fmmord1,Dy_fmmord1,
-                                      P_fmmord1,pickobs1,stdobs)
+function discradjoint_hiord_SINGLESRC(idx_fmmord,tt,Dx,Dy,P,pickobs,stdobs,grd,vel2d)
+    #
+    # all stuff must be in FMM order (e.g., tt_fmmord)
+    #
 
+    #@show size(P), size(tt),size(pickobs),size(stdobs)
+    rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
+
+    tmplhs = transpose( (2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) )
+
+    lhs = UpperTriangular(tmplhs)
+
+    # println("2.0 .* Diagonal(Dx*tt) * Dx) + [...]:")
+    # display((2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) )
+
+    lambda_fmmord = lhs\rhs
+
+    ##--------------------------------------
+    # reorder lambda from fmmord to original grid!!
+    N = length(lambda_fmmord)
+    lambda = Vector{Float64}(undef,N)
+    for p=1:N
+        iorig = idx_fmmord[p]
+        lambda[iorig] = lambda_fmmord[p]
+    end
+
+    #gradvec = -2.0 .* transpose(lambda) * Diagonal(1.0./vec(vel2d))
+    gradvec = -2.0 .* lambda ./ vec(vel2d)
+
+    grad2d = reshape(gradvec,grd.nx,grd.ny)
     
-
-    return grad1
+    return grad2d
 end
 
 ##############################################################################
