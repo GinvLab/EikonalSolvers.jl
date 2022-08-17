@@ -984,6 +984,8 @@ function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
                         testval2 = ttime[i+ish2,j+jsh2]
                         ## pick the lowest value of the two
                         ## <=, compare to chosenval 1, *not* 2!!
+                        ## This because the direction has already been chosen
+                        ##  at the line "testval1<chosenval1"
                         if testval2<=chosenval1 
                             chosenval2=testval2
                             use2ndord=true

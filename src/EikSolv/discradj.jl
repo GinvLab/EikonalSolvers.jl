@@ -30,6 +30,11 @@ end
 
 ##############################################################################
 
+"""
+$(TYPEDSIGNATURES)
+
+ Set the coefficients (elements) of the derivative matrices in the x and y directions.
+"""
 function setcoeffderiv!(D::VecSPDerivMat,irow,idx_fmmord,codeDxy_orig,
                         cartid_nxny,linid_nxny,dh; axis)
 
@@ -123,25 +128,12 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_fmmord,codeDxy_orig,
 end
 
 ##############################################################################
-# """
-# $(TYPEDSIGNATURES)
-
-#  Find the corresponding linear index in FMM order given (i,j) in the original grid.
-# """
-# function orig2fmmord(linid_nxny::LinearIndices,idx_fmmord::Vector{<:Integer},i::Integer,j::Integer)
-#     # convert to linear index
-#     lidx_orig = linid_nxny[i,j]
-#     # find corresponding index in FMM order
-#     idx_fmmord = findfirst(idx_fmmord.==lidx_orig)    
-#     return idx_fmmord
-# end
-
-##############################################################################
 
 """
 $(TYPEDSIGNATURES)
 
- Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid. 
+ Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid 
+  for discrete adjoint calculations. 
 """
 function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
                                      
@@ -163,22 +155,82 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
     status = Array{Int64}(undef,nx,ny)
     status[:,:] .= 0   ## set all to far
     
-    ##########################################
-    ##refinearoundsrc=true
+    ########################
+    # discrete adjoint: init stuff
+    idx_fmmord = zeros(Int64,nxXny)
+    tt_fmmord  = zeros(nxXny)
+    idD = zeros(Int64,2)
+    codeDxy = zeros(Int64,nxXny,2)
+    vecDx_fmmord = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3),
+                                  v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )
+    vecDy_fmmord = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3),
+                                  v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )                 
+
+        
+    ########################
+    ## conversion cart to lin indices, old sub2ind
+    linid_nxny = LinearIndices((nx,ny))
+    ## conversion lin to cart indices, old ind2sub
+    cartid_nxny = CartesianIndices((nx,ny))
+
+    
+    ###########################################
     
     if extrapars.refinearoundsrc
         ##---------------------------------
         ## 
         ## Refinement around the source      
         ##
-        ttaroundsrc!(status,ttime,vel,src,grd,inittt)
- 
+        #
+        ttaroundsrc_discradj!(status,ttime,vel,src,grd,inittt,
+                              idx_fmmord,tt_fmmord )
+        ##-----------------------------------------
+        ## 
+        ## DISCRETE ADJOINT WORKAROUND FOR DERIVATIVES
+        ##
+        ## get all i,j accepted
+        ijss = findall(status.==2) 
+        is = [l[1] for l in ijss]
+        js = [l[2] for l in ijss]
+        naccinit = length(ijss)
+
+        # How many points to skip, considering them as "onsrc"?
+        skipnptsDxy = 4
+        
+        for l=1:naccinit
+
+            if l<=skipnptsDxy
+                #################################################################
+                # Here we store a 1 in the diagonal because we are on a source node...
+                #  store arrival time for first points in FMM order
+                addentry!(vecDx_fmmord,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                addentry!(vecDy_fmmord,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                #################################################################
+            end
+
+            ## "reconstruct" derivative stencils from known FMM order and arrival times
+            derivaroundsrcfmm!(l,linid_nxny,cartid_nxny,idx_fmmord,idD)
+
+            if idD==[0,0]
+                #################################################################
+                # Here we store a 1 in the diagonal because we are on a source node...
+                #  store arrival time for first points in FMM order
+                addentry!(vecDx_fmmord,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                addentry!(vecDy_fmmord,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                #################################################################
+            else
+                l_fmmord = idx_fmmord[l]
+                codeDxy[l_fmmord,:] .= idD
+            end
+        end
+
+
     else
         ##-----------------------------------------
         ## 
         ## NO refinement around the source      
         ##
-        println("\nttFMM_hiord(): NO refinement around the source! \n")
+        println("ttFMM_hiord(): NO refinement around the source! ")
 
         ## source location, etc.      
         ## REGULAR grid
@@ -188,9 +240,49 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
         ## Status of nodes
         status[onsrc] .= 2 ## set to accepted on src
         
+        ## get all i,j accepted
+        ijss = findall(status.==2) 
+        is = [l[1] for l in ijss]
+        js = [l[2] for l in ijss]
+        naccinit = length(ijss)
+        
+        ########################
+        # discrete adjoint: first visited points in FMM order
+        ttfirstpts = Vector{Float64}(undef,naccinit)
+        for l=1:naccinit
+            i,j = is[l],js[l]
+            ttij = ttime[i,j]
+            # store initial points' FMM order
+            ttfirstpts[l] = ttij
+        end
+        # sort according to arrival time
+        spidx = sortperm(ttfirstpts)
+        # store the first accepted points' order
+        for l=1:naccinit
+            # ordered index
+            p = spidx[l]
+            # go from cartesian (i,j) to linear
+            idx_fmmord[l] = linid_nxny[is[p],js[p]]
+
+            # store arrival time for first points in FMM order
+            tt_fmmord[l] = ttime[is[p],js[p]]
+
+            #################################################################
+            # Here we store a 1 in the diagonal because we are on a source node...
+            #  store arrival time for first points in FMM order
+            #
+            addentry!(vecDx_fmmord,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
+            addentry!(vecDy_fmmord,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
+            #
+            #################################################################
+
+            #@show is[p],js[p],ttime[is[p],js[p]],idx_fmmord[l]
+        end
+
     end # if refinearoundsrc
     ###################################################### 
 
+    
     #-------------------------------
     ## init FMM 
     neigh = [1  0;
@@ -198,62 +290,12 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
             -1  0;
              0 -1]
     
-    ## get all i,j accepted
-    ijss = findall(status.==2) 
-    is = [l[1] for l in ijss]
-    js = [l[2] for l in ijss]
-    naccinit = length(ijss)
-
-    ########################
-    ## conversion cart to lin indices, old sub2ind
-    linid_nxny = LinearIndices((nx,ny))
-    ## conversion lin to cart indices, old ind2sub
-    cartid_nxny = CartesianIndices((nx,ny))
-
-
-    ########################
-    # discrete adjoint: init stuff
-    idx_fmmord = zeros(Int64,nxXny)
-    tt_fmmord  = zeros(nxXny)
-    idD = zeros(Int64,2)
-    codeDxy = zeros(Int64,nxXny,2)
-    vecDx_fmmord = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3), v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )
-    vecDy_fmmord = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3), v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )                 
-    
-    
-    ########################
-    # discrete adjoint: first visited points in FMM order
-    ttfirstpts = Vector{Float64}(undef,naccinit)
-    for l=1:naccinit
-        i,j = is[l],js[l]
-        ttij = ttime[i,j]
-        # store initial points' FMM order
-        ttfirstpts[l] = ttij
-    end
-    # sort according to arrival time
-    spidx = sortperm(ttfirstpts)
-    # store the first accepted points' order
-    for l=1:naccinit
-        # ordered index
-        p = spidx[l]
-        # go from cartesian (i,j) to linear
-        idx_fmmord[l] = linid_nxny[is[p],js[p]]
-
-        # store arrival time for first points in FMM order
-        tt_fmmord[l] = ttime[is[p],js[p]]
-
-        #################################################################
-        # Here we store a 1 in the diagonal because we are on a source node...
-        #  store arrival time for first points in FMM order
-        #
-        addentry!(vecDx_fmmord,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
-        addentry!(vecDy_fmmord,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
-        #
-        #################################################################
-
-        #@show is[p],js[p],ttime[is[p],js[p]],idx_fmmord[l]
-    end
-    
+    # ## get all i,j accepted
+    # ijss = findall(status.==2) 
+    # is = [l[1] for l in ijss]
+    # js = [l[2] for l in ijss]
+    # naccinit = length(ijss)
+    # @show naccinit
 
     ## Init the min binary heap with void arrays but max size
     Nmax=nxXny
@@ -301,7 +343,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
 
         ## if no top left exit the game...
         if bheap.Nh<1
-            break
+             break
         end
 
         han,tmptt = pop_minheap!(bheap)
@@ -315,7 +357,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
         # set traveltime of the new accepted point
         ttime[ia,ja] = tmptt
 
-        # store the linear index of FMM order 
+        # store the linear index of FMM order
         idx_fmmord[node] = linid_nxny[ia,ja]
         # store arrival time for first points in FMM order
         tt_fmmord[node] = tmptt
@@ -360,6 +402,15 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
         ##-------------------------------
     end
 
+    if length(unique(idx_fmmord))!=length(idx_fmmord)
+        # sif = sort(idx_fmmord)
+        # for i=1:length(idx_fmmord)
+        #     if sif[i]==1655 #!=i
+        #         @show i,sif[i]
+        #     end
+        # end
+        error("length(unique(idx_fmmord))!=length(idx_fmmord)")
+    end
     
     for irow=1:nxXny
         
@@ -378,6 +429,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
 
     end
 
+        
     # create the actual sparse arrays from the vectors
     Nxnnz = vecDx_fmmord.Nnnz[]
 
@@ -392,22 +444,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
                        vecDy_fmmord.v[1:Nynnz],
                        vecDy_fmmord.Nsize[1], vecDy_fmmord.Nsize[2] ) 
 
-    #########################
-    # display(Dx_fmmord)
-    # display(Dy_fmmord)
-
-    # for i=1:size(Dx_fmmord,1)
-    #     cnnz_X = count(Dx_fmmord[i,:].!=0.0)
-    #     cnnz_Y = count(Dy_fmmord[i,:].!=0.0)
-    #     if cnnz_X==0
-    #         @show i,cnnz_X,cnnz_Y
-    #     end
-    #     if cnnz_Y==0
-    #         @show i,cnnz_X,cnnz_Y
-    #     end
-    # end
-
-    return ttime,idx_fmmord,tt_fmmord,Dx_fmmord,Dy_fmmord
+     return ttime,idx_fmmord,tt_fmmord,Dx_fmmord,Dy_fmmord
 end
 
 ##====================================================================##
@@ -416,11 +453,12 @@ end
 $(TYPEDSIGNATURES)
 
    Compute the traveltime at a given node using 2nd order stencil 
-    where possible, otherwise revert to 1st order.
+    where possible, otherwise revert to 1st order. This function is 
+    intended for subsequent calculations using the discrete adjoint method.
 """
 function calcttpt_2ndord_discradj!(ttime::Array{Float64,2},vel::Array{Float64,2},
                                   grd::Grid2D, status::Array{Int64,2},i::Int64,j::Int64,
-                                  idD::Vector{<:Integer})
+                                  codeD::Vector{<:Integer})
     
     #######################################################
     ##  Local solver Sethian et al., Rawlison et al.  ???##
@@ -454,7 +492,7 @@ function calcttpt_2ndord_discradj!(ttime::Array{Float64,2},vel::Array{Float64,2}
     gamma = - slowcurpt^2 ## !!!!
     HUGE = 1.0e30
 
-    idD[:] .= 0.0 #zeros(Int64,2)
+    codeD[:] .= 0.0 #zeros(Int64,2)
     
     ## 2 directions
     for axis=1:2
@@ -495,7 +533,7 @@ function calcttpt_2ndord_discradj!(ttime::Array{Float64,2},vel::Array{Float64,2}
                     use1stord = true
 
                     # save derivative choices
-                    axis==1 ? (idD[axis]=ish) : (idD[axis]=jsh)
+                    axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
                     
                     ## 2nd order
                     ish2::Int64 = 2*ish
@@ -504,19 +542,21 @@ function calcttpt_2ndord_discradj!(ttime::Array{Float64,2},vel::Array{Float64,2}
                         testval2 = ttime[i+ish2,j+jsh2]
                         ## pick the lowest value of the two
                         ## <=, compare to chosenval 1, *not* 2!!
+                        ## This because the direction has already been chosen
+                        ##  at the line "testval1<chosenval1"
                         if testval2<=chosenval1 
                             chosenval2=testval2
                             use2ndord=true
 
                             # save derivative choices
-                            axis==1 ? (idD[axis]=2*ish) : (idD[axis]=2*jsh)
+                            axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
 
                         else
                             chosenval2=HUGE
                             use2ndord=false # this is needed!
 
                             # save derivative choices
-                            axis==1 ? (idD[axis]=ish) : (idD[axis]=jsh)
+                            axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
                             
                         end
                     end
@@ -568,7 +608,7 @@ function calcttpt_2ndord_discradj!(ttime::Array{Float64,2},vel::Array{Float64,2}
             beta  = 0.0
             gamma = - slowcurpt^2 ## !!!!
             
-            idD[:] .= 0.0
+            codeD[:] .= 0.0
 
             ## 2 directions
             for axis=1:2
@@ -607,7 +647,7 @@ function calcttpt_2ndord_discradj!(ttime::Array{Float64,2},vel::Array{Float64,2}
                             use1stord = true
 
                             # save derivative choices
-                            axis==1 ? (idD[axis]=ish) : (idD[axis]=jsh)
+                            axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
 
                         end
                     end
@@ -668,7 +708,11 @@ end
 ##############################################################################
 
 
-# projection operator P ordered according to FMM order
+"""
+$(TYPEDSIGNATURES)
+
+ Projection operator P containing interpolation coefficients, ordered according to FMM order.
+"""
 function calcprojttfmmord(ttime,grd,idx_fmmord,coordrec)
 
     linid_nxny = LinearIndices((grd.nx,grd.ny))
@@ -712,20 +756,22 @@ end
 
 ##############################################################################
 
+
+"""
+$(TYPEDSIGNATURES)
+
+ Solve the discrete adjoint equations and return the gradient of the misfit.
+"""
 function discradjoint_hiord_SINGLESRC(idx_fmmord,tt,Dx,Dy,P,pickobs,stdobs,grd,vel2d)
     #
     # all stuff must be in FMM order (e.g., tt_fmmord)
     #
 
-    #@show size(P), size(tt),size(pickobs),size(stdobs)
     rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
 
     tmplhs = transpose( (2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) )
 
     lhs = UpperTriangular(tmplhs)
-
-    # println("2.0 .* Diagonal(Dx*tt) * Dx) + [...]:")
-    # display((2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) )
 
     lambda_fmmord = lhs\rhs
 
@@ -747,3 +793,433 @@ function discradjoint_hiord_SINGLESRC(idx_fmmord,tt,Dx,Dy,P,pickobs,stdobs,grd,v
 end
 
 ##############################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+  Refinement of the grid around the source. FMM calculated inside a finer grid 
+    and then passed on to coarser grid
+"""
+function ttaroundsrc_discradj!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2},
+                               vel::Array{Float64,2},src::Vector{Float64},grdcoarse::Grid2D,inittt::Float64, 
+                               idx_fmmord, tt_fmmord )
+    
+    ##
+    ## 2x10 nodes -> 2x50 nodes
+    ##
+    downscalefactor::Int = 5
+    noderadius::Int = 5
+
+    ## find indices of closest node to source in the "big" array
+    ## ix, iy will become the center of the refined grid
+    ixsrcglob,iysrcglob = findclosestnode(src[1],src[2],grdcoarse.xinit,grdcoarse.yinit,grdcoarse.hgrid) 
+    
+    ## conversion cart to lin indices
+    linid_nxny_coarse = LinearIndices((grdcoarse.nx,grdcoarse.ny))
+
+    ##
+    ## Define chunck of coarse grid
+    ##
+    i1coarsevirtual = ixsrcglob - noderadius
+    i2coarsevirtual = ixsrcglob + noderadius
+    j1coarsevirtual = iysrcglob - noderadius
+    j2coarsevirtual = iysrcglob + noderadius
+    # if hitting borders
+    outxmin = i1coarsevirtual<1
+    outxmax = i2coarsevirtual>grdcoarse.nx
+    outymin = j1coarsevirtual<1 
+    outymax = j2coarsevirtual>grdcoarse.ny
+    outxmin ? i1coarse=1            : i1coarse=i1coarsevirtual
+    outxmax ? i2coarse=grdcoarse.nx : i2coarse=i2coarsevirtual
+    outymin ? j1coarse=1            : j1coarse=j1coarsevirtual
+    outymax ? j2coarse=grdcoarse.ny : j2coarse=j2coarsevirtual
+
+    ##
+    ## Refined grid parameters
+    ##
+    dh = grdcoarse.hgrid/downscalefactor
+    # fine grid size
+    nx = (i2coarse-i1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
+    ny = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
+
+    # set origin of the fine grid
+    xinit = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
+    yinit = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
+    grdfine = Grid2D(hgrid=dh,xinit=xinit,yinit=yinit,nx=nx,ny=ny)
+
+    ## 
+    ## Time array
+    ##
+    inittt = 1e30
+    ttime = Array{Float64}(undef,nx,ny)
+    ttime[:,:] .= inittt
+    ##
+    ## Status of nodes
+    ##
+    status = Array{Int64}(undef,nx,ny)
+    status[:,:] .= 0   ## set all to far
+   
+    ##
+    ## Get the vel around the source on the coarse grid
+    ##
+    velcoarsegrd = view(vel,i1coarse:i2coarse,j1coarse:j2coarse)
+    
+    ##
+    ## Reset coodinates to match the fine grid
+    ##
+    # xorig = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
+    # yorig = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
+    xsrc = src[1] #- xorig #- grdcoarse.xinit
+    ysrc = src[2] #- yorig #- grdcoarse.yinit
+    srcfine = Float64[xsrc,ysrc]
+
+    ##
+    ## Nearest neighbor interpolation for velocity on finer grid
+    ## 
+    velfinegrd = Array{Float64}(undef,nx,ny)
+    for j=1:ny
+        for i=1:nx
+            di=div(i-1,downscalefactor)
+            ri=i-di*downscalefactor
+            ii = ri>=downscalefactor/2+1 ? di+2 : di+1
+
+            dj=div(j-1,downscalefactor)
+            rj=j-dj*downscalefactor
+            jj = rj>=downscalefactor/2+1 ? dj+2 : dj+1
+
+            velfinegrd[i,j] = velcoarsegrd[ii,jj]
+        end
+    end
+    
+    ##
+    ## Source location, etc. within fine grid
+    ##  
+    ## REGULAR grid (not staggered), use "grdfine","finegrd", source position in the fine grid!!
+    onsrc = sourceboxloctt!(ttime,velfinegrd,srcfine,grdfine, staggeredgrid=false )
+   
+    ######################################################
+  
+    neigh = [1  0;
+             0  1;
+            -1  0;
+             0 -1]
+
+    #-------------------------------
+    ## init FMM 
+    status[onsrc] .= 2 ## set to accepted on src
+    #naccinit=count(status.==2)
+
+    ## get all i,j accepted
+    ijss = findall(status.==2) 
+    is = [l[1] for l in ijss]
+    js = [l[2] for l in ijss]
+    naccinit = length(ijss)
+
+    ## conversion cart to lin indices, old sub2ind
+    linid_nxny = LinearIndices((nx,ny))
+    ## conversion lin to cart indices, old ind2sub
+    cartid_nxny = CartesianIndices((nx,ny))
+
+    ##===================================
+    for l=1:naccinit
+        ia = is[l]
+        ja = js[l]
+        # if the node coincides with the coarse grid, store values
+        oncoa,ia_coarse,ja_coarse = isacoarsegridnode(ia,ja,downscalefactor,i1coarse,j1coarse)
+        if oncoa
+            ##===================================
+            ## UPDATE the COARSE GRID
+            ttimecoarse[ia_coarse,ja_coarse]  = ttime[ia,ja]
+            statuscoarse[ia_coarse,ja_coarse] = status[ia,ja]
+            ##==================================
+        end
+    end
+
+    ##==========================================================##
+    # discrete adjoint
+
+    ########################
+    # discrete adjoint: first visited points in FMM order
+    ttfirstpts = Vector{Float64}(undef,naccinit)
+    for l=1:naccinit
+        i,j = is[l],js[l]
+        ttij = ttime[i,j]
+        # store initial points' FMM order
+        ttfirstpts[l] = ttij
+    end
+    # sort according to arrival time
+    spidx = sortperm(ttfirstpts)
+    
+    # store the first accepted points' order
+    node_coarse = 1
+    for l=1:naccinit
+        # ordered index
+        p = spidx[l]
+
+        ## if the point belongs to the coarse grid, add it
+        oncoa,ia_coarse,ja_coarse = isacoarsegridnode(is[p],js[p],downscalefactor,i1coarse,j1coarse)
+        if oncoa
+            # go from cartesian (i,j) to linear
+            idx_fmmord[node_coarse] = linid_nxny_coarse[ia_coarse,ja_coarse]
+
+            # store arrival time for first points in FMM order
+            tt_fmmord[node_coarse] = ttime[is[p],js[p]]
+            
+            node_coarse +=1
+        end
+        #@show is[p],js[p],ttime[is[p],js[p]],idx_fmmord[l]
+    end
+
+    ##==========================================================##
+    
+    ## Init the min binary heap with void arrays but max size
+    Nmax=nx*ny
+    bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+
+    ## pre-allocate
+    tmptt::Float64 = 0.0 
+    
+    ## construct initial narrow band
+    for l=1:naccinit ##
+        
+         for ne=1:4 ## four potential neighbors
+
+            i = is[l] + neigh[ne,1]
+            j = js[l] + neigh[ne,2]
+            
+            ## if the point is out of bounds skip this iteration
+            if (i>nx) || (i<1) || (j>ny) || (j<1)
+                continue
+            end
+
+            if status[i,j]==0 ## far
+
+                ## add tt of point to binary heap and give handle
+                tmptt = calcttpt_2ndord(ttime,velfinegrd,grdfine,status,i,j)
+                # get handle
+                # han = sub2ind((nx,ny),i,j)
+                han = linid_nxny[i,j]
+                # insert into heap
+                insert_minheap!(bheap,tmptt,han)
+                # change status, add to narrow band
+                status[i,j]=1
+                
+            end            
+        end
+    end
+
+    #-------------------------------
+    ## main FMM loop
+    firstwarning=true
+    totnpts = nx*ny
+    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
+
+        ## if no top left exit the game...
+        if bheap.Nh<1
+            break
+        end
+
+        han,tmptt = pop_minheap!(bheap)
+        #ia,ja = ind2sub((nx,ny),han)
+        cija = cartid_nxny[han]
+        ia,ja = cija[1],cija[2]
+        # set status to accepted
+        status[ia,ja] = 2 # 2=accepted
+        # set traveltime of the new accepted point
+        ttime[ia,ja] = tmptt
+
+        ##===================================
+        oncoa,ia_coarse,ja_coarse = isacoarsegridnode(ia,ja,downscalefactor,i1coarse,j1coarse)
+        if oncoa
+
+            ##===================================
+            ## UPDATE the COARSE GRID
+            ttimecoarse[ia_coarse,ja_coarse] = tmptt
+            statuscoarse[ia_coarse,ja_coarse] = 2
+            ##===================================
+
+            ##===================================
+            # Discrete adjoint
+            # store the linear index of FMM order
+            idx_fmmord[node_coarse] = linid_nxny_coarse[ia_coarse,ja_coarse]
+            # store arrival time for first points in FMM order
+            tt_fmmord[node_coarse] = tmptt
+            # increase the counter
+            node_coarse += 1
+        end
+        ##===================================
+
+
+        ##########################################################
+        ##
+        ## If the the accepted point is on the edge of the
+        ##  fine grid, stop computing and jump to coarse grid
+        ##
+        ##########################################################
+        #  if (ia==nx) || (ia==1) || (ja==ny) || (ja==1)
+        if (ia==1 && !outxmin) || (ia==nx && !outxmax) || (ja==1 && !outymin) || (ja==ny && !outymax)
+            # ttimecoarse[i1coarse:i2coarse,j1coarse:j2coarse]  =  ttime[1:downscalefactor:end,1:downscalefactor:end]
+            # statuscoarse[i1coarse:i2coarse,j1coarse:j2coarse] = status[1:downscalefactor:end,1:downscalefactor:end]
+            ## delete current narrow band to avoid problems when returned to coarse grid
+            statuscoarse[statuscoarse.==1] .= 0
+
+            ## Prevent the difficult case of traveltime hitting the borders but
+            ##   not the coarse grid, which would produce an empty "statuscoarse" and an empty "ttimecoarse".
+            ## Probably needs a better fix..."
+            if count(statuscoarse.>0)<1
+                if firstwarning 
+                    @warn("Traveltime hitting the borders but not the coarse grid, continuing.")
+                    firstwarning=false
+                end
+                continue
+            end
+            return nothing
+        end
+        ##########################################################
+
+        ## try all neighbors of newly accepted point
+        for ne=1:4 
+
+            i = ia + neigh[ne,1]
+            j = ja + neigh[ne,2]
+            
+            ## if the point is out of bounds skip this iteration
+            if (i>nx) || (i<1) || (j>ny) || (j<1)
+                continue
+            end
+
+            if status[i,j]==0 ## far, active
+
+                ## add tt of point to binary heap and give handle
+                tmptt = calcttpt_2ndord(ttime,velfinegrd,grdfine,status,i,j)
+                han = linid_nxny[i,j]
+                insert_minheap!(bheap,tmptt,han)
+                # change status, add to narrow band
+                status[i,j]=1                
+                
+            elseif status[i,j]==1 ## narrow band                
+
+                # update the traveltime for this point
+                tmptt = calcttpt_2ndord(ttime,velfinegrd,grdfine,status,i,j)
+                # get handle
+                han = linid_nxny[i,j]
+                # update the traveltime for this point in the heap
+                update_node_minheap!(bheap,tmptt,han)
+
+            end
+        end
+        ##-------------------------------
+    end
+    error("ttaroundsrc_discradj!(): Ouch...")
+end
+
+
+#######################################################################################
+
+function isacoarsegridnode(i::Int,j::Int,downscalefactor::Int,i1coarse::Int,j1coarse)
+    a = rem(i, downscalefactor)
+    b = rem(j, downscalefactor)
+    if a==b==0
+        icoa = div(i,downscalefactor)+i1coarse
+        jcoa = div(j,downscalefactor)+j1coarse
+        return true,icoa,jcoa
+    else
+        return false,nothing,nothing
+    end
+    return
+end
+
+#######################################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+ Attempt to reconstruct how derivatives have been calculated in the area of 
+  the refinement of the source. Updates the codes for derivatives used to construct
+   Dx and Dy.
+"""
+function derivaroundsrcfmm!(lseq,linid::LinearIndices,cartid::CartesianIndices,
+                            idx_fmmord,codeD)
+    # lipt = index in fmmord in sequential order (1,2,3,4,...)
+    
+    nx = cartid.indices[1].stop
+    ny = cartid.indices[2].stop
+
+    idxpt = idx_fmmord[lseq]
+    ipt,jpt = Tuple(cartid[idxpt])
+    
+    codeD[:] .= 0
+    for axis=1:2
+
+        chosenidx = lseq
+        for dir=1:2
+
+            ## map the 4 cases to an integer as in linear indexing...
+            lax = dir + 2*(axis-1)
+            if lax==1 # axis==1
+                ish = 1
+                jsh = 0
+            elseif lax==2 # axis==1
+                ish = -1
+                jsh = 0
+            elseif lax==3 # axis==2
+                ish = 0
+                jsh = 1
+            elseif lax==4 # axis==2
+                ish = 0
+                jsh = -1
+            end
+            
+            ##=========================
+            ## first order
+            i = ipt+ish
+            j = jpt+jsh
+
+            ## check if on boundaries
+            isonb1st,isonb2nd = isonbord(i,j,nx,ny)
+
+            if !isonb1st
+                ## calculate the index of the neighbor in the fmmord
+                l = linid[i,j]
+                idxne1 = findfirst(idx_fmmord.==l)
+                    
+                #@show lseq,l,idxne1,chosenidx
+            
+                if idxne1!=nothing && idxne1<chosenidx                   
+
+                    # to make sure we chose correctly the direction
+                    chosenidx = idxne1
+                    # save derivative choices [first order]
+                    axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+
+                    if !isonb2nd
+                        ##=========================
+                        ## second order
+                        i = ipt + 2*ish
+                        j = jpt + 2*jsh
+                        
+                        ## calculate the index of the neighbor in the fmmord
+                        l = linid[i,j]
+                        idxne2 = idx_fmmord[l]
+                        
+                        ##===========================================================
+                        ## WARNING! The traveltime for the second order point must
+                        ##   be smaller than the one for the first order for selecting
+                        ##   second order. Otherwise first order only.
+                        ##  Therefore we compare idxne2<idxne1 instead of idxne2<idxpt
+                        ##===========================================================
+                        if idxne2<idxne1
+                            # save derivative choices [second order]
+                            axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
+                        end
+
+                    end
+                end
+            end            
+        end
+    end
+
+    return 
+end
+
+#######################################################################################
