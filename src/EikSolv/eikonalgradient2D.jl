@@ -32,7 +32,8 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Vector{Array{Float64,2}},
-                     pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord_discradj",
+                     pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
+                     gradttalgo::String="gradFMM_hiord_discradj",
                      smoothgrad::Bool=true)
 
     @assert size(coordsrc,2)==2
@@ -113,14 +114,15 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
         if adjalgo=="gradFMM_hiord_discradj"
             # Discrete adjoint formulation
             # Variables ordered according to FMM order
-            ttgrdonesrc,idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
-
+            println("\nSTART ttFMM_hiord_discradj")
+            @time ttgrdonesrc,idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
+            println("END ttFMM_hiord_discradj\n")
 
         elseif adjalgo=="gradFMM_podlec"
             ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
       
         elseif adjalgo=="gradFMM_hiord"
-            ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
+            @time ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
 
         elseif adjalgo=="gradFS_podlec"
             ttgrdonesrc = ttFS_podlec(vel,xysrc[s,:],grd)
@@ -149,9 +151,11 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFMM_hiord_discradj"
             # discrete adjoint formulation
-            grad1 .+= discradjoint_hiord_SINGLESRC(idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
+            println("\nSTART discradjoint_hiord_SINGLESRC")
+            @time grad1 .+= discradjoint_hiord_SINGLESRC(idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
                                                    P_fmmord1,pickobs1[s],stdobs[s],grd,vel)
-           
+           println("END discradjoint_hiord_SINGLESRC\n")
+
         elseif adjalgo=="gradFS_podlec"
 
             grad1 .+= eikgrad_FS_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],grd,
@@ -163,7 +167,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
                                           grd,pickobs1[s],ttpicks1,stdobs[s])
             
         elseif adjalgo=="gradFMM_hiord"
-            grad1 .+= eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],
+            @time grad1 .+= eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],
                                                   grd,pickobs1[s],ttpicks1,stdobs[s])
 
         else

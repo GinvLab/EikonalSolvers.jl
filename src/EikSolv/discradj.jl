@@ -1,6 +1,15 @@
 
+
 ##############################################################################
 
+Base.@kwdef struct MapLinearIndexGridFMM
+    "Linear grid indices in FMM order (as visited by FMM)"
+    fmm2gridord::Vector{Int} #old idx_fmmord
+    "Linear FMM indices in grid order"
+    grid2fmmord::Vector{Int}
+end
+
+##=======================================================
 # structs for sparse matrices to represent derivatives
 
 struct VecSPDerivMat
@@ -35,18 +44,17 @@ $(TYPEDSIGNATURES)
 
  Set the coefficients (elements) of the derivative matrices in the x and y directions.
 """
-function setcoeffderiv!(D::VecSPDerivMat,irow,idx_fmmord,codeDxy_orig,
+function setcoeffderiv!(D::VecSPDerivMat,irow,idx_orig,idx_fmmord,codeDxy_orig,
                         cartid_nxny,linid_nxny,dh; axis)
 
     # get the linear index in the original grid
     iptorig = idx_fmmord[irow]
     # get the (i,j) indices in the original grid
-    cij = cartid_nxny[iptorig]
-    i,j = cij[1],cij[2]
+    i,j = Tuple(cartid_nxny[iptorig])
     # get the codes of the derivatives (+1,-2,...)
-    codes_orig = codeDxy_orig[iptorig,:]
-
-    if codes_orig == [0,0]
+    codes_orig = view(codeDxy_orig,iptorig,:)
+  
+    if all(codes_orig .== 0)
         # no derivatives have been used...
         return
     end
@@ -55,7 +63,8 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_fmmord,codeDxy_orig,
     # closure over idx_fmmord
     function orig2fmmord(i,j)
         iorig = linid_nxny[i,j]
-        ifmmord = findfirst(idx_fmmord.==iorig)
+        #ifmmord = findfirst(idx_fmmord.==iorig)
+        ifmmord = idx_orig[iorig] #findfirst(idx_fmmord.==iorig)
         return ifmmord
     end
     ##--------------------------
@@ -230,7 +239,7 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
         ## 
         ## NO refinement around the source      
         ##
-        println("ttFMM_hiord(): NO refinement around the source! ")
+        println("ttFMM_hiord_discradj(): NO refinement around the source! ")
 
         ## source location, etc.      
         ## REGULAR grid
@@ -282,7 +291,9 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
     end # if refinearoundsrc
     ###################################################### 
 
-    
+    println(" -> big loop")
+    @time begin 
+
     #-------------------------------
     ## init FMM 
     neigh = [1  0;
@@ -412,37 +423,53 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
         error("length(unique(idx_fmmord))!=length(idx_fmmord)")
     end
     
-    for irow=1:nxXny
-        
-        # reorder the derivative codes (+-1,+-2) according to the FMM order from idx_fmmord
-        icol = irow
+    end # begin @time
 
-        #@show irow,icol,cartid_nxny[icol]
+    println(" -> setcoeffderiv")
+    @time begin
 
-        # compute the coefficients for X  derivatives
-        setcoeffderiv!(vecDx_fmmord,irow,idx_fmmord,codeDxy,
-                       cartid_nxny,linid_nxny,hgrid,axis="X")
+        ## pre-compute the mapping between fmm and orig order
+        idx_orig = zeros(Int,nxXny)
+        for i=1:nxXny
+            ifm = idx_fmmord[i]
+            idx_orig[ifm] = i
+        end
 
-        # compute the coefficients for Y derivatives
-        setcoeffderiv!(vecDy_fmmord,irow,idx_fmmord,codeDxy,
-                       cartid_nxny,linid_nxny,hgrid,axis="Y")
+        for irow=1:nxXny
+            
+            # reorder the derivative codes (+-1,+-2) according to the FMM order from idx_fmmord
+            icol = irow
 
+            #@show irow,icol,cartid_nxny[icol]
+
+            # compute the coefficients for X  derivatives
+            setcoeffderiv!(vecDx_fmmord,irow,idx_orig,idx_fmmord,codeDxy,
+                           cartid_nxny,linid_nxny,hgrid,axis="X")
+
+            # compute the coefficients for Y derivatives
+            setcoeffderiv!(vecDy_fmmord,irow,idx_orig,idx_fmmord,codeDxy,
+                           cartid_nxny,linid_nxny,hgrid,axis="Y")
+
+        end
     end
+#error("deliberate exit after setcoeff")
 
-        
-    # create the actual sparse arrays from the vectors
-    Nxnnz = vecDx_fmmord.Nnnz[]
+    println(" -> assemble sparse matrices")
+    @time begin
+        # create the actual sparse arrays from the vectors
+        Nxnnz = vecDx_fmmord.Nnnz[]
 
-    Dx_fmmord = sparse(vecDx_fmmord.i[1:Nxnnz],
-                       vecDx_fmmord.j[1:Nxnnz],
-                       vecDx_fmmord.v[1:Nxnnz],
-                       vecDx_fmmord.Nsize[1], vecDx_fmmord.Nsize[2] )
+        Dx_fmmord = sparse(vecDx_fmmord.i[1:Nxnnz],
+                           vecDx_fmmord.j[1:Nxnnz],
+                           vecDx_fmmord.v[1:Nxnnz],
+                           vecDx_fmmord.Nsize[1], vecDx_fmmord.Nsize[2] )
 
-    Nynnz = vecDy_fmmord.Nnnz[]
-    Dy_fmmord = sparse(vecDy_fmmord.i[1:Nynnz],
-                       vecDy_fmmord.j[1:Nynnz],
-                       vecDy_fmmord.v[1:Nynnz],
-                       vecDy_fmmord.Nsize[1], vecDy_fmmord.Nsize[2] ) 
+        Nynnz = vecDy_fmmord.Nnnz[]
+        Dy_fmmord = sparse(vecDy_fmmord.i[1:Nynnz],
+                           vecDy_fmmord.j[1:Nynnz],
+                           vecDy_fmmord.v[1:Nynnz],
+                           vecDy_fmmord.Nsize[1], vecDy_fmmord.Nsize[2] ) 
+    end
 
      return ttime,idx_fmmord,tt_fmmord,Dx_fmmord,Dy_fmmord
 end
@@ -767,27 +794,35 @@ function discradjoint_hiord_SINGLESRC(idx_fmmord,tt,Dx,Dy,P,pickobs,stdobs,grd,v
     # all stuff must be in FMM order (e.g., tt_fmmord)
     #
 
-    rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
-
-    tmplhs = transpose( (2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) )
-
-    lhs = UpperTriangular(tmplhs)
-
-    lambda_fmmord = lhs\rhs
-
-    ##--------------------------------------
-    # reorder lambda from fmmord to original grid!!
-    N = length(lambda_fmmord)
-    lambda = Vector{Float64}(undef,N)
-    for p=1:N
-        iorig = idx_fmmord[p]
-        lambda[iorig] = lambda_fmmord[p]
+    println("rhs, lhs, solve lin syst")
+    @time begin 
+        rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
+        ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
+        ##   the solver (\) does not use the correct sparse algo for matrix division
+        tmplhs = copy(transpose( (2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) ))
+        lhs = UpperTriangular(tmplhs)
+        lambda_fmmord = lhs\rhs
     end
+    #@show typeof(lhs)
+    
+    println("reorder lambda, calc grad")
+    @time begin
 
-    #gradvec = -2.0 .* transpose(lambda) * Diagonal(1.0./vec(vel2d))
-    gradvec = -2.0 .* lambda ./ vec(vel2d)
+        ##--------------------------------------
+        # reorder lambda from fmmord to original grid!!
+        N = length(lambda_fmmord)
+        lambda = Vector{Float64}(undef,N)
+        for p=1:N
+            iorig = idx_fmmord[p]
+            lambda[iorig] = lambda_fmmord[p]
+        end
 
-    grad2d = reshape(gradvec,grd.nx,grd.ny)
+        #gradvec = -2.0 .* transpose(lambda) * Diagonal(1.0./vec(vel2d))
+        gradvec = -2.0 .* lambda ./ vec(vel2d)
+
+        grad2d = reshape(gradvec,grd.nx,grd.ny)
+
+    end
     
     return grad2d
 end
