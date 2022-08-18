@@ -54,14 +54,16 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_orig,idx_fmmord,codeDxy_orig,
     # get the codes of the derivatives (+1,-2,...)
     codes_orig = view(codeDxy_orig,iptorig,:)
   
-    if all(codes_orig .== 0)
+    cx,cy = codes_orig[1],codes_orig[2]
+    #if all(codes_orig .== 0)
+    if cx==0 && cy==0
         # no derivatives have been used...
         return
     end
 
     ##--------------------------
     # closure over idx_fmmord
-    function orig2fmmord(i,j)
+    function ijgrid2fmmord(i,j)
         iorig = linid_nxny[i,j]
         #ifmmord = findfirst(idx_fmmord.==iorig)
         ifmmord = idx_orig[iorig] #findfirst(idx_fmmord.==iorig)
@@ -69,7 +71,11 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_orig,idx_fmmord,codeDxy_orig,
     end
     ##--------------------------
 
+
     #@show i,j,irow,code
+
+    # println("set coe 2")
+    # @time begin
 
     if axis=="X"
         code = codes_orig[1]
@@ -78,22 +84,22 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_orig,idx_fmmord,codeDxy_orig,
             nothing
 
         elseif code==-2
-            addentry!(D, irow, orig2fmmord(i,j),    3.0/(2.0*dh) ) #  0   
-            addentry!(D, irow, orig2fmmord(i-1,j), -4.0/(2.0*dh) ) # -1
-            addentry!(D, irow, orig2fmmord(i-2,j),  1.0/(2.0*dh) ) # -2
+            addentry!(D, irow, ijgrid2fmmord(i,j),    3.0/(2.0*dh) ) #  0   
+            addentry!(D, irow, ijgrid2fmmord(i-1,j), -4.0/(2.0*dh) ) # -1
+            addentry!(D, irow, ijgrid2fmmord(i-2,j),  1.0/(2.0*dh) ) # -2
 
         elseif code==-1
-            addentry!(D, irow, orig2fmmord(i,j),    1.0/dh ) #  0
-            addentry!(D, irow, orig2fmmord(i-1,j), -1.0/dh ) # -1
+            addentry!(D, irow, ijgrid2fmmord(i,j),    1.0/dh ) #  0
+            addentry!(D, irow, ijgrid2fmmord(i-1,j), -1.0/dh ) # -1
 
         elseif code==1
-            addentry!(D, irow, orig2fmmord(i,j),  -1.0/dh ) #  0
-            addentry!(D, irow, orig2fmmord(i+1,j), 1.0/dh ) # +1
+            addentry!(D, irow, ijgrid2fmmord(i,j),  -1.0/dh ) #  0
+            addentry!(D, irow, ijgrid2fmmord(i+1,j), 1.0/dh ) # +1
 
         elseif code==2
-            addentry!(D, irow, orig2fmmord(i,j),   -3.0/(2.0*dh) ) #  0
-            addentry!(D, irow, orig2fmmord(i+1,j),  4.0/(2.0*dh) ) # +1
-            addentry!(D, irow, orig2fmmord(i+2,j), -1.0/(2.0*dh) ) # +2
+            addentry!(D, irow, ijgrid2fmmord(i,j),   -3.0/(2.0*dh) ) #  0
+            addentry!(D, irow, ijgrid2fmmord(i+1,j),  4.0/(2.0*dh) ) # +1
+            addentry!(D, irow, ijgrid2fmmord(i+2,j), -1.0/(2.0*dh) ) # +2
 
         else
             error("setcoeffderiv(): Wrong code...")
@@ -107,22 +113,22 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_orig,idx_fmmord,codeDxy_orig,
             nothing
 
         elseif code==-2
-            addentry!(D, irow, orig2fmmord(i,j),   -3.0/(2.0*dh) ) #  0                        
-            addentry!(D, irow, orig2fmmord(i,j-1),  4.0/(2.0*dh) ) # -1
-            addentry!(D, irow, orig2fmmord(i,j-2), -1.0/(2.0*dh) ) # -2
+            addentry!(D, irow, ijgrid2fmmord(i,j),   -3.0/(2.0*dh) ) #  0                        
+            addentry!(D, irow, ijgrid2fmmord(i,j-1),  4.0/(2.0*dh) ) # -1
+            addentry!(D, irow, ijgrid2fmmord(i,j-2), -1.0/(2.0*dh) ) # -2
 
         elseif code==-1
-            addentry!(D, irow, orig2fmmord(i,j),    1.0/dh ) #  0
-            addentry!(D, irow, orig2fmmord(i,j-1), -1.0/dh ) # -1
+            addentry!(D, irow, ijgrid2fmmord(i,j),    1.0/dh ) #  0
+            addentry!(D, irow, ijgrid2fmmord(i,j-1), -1.0/dh ) # -1
 
         elseif code==1
-            addentry!(D, irow, orig2fmmord(i,j),  -1.0/dh ) #  0
-            addentry!(D, irow, orig2fmmord(i,j+1), 1.0/dh ) # +1
+            addentry!(D, irow, ijgrid2fmmord(i,j),  -1.0/dh ) #  0
+            addentry!(D, irow, ijgrid2fmmord(i,j+1), 1.0/dh ) # +1
 
         elseif code==2
-            addentry!(D, irow, orig2fmmord(i,j),   -3.0/(2.0*dh) ) #  0
-            addentry!(D, irow, orig2fmmord(i,j+1),  4.0/(2.0*dh) ) # +1
-            addentry!(D, irow, orig2fmmord(i,j+2), -1.0/(2.0*dh) ) # +2
+            addentry!(D, irow, ijgrid2fmmord(i,j),   -3.0/(2.0*dh) ) #  0
+            addentry!(D, irow, ijgrid2fmmord(i,j+1),  4.0/(2.0*dh) ) # +1
+            addentry!(D, irow, ijgrid2fmmord(i,j+2), -1.0/(2.0*dh) ) # +2
 
         else
             error("setcoeffderiv(): Wrong code...")
@@ -132,7 +138,7 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_orig,idx_fmmord,codeDxy_orig,
     else
         error("setcoeffderiv(): Wrong axis...")
     end
-
+    #end # begin
     return
 end
 
@@ -146,6 +152,9 @@ $(TYPEDSIGNATURES)
 """
 function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
                                      
+    # println(" -> init")
+    # @time begin
+
     ## Sizes
     nx,ny = grd.nx,grd.ny #size(vel)  ## NOT A STAGGERED GRID!!!
     hgrid = grd.hgrid
@@ -291,8 +300,11 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
     end # if refinearoundsrc
     ###################################################### 
 
-    println(" -> big loop")
-    @time begin 
+    # end # @time begin
+
+    # println(" -> big loop")
+    # @time begin
+        
 
     #-------------------------------
     ## init FMM 
@@ -423,53 +435,55 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
         error("length(unique(idx_fmmord))!=length(idx_fmmord)")
     end
     
-    end # begin @time
+    # end # begin @time
 
-    println(" -> setcoeffderiv")
-    @time begin
+    # println(" -> setcoeffderiv")
+    # @time begin
 
-        ## pre-compute the mapping between fmm and orig order
-        idx_orig = zeros(Int,nxXny)
-        for i=1:nxXny
-            ifm = idx_fmmord[i]
-            idx_orig[ifm] = i
-        end
-
-        for irow=1:nxXny
-            
-            # reorder the derivative codes (+-1,+-2) according to the FMM order from idx_fmmord
-            icol = irow
-
-            #@show irow,icol,cartid_nxny[icol]
-
-            # compute the coefficients for X  derivatives
-            setcoeffderiv!(vecDx_fmmord,irow,idx_orig,idx_fmmord,codeDxy,
-                           cartid_nxny,linid_nxny,hgrid,axis="X")
-
-            # compute the coefficients for Y derivatives
-            setcoeffderiv!(vecDy_fmmord,irow,idx_orig,idx_fmmord,codeDxy,
-                           cartid_nxny,linid_nxny,hgrid,axis="Y")
-
-        end
+    ## pre-compute the mapping between fmm and orig order
+    idx_orig = zeros(Int,nxXny)
+    for i=1:nxXny
+        ifm = idx_fmmord[i]
+        idx_orig[ifm] = i
     end
+
+    for irow=1:nxXny
+        
+        # reorder the derivative codes (+-1,+-2) according to the FMM order from idx_fmmord
+        icol = irow
+
+        #@show irow,icol,cartid_nxny[icol]
+
+        # compute the coefficients for X  derivatives
+        setcoeffderiv!(vecDx_fmmord,irow,idx_orig,idx_fmmord,codeDxy,
+                       cartid_nxny,linid_nxny,hgrid,axis="X")
+
+        # compute the coefficients for Y derivatives
+        setcoeffderiv!(vecDy_fmmord,irow,idx_orig,idx_fmmord,codeDxy,
+                       cartid_nxny,linid_nxny,hgrid,axis="Y")
+
+    end
+    
+    # end # @time begin
 #error("deliberate exit after setcoeff")
 
-    println(" -> assemble sparse matrices")
-    @time begin
-        # create the actual sparse arrays from the vectors
-        Nxnnz = vecDx_fmmord.Nnnz[]
+    # println(" -> assemble sparse matrices")
+    # @time begin
 
-        Dx_fmmord = sparse(vecDx_fmmord.i[1:Nxnnz],
-                           vecDx_fmmord.j[1:Nxnnz],
-                           vecDx_fmmord.v[1:Nxnnz],
-                           vecDx_fmmord.Nsize[1], vecDx_fmmord.Nsize[2] )
+    # create the actual sparse arrays from the vectors
+    Nxnnz = vecDx_fmmord.Nnnz[]
 
-        Nynnz = vecDy_fmmord.Nnnz[]
-        Dy_fmmord = sparse(vecDy_fmmord.i[1:Nynnz],
-                           vecDy_fmmord.j[1:Nynnz],
-                           vecDy_fmmord.v[1:Nynnz],
-                           vecDy_fmmord.Nsize[1], vecDy_fmmord.Nsize[2] ) 
-    end
+    Dx_fmmord = sparse(vecDx_fmmord.i[1:Nxnnz],
+                       vecDx_fmmord.j[1:Nxnnz],
+                       vecDx_fmmord.v[1:Nxnnz],
+                       vecDx_fmmord.Nsize[1], vecDx_fmmord.Nsize[2] )
+
+    Nynnz = vecDy_fmmord.Nnnz[]
+    Dy_fmmord = sparse(vecDy_fmmord.i[1:Nynnz],
+                       vecDy_fmmord.j[1:Nynnz],
+                       vecDy_fmmord.v[1:Nynnz],
+                       vecDy_fmmord.Nsize[1], vecDy_fmmord.Nsize[2] ) 
+    # end # @time begin
 
      return ttime,idx_fmmord,tt_fmmord,Dx_fmmord,Dy_fmmord
 end
@@ -745,6 +759,12 @@ function calcprojttfmmord(ttime,grd,idx_fmmord,coordrec)
     linid_nxny = LinearIndices((grd.nx,grd.ny))
     nxXny = grd.nx*grd.ny
 
+    idx_gridord = zeros(Int,nxXny)
+    for l=1:nxXny
+        ig = idx_fmmord[l]
+        idx_gridord[ig] = l
+    end
+
     # calculate the coefficients and their indices using bilinear interpolation
     nrec = size(coordrec,1)
     Ncoe = 4
@@ -764,7 +784,7 @@ function calcprojttfmmord(ttime,grd,idx_fmmord,coordrec)
         for l=1:Ncoe
             i,j = ijcoe[l,1],ijcoe[l,2]
             iorig = linid_nxny[i,j]
-            jfmmord = findfirst(idx_fmmord.==iorig)
+            jfmmord = idx_gridord[iorig]  # jfmmord = findfirst(idx_fmmord.==iorig)
             # the order for P is:
             #   rows: according to coordrec, stdobs, pickobs
             #   columns: according to the FMM order

@@ -135,7 +135,8 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFMM_hiord_discradj"
             # projection operator P ordered according to FMM order
-            P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idx_fmmord1,coordrec[s])
+            println("\ncalcprojttfmmord(...)")
+            @time P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idx_fmmord1,coordrec[s])
 
         else
             ## ttime at receivers
