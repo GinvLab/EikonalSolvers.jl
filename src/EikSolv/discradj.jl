@@ -54,12 +54,21 @@ function setcoeffderiv!(D::VecSPDerivMat,irow,idx_orig,idx_fmmord,codeDxy_orig,
     # get the codes of the derivatives (+1,-2,...)
     codes_orig = view(codeDxy_orig,iptorig,:)
   
-    cx,cy = codes_orig[1],codes_orig[2]
+    cox,coy = codes_orig[1],codes_orig[2]
+
     #if all(codes_orig .== 0)
-    if cx==0 && cy==0
+    if axis=="X" && cox==0
+        # no derivatives have been used...
+        return
+    elseif axis=="Y" && coy==0
         # no derivatives have been used...
         return
     end
+
+    # if co1==0 && co2==0
+    #     # no derivatives have been used...
+    #     return
+    # end
 
     ##--------------------------
     # closure over idx_fmmord
