@@ -114,15 +114,13 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
         if adjalgo=="gradFMM_hiord_discradj"
             # Discrete adjoint formulation
             # Variables ordered according to FMM order
-            println("\nSTART ttFMM_hiord_discradj")
-            @time ttgrdonesrc,idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
-            println("END ttFMM_hiord_discradj\n")
+            ttgrdonesrc,idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
 
         elseif adjalgo=="gradFMM_podlec"
             ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
       
         elseif adjalgo=="gradFMM_hiord"
-            @time ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
+            ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
 
         elseif adjalgo=="gradFS_podlec"
             ttgrdonesrc = ttFS_podlec(vel,xysrc[s,:],grd)
@@ -135,8 +133,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFMM_hiord_discradj"
             # projection operator P ordered according to FMM order
-            println("\ncalcprojttfmmord(...)")
-            @time P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idx_fmmord1,coordrec[s])
+            P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idx_fmmord1,coordrec[s])
 
         else
             ## ttime at receivers
@@ -152,10 +149,8 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFMM_hiord_discradj"
             # discrete adjoint formulation
-            println("\nSTART discradjoint_hiord_SINGLESRC")
-            @time grad1 .+= discradjoint_hiord_SINGLESRC(idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
+            grad1 .+= discradjoint_hiord_SINGLESRC(idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
                                                    P_fmmord1,pickobs1[s],stdobs[s],grd,vel)
-           println("END discradjoint_hiord_SINGLESRC\n")
 
         elseif adjalgo=="gradFS_podlec"
 
@@ -168,7 +163,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
                                           grd,pickobs1[s],ttpicks1,stdobs[s])
             
         elseif adjalgo=="gradFMM_hiord"
-            @time grad1 .+= eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],
+            grad1 .+= eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],
                                                   grd,pickobs1[s],ttpicks1,stdobs[s])
 
         else
