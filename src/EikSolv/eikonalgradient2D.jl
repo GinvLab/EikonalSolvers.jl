@@ -34,7 +34,7 @@ The computations are run in parallel depending on the number of workers (nworker
 function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Vector{Array{Float64,2}},
                      pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
                      gradttalgo::String="gradFMM_hiord_discradj",
-                     smoothgrad::Bool=true)
+                     smoothgradsourceradius::Integer=0,smoothgrad::Bool=false)
 
     @assert size(coordsrc,2)==2
     #@assert size(coordrec,2)==2
@@ -61,7 +61,7 @@ function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,
             @async tmpgrad[:,:,s] = remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
                                                      coordsrc[igrs,:],coordrec[igrs],
                                                      grd,stdobs[igrs],pickobs[igrs],
-                                                     gradttalgo )
+                                                     gradttalgo,smoothgradsourceradius )
         end
     end
     grad = dropdims(sum(tmpgrad,dims=3),dims=3)
@@ -87,7 +87,7 @@ Calculate the gradient for some requested sources
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
                          coordrec::Vector{Array{Float64,2}},grd::Grid2D,
                          stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
-                         adjalgo::String)
+                         adjalgo::String,smoothgradsourceradius::Integer)
 
     nx,ny=size(vel)
     nsrc = size(xysrc,1)
@@ -171,6 +171,11 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
             return
         end
         
+        ###########################################
+        ## smooth gradient around the source
+        smoothgradaroundsrc!(grad1,xysrc[s,1],xysrc[s,2],grd,
+                             radiuspx=smoothgradsourceradius)
+
     end
 
     return grad1

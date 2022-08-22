@@ -749,7 +749,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
         ## 
         ## NO refinement around the source      
         ##
-        println("ttFMM_hiord(): NO refinement around the source! ")
+        #println("ttFMM_hiord(): NO refinement around the source! ")
 
         ## source location, etc.      
         ## REGULAR grid

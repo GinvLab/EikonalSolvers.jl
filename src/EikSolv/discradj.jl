@@ -252,6 +252,8 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
         js = [l[2] for l in ijss]
         naccinit = length(ijss)
 
+        #@show count(ttime.>=0.0),count(tt_fmmord.>=0.0)
+
         # How many initial points to skip, considering them as "onsrc"?
         skipnptsDxy = 4
         
@@ -328,8 +330,16 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
             # go from cartesian (i,j) to linear
             idx_fmmord[l] = linid_nxny[is[p],js[p]]
 
+            ######################################
             # store arrival time for first points in FMM order
-            tt_fmmord[l] = ttime[is[p],js[p]]
+            ttgrid = ttime[is[p],js[p]]
+            ## The following to avoid a singular upper triangular matrix in the
+            ##  adjoint equation. Otherwise there will be a row of only zeros in the LHS.
+            if ttgrid==0.0
+                tt_fmmord[l] = eps()
+            else
+                tt_fmmord[l] = ttgrid
+            end
 
             #################################################################
             # Here we store a 1 in the diagonal because we are on a source node...
@@ -351,7 +361,9 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
     # println(" -> big loop")
     # @time begin
         
-
+    # @show count(ttime.>0.0),count(tt_fmmord.>0.0)
+    # @show count(ttime.<0.0),count(tt_fmmord.<0.0)
+    
     #-------------------------------
     ## init FMM 
     neigh = [1  0;
@@ -858,17 +870,17 @@ function discradjoint_hiord_SINGLESRC(idx_fmmord,tt,Dx,Dy,P,pickobs,stdobs,grd,v
 
     # println("rhs, lhs, solve lin syst")
     # @time begin 
-
+    # @show extrema(Dx*tt),extrema(Dy*tt),extrema(Dx),extrema(Dy)
+    # @show extrema(P),extrema(pickobs),extrema(stdobs)
+ 
     rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
     ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
     ##   the solver (\) does not use the correct sparse algo for matrix division
     tmplhs = copy(transpose( (2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) ))
     lhs = UpperTriangular(tmplhs)
+    # solve the linear system
     lambda_fmmord = lhs\rhs
 
-    # end
-    #@show typeof(lhs)
-    
     # println("reorder lambda, calc grad")
     # @time begin
 
@@ -881,13 +893,14 @@ function discradjoint_hiord_SINGLESRC(idx_fmmord,tt,Dx,Dy,P,pickobs,stdobs,grd,v
         lambda[iorig] = lambda_fmmord[p]
     end
 
-    #gradvec = -2.0 .* transpose(lambda) * Diagonal(1.0./vec(vel2d))
-    gradvec = -2.0 .* lambda ./ vec(vel2d)
+    #gradvec = 2.0 .* transpose(lambda) * Diagonal(1.0./ (vec(vel2d).^2) )
+    gradvec = 2.0 .* lambda ./ vec(vel2d).^3
 
     grad2d = reshape(gradvec,grd.nx,grd.ny)
 
     # end
-    
+    #@warn("change sign to gradient!! FIX IT!!!!")
+    grad2d[:,:] .= grad2d
     return grad2d
 end
 

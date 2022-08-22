@@ -155,3 +155,42 @@ end
 #############################################
 
 
+
+########################################################################
+
+function smoothgradaroundsrc!(grad::AbstractArray,xsrc::Real,ysrc::Real,grd::Grid2D ;
+                              radiuspx::Integer=5)
+
+    isr,jsr = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid)
+    nx,ny = grd.nx,grd.ny
+
+    rmax = (radiuspx-1)*grd.hgrid
+    imin = isr-radiuspx
+    imax = isr+radiuspx
+    jmin = jsr-radiuspx
+    jmax = jsr+radiuspx
+
+    for j=jmin:jmax
+        for i=imin:imax
+            # deal with the borders
+            if i<1 || i>nx || j<1 || j>ny
+                continue
+
+            else
+                xcur = grd.xinit + (i-1)*grd.hgrid
+                ycur = grd.yinit + (j-1)*grd.hgrid
+                # inverse of geometrical spreading
+                r = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2)
+                if r<=rmax
+                    # normalized inverse of geometrical spreading
+                    att = r/rmax
+                    grad[i,j] *= att
+                end
+            end
+        end
+    end
+
+    return 
+end
+
+########################################################################
