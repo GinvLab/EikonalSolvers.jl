@@ -494,10 +494,11 @@ function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
    
     ##================================
     slowness = 1.0./vel
-    neigh = [1  0;
-             0  1;
-            -1  0;
-             0 -1]
+    # static array
+    neigh = SA[1  0;
+               0  1;
+              -1  0;
+               0 -1]
 
     #-------------------------------
     ## init FMM 

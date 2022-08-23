@@ -677,7 +677,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     ######################################################
     #-------------------------------
     ## init FMM 
-    neigh = [1  0  0;
+    neigh = SA[1  0  0;
              0  1  0;
             -1  0  0;
              0 -1  0;
@@ -913,7 +913,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     ######################################################
     #-------------------------------
     ## init FMM 
-    neigh = [1  0  0;
+    neigh = SA[1  0  0;
              0  1  0;
             -1  0  0;
              0 -1  0;
@@ -1080,19 +1080,19 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},
         ##
         ## Central differences in Leung & Qian, 2006 scheme!
         ##  
-        if !isout2nd
-            ##
-            ## Fourth order central diff O(h^4); a,b computed in between nodes of velocity
-            ##  dh = 2*dist because distance from edge of cells is dh/2
-            ## 12*h => 12*dh/2 = 6*dh
-            aback = -( -tt[i+1,j,k]+8.0*tt[i,j,k]-8.0*tt[i-1,j,k]+tt[i-2,j,k] )/(6.0*dh)
-            aforw = -( -tt[i+2,j,k]+8.0*tt[i+1,j,k]-8.0*tt[i,j,k]+tt[i-1,j,k] )/(6.0*dh)
-            bback = -( -tt[i,j+1,k]+8.0*tt[i,j,k]-8.0*tt[i,j-1,k]+tt[i,j-2,k] )/(6.0*dh)
-            bforw = -( -tt[i,j+2,k]+8.0*tt[i,j+1,k]-8.0*tt[i,j,k]+tt[i,j-1,k] )/(6.0*dh)
-            cback = -( -tt[i,j,k+1]+8.0*tt[i,j,k]-8.0*tt[i,j,k-1]+tt[i,j,k-2] )/(6.0*dh)
-            cforw = -( -tt[i,j,k+2]+8.0*tt[i,j,k+1]-8.0*tt[i,j,k]+tt[i,j,k-1] )/(6.0*dh)
+        # if !isout2nd
+        #     ##
+        #     ## Fourth order central diff O(h^4); a,b computed in between nodes of velocity
+        #     ##  dh = 2*dist because distance from edge of cells is dh/2
+        #     ## 12*h => 12*dh/2 = 6*dh
+        #     aback = -( -tt[i+1,j,k]+8.0*tt[i,j,k]-8.0*tt[i-1,j,k]+tt[i-2,j,k] )/(6.0*dh)
+        #     aforw = -( -tt[i+2,j,k]+8.0*tt[i+1,j,k]-8.0*tt[i,j,k]+tt[i-1,j,k] )/(6.0*dh)
+        #     bback = -( -tt[i,j+1,k]+8.0*tt[i,j,k]-8.0*tt[i,j-1,k]+tt[i,j-2,k] )/(6.0*dh)
+        #     bforw = -( -tt[i,j+2,k]+8.0*tt[i,j+1,k]-8.0*tt[i,j,k]+tt[i,j-1,k] )/(6.0*dh)
+        #     cback = -( -tt[i,j,k+1]+8.0*tt[i,j,k]-8.0*tt[i,j,k-1]+tt[i,j,k-2] )/(6.0*dh)
+        #     cforw = -( -tt[i,j,k+2]+8.0*tt[i,j,k+1]-8.0*tt[i,j,k]+tt[i,j,k-1] )/(6.0*dh)
             
-        else
+        # else
             ##
             ## Central diff (Leung & Qian, 2006); a,b computed in between nodes of velocity
             ##  dh = 2*dist because distance from edge of cells is dh/2
@@ -1104,7 +1104,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},
             cback = -(tt[i,j,k]  -tt[i,j,k-1])/dh
             cforw = -(tt[i,j,k+1]-tt[i,j,k])/dh
 
-        end         
+        #end         
     end                    
 
     ##-----------------------------------

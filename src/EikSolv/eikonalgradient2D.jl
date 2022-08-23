@@ -114,7 +114,8 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
         if adjalgo=="gradFMM_hiord_discradj"
             # Discrete adjoint formulation
             # Variables ordered according to FMM order
-            ttgrdonesrc,idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
+            ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
+            println()
 
         elseif adjalgo=="gradFMM_podlec"
             ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
@@ -133,7 +134,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFMM_hiord_discradj"
             # projection operator P ordered according to FMM order
-            P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idx_fmmord1,coordrec[s])
+            P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idxconv,coordrec[s])
 
         else
             ## ttime at receivers
@@ -149,8 +150,8 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         if adjalgo=="gradFMM_hiord_discradj"
             # discrete adjoint formulation
-            grad1 .+= discradjoint_hiord_SINGLESRC(idx_fmmord1,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
-                                                   P_fmmord1,pickobs1[s],stdobs[s],grd,vel)
+            grad1 .+= discradjoint_hiord_SINGLESRC(idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
+                                                   P_fmmord1,pickobs1[s],stdobs[s],vel)
 
         elseif adjalgo=="gradFS_podlec"
 
@@ -625,7 +626,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
     onarec = recboxlocgrad!(tt,lambda,ttpicks,grd,rec,pickobs,stdobs,staggeredgrid=true)
     
     ######################################################
-    neigh = [1  0;
+    neigh = SA[1  0;
              0  1;
             -1  0;
              0 -1]
@@ -841,7 +842,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
 
     
     ######################################################
-    neigh = [1  0;
+    neigh = SA[1  0;
              0  1;
             -1  0;
              0 -1]

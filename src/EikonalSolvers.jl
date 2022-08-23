@@ -36,7 +36,7 @@ using LinearAlgebra
 using OffsetArrays
 using SparseArrays
 using DocStringExtensions
-
+using StaticArrays
 
 # using LinearAlgebra
 ## For parallelisation

@@ -792,12 +792,12 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     
     ##==========================================
     ## init FMM 
-    neigh = [1  0  0;
-             0  1  0;
-            -1  0  0;
-             0 -1  0;
-             0  0  1;
-             0  0 -1]
+    neigh = SA[1  0  0;
+               0  1  0;
+              -1  0  0;
+               0 -1  0;
+               0  0  1;
+               0  0 -1]
 
     status = Array{Int64}(undef,ntx,nty,ntz)
     status[:,:,:] .= 0   ## set all to far
@@ -1283,12 +1283,12 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     ##===========================================================================================    
     #-------------------------------
     ## init FMM 
-    neigh = [1  0  0;
-             0  1  0;
-            -1  0  0;
-             0 -1  0;
-             0  0  1;
-             0  0 -1]
+    neigh = SA[1  0  0;
+               0  1  0;
+              -1  0  0;
+               0 -1  0;
+               0  0  1;
+               0  0 -1]
 
     ## get all i,j,k accepted
     ijkss = findall(status.==2) 

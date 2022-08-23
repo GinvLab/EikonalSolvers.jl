@@ -116,50 +116,16 @@ end
 #     return gr,gr2
 # end
 
-
-########################################################################
-
-# function smoothgradatsource2D!(grad::AbstractArray,ijsrcs::Array{Int64,2} ;
-#                              radiuspx::Integer=5)
-
-#     isr = ijsrcs[1]
-#     jsr = ijsrcs[2]
-#     nx,ny = size(grad)
-
-#     rmax = radiuspx
-#     imin = isr-radiuspx
-#     imax = isr+radiuspx
-#     jmin = jsr-radiuspx
-#     jmax = jsr+radiuspx
-
-#     for j=jmin:jmax
-#         for i=imin:imax
-#             # deal with the borders
-#             if i<1 || i>nx || j<1 || j>ny
-#                 continue
-#             else
-#                 # inverse of geometrical spreading
-#                 r = sqrt(float(i-isr)^2+float(j-jsr)^2)
-#                 if r<=rmax
-#                     # normalized inverse of geometrical spreading
-#                     att = r/rmax
-#                     grad[i,j] *= att
-#                 end
-#             end
-#         end
-#     end
-
-#     return 
-# end
-
-#############################################
-
-
-
 ########################################################################
 
 function smoothgradaroundsrc!(grad::AbstractArray,xsrc::Real,ysrc::Real,grd::Grid2D ;
-                              radiuspx::Integer=5)
+                              radiuspx::Integer)
+    ## no smoothing
+    if radiuspx==0
+        return
+    elseif radiuspx<0
+        error("smoothgradaroundsrc!(): 'radius'<0 ")
+    end
 
     isr,jsr = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid)
     nx,ny = grd.nx,grd.ny
@@ -194,3 +160,87 @@ function smoothgradaroundsrc!(grad::AbstractArray,xsrc::Real,ysrc::Real,grd::Gri
 end
 
 ########################################################################
+
+# function raytrace2doneshot(ttime::Array{Float64,2},grd::Grid2D,coordrec::Array{Float64,2},
+#                            coordsrc::Vector{Float64})
+
+#     nx,ny = grd.nx,grd.ny
+#     nrec = size(coordrec,1)
+#     HUGE = 1e30
+#     tmprayij = MVector(0,0)
+
+#     # indices for exploring neighboring points
+#     neigh = SA[1  0;
+#                0  1;
+#               -1  0;
+#                0 -1;
+#                1  1;
+#               -1  1;
+#                1 -1;
+#               -1 -1]
+
+#     raycoo = zeros(nx*ny,2)
+#     rays = Vector{Array{Float64,2}}(undef,nrec)
+#     tmpi,tmpj = 0,0
+#     nelemray = 0
+
+#     for r=1:nrec
+
+#         xrec,yrec = coordrec[r,1],coordrec[r,2]
+#         raycoo[:,:] .= 0.0
+        
+#         # initial coordinates, i.e., receiver location
+#         raycoo[1,:] .= (xrec,yrec)
+
+#         # find the closest node to the source point
+#         icur,jcur = findclosestnode(xrec,yrec,grd.xinit,grd.yinit,grd.hgrid)
+
+#         @show icur,jcur
+#         ## single ray
+#         smallesttt = ttime[icur,jcur]
+#         l=2
+#         notonsource = true
+#         while notonsource
+
+
+#             display(ttime[icur-1:icur+1,jcur-1:jcur+1])
+
+#             foundsmallertt = false
+#             for ne=1:8 ## eight neighbors
+#                 i = icur + neigh[ne,1]
+#                 j = jcur + neigh[ne,2]
+#                 ## if the point is out of bounds skip this iteration
+#                 if (i>nx) || (i<1) || (j>ny) || (j<1)
+#                     continue
+#                 end
+
+#                 if ttime[i,j]<smallesttt
+#                     smallesttt = ttime[i,j]
+#                     tmprayij[:] .= (i,j)
+#                     foundsmallertt = true
+#                     #@show i,j,smallesttt
+#                 end
+#             end
+
+#             if foundsmallertt
+#                 #@show l,tmprayij
+#                 icur,jcur = tmprayij[1],tmprayij[2]
+#                 raycoo[l,:] .= (grd.hgrid*(tmprayij[1]-1)+grd.xinit,grd.hgrid*(tmprayij[2]-1)+grd.yinit)
+#                 l+=1
+
+#                 #@show icur,jcur,smallesttt
+#             else
+#                 raycoo[l,:] .= coordsrc[:]
+#                 nelemray = l
+#                 notonsource = false
+#             end
+
+#         end # while
+
+#         #@show nelemray
+#         rays[r] = raycoo[1:nelemray,:]
+
+#     end # r=1:nrec
+
+#     return rays
+# end
