@@ -115,7 +115,6 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
             # Discrete adjoint formulation
             # Variables ordered according to FMM order
             ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
-            println()
 
         elseif adjalgo=="gradFMM_podlec"
             ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
