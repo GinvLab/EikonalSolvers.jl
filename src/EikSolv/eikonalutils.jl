@@ -390,6 +390,50 @@ function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksob
 end
 
 ###################################################
+
+# structs for sparse matrices to represent derivatives (discrete adjoint)
+
+struct VecSPDerivMat
+    i::Vector{Int64}
+    j::Vector{Int64}
+    v::Vector{Float64}
+    Nnnz::Base.RefValue{Int64}
+    Nsize::Vector{Int64}
+
+    function VecSPDerivMat(; i,j,v,Nsize)
+        Nnnz = Ref(0)
+        new(i,j,v,Nnnz,Nsize) 
+    end
+end
+
+##=======================================================
+
+function addentry!(D::VecSPDerivMat,i::Integer,j::Integer,v::Float64)
+    p = D.Nnnz[]+1
+    D.i[p] = i
+    D.j[p] = j
+    D.v[p] = v
+    D.Nnnz[] = p 
+    return
+end
+
+###################################################
+
+function cart2lin(i::Integer,j::Integer,ni::Integer)
+    l = (j-1)*ni + i
+    return l
+end
+
+
+function lin2cart!(l::Integer,ni::Integer,point::MVector) 
+    point[2] = div(l-1,ni) + 1
+    point[1] = l-(point[2]-1)*ni
+    return 
+end
+
+###################################################
+
+###################################################
 #end # module EikUtils                           ##
 ###################################################
 

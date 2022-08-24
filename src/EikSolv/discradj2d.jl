@@ -1,68 +1,7 @@
 
-
 ##############################################################################
 
-##=======================================================
-# structs for sparse matrices to represent derivatives
-
-struct VecSPDerivMat
-    i::Vector{Int64}
-    j::Vector{Int64}
-    v::Vector{Float64}
-    Nnnz::Base.RefValue{Int64}
-    Nsize::Vector{Int64}
-
-    function VecSPDerivMat(; i,j,v,Nsize)
-        Nnnz = Ref(0)
-        new(i,j,v,Nnnz,Nsize) 
-    end
-end
-
-function addentry!(D::VecSPDerivMat,i::Integer,j::Integer,v::Float64)
-    p = D.Nnnz[]+1
-    #@show i,j,D.Nsize,p
-    D.i[p] = i
-    D.j[p] = j
-    D.v[p] = v
-    D.Nnnz[] = p 
-    return
-end
-
-##############################################################################
-
-@inline function cart2lin(i::Integer,j::Integer,ni::Integer)
-    l = (j-1)*ni + i
-    # tmpl = LinearIndices((ni,140))[i,j]
-    # @assert l==tmpl
-    return l
-end
-
-# function lin2cart(l::Integer,ni::Integer)
-#     i = div(l,ni) + 1
-#     j = l-(i-1)*ni
-#     return (i,j)
-# end
-
-# mutable struct IJPoint
-#     i::Integer
-#     j::Integer
-# end
-
-@inline function lin2cart!(l::Integer,ni::Integer,point::MVector) #point::IJPoint)
-    point[2] = div(l-1,ni) + 1
-    point[1] = l-(point[2]-1)*ni
-    # point.j = div(l-1,ni) + 1
-    # point.i = l-(point.j-1)*ni
-    # tmpi,tmpj = Tuple(CartesianIndices((ni,140))[l])
-    # @show l,point,(tmpi,tmpj)
-    # @assert point.i==tmpi
-    # @assert point.j==tmpj
-    return 
-end
-
-##############################################################################
-
-struct MapOrderGridFMM
+struct MapOrderGridFMM2D
     "Linear grid indices in FMM order (as visited by FMM)"
     lfmm2grid::Vector{Int64} # idx_fmmord
     "Linear FMM indices in grid order"
@@ -72,7 +11,7 @@ struct MapOrderGridFMM
     nx::Int64
     ny::Int64
 
-    function MapOrderGridFMM(nx,ny)
+    function MapOrderGridFMM2D(nx,ny)
         nxXny = nx*ny
         lfmm2grid = zeros(Int64,nxXny)
         lgrid2fmm = zeros(Int64,nxXny)
@@ -84,12 +23,12 @@ struct MapOrderGridFMM
 end
 
 
-struct VarsFMMOrder
+struct VarsFMMOrder2D
     ttime::Vector{Float64}
     vecDx::VecSPDerivMat
     vecDy::VecSPDerivMat
 
-    function VarsFMMOrder(nx,ny)
+    function VarsFMMOrder2D(nx,ny)
         nxXny =  nx*ny
         ttime = zeros(nxXny)
         vecDx = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3),
@@ -133,8 +72,8 @@ function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Gr
     
     ########################
     # discrete adjoint: init stuff
-    idxconv = MapOrderGridFMM(nx,ny)
-    fmmord = VarsFMMOrder(nx,ny)
+    idxconv = MapOrderGridFMM2D(nx,ny)
+    fmmord = VarsFMMOrder2D(nx,ny)
     idD = MVector(0,0)
     codeDxy = zeros(Int64,nxXny,2)
     ijpt = MVector(0,0) #IJPoint(0,0)
@@ -455,7 +394,7 @@ $(TYPEDSIGNATURES)
 
  Set the coefficients (elements) of the derivative matrices in the x and y directions.
 """
-function setcoeffderiv!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFMM,
+function setcoeffderiv!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFMM2D,
                         codeDxy_orig,allcoeff,ijpt; axis)
                         #irow,idxconv,codeDxy_orig,allcoeff,ijpt; axis)
                     
