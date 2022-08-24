@@ -10,15 +10,13 @@ struct MapOrderGridFMM3D
     # lin2cart::CartesianIndices
     nx::Int64
     ny::Int64
+    nz::Int64
 
-    function MapOrderGridFMM2D(nx,ny)
-        nxXny = nx*ny
-        lfmm2grid = zeros(Int64,nxXny)
-        lgrid2fmm = zeros(Int64,nxXny)
-        # cart2lin = LinearIndices((nx,ny))
-        # lin2cart = CartesianIndices((nx,ny))
-        #return new(lfmm2grid,lgrid2fmm,cart2lin,lin2cart,nx,ny)
-        return new(lfmm2grid,lgrid2fmm,nx,ny)
+    function MapOrderGridFMM3D(nx,ny,nz)
+        nxyz = nx*ny*nz
+        lfmm2grid = zeros(Int64,nxyz)
+        lgrid2fmm = zeros(Int64,nxyz)
+        return new(lfmm2grid,lgrid2fmm,nx,ny,nz)
     end
 end
 
@@ -27,14 +25,15 @@ struct VarsFMMOrder3D
     ttime::Vector{Float64}
     vecDx::VecSPDerivMat
     vecDy::VecSPDerivMat
+    vecDy::VecSPDerivMat
 
     function VarsFMMOrder2D(nx,ny)
-        nxXny =  nx*ny
-        ttime = zeros(nxXny)
-        vecDx = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3),
-                                v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )
-        vecDy = VecSPDerivMat( i=zeros(Int64,nxXny*3), j=zeros(Int64,nxXny*3),
-                               v=zeros(nxXny*3), Nsize=[nxXny,nxXny] )
+        nxyz =  nx*ny*nz
+        ttime = zeros(nxyz)
+        vecDx = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
+                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
+        vecDy = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
+                               v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
         return new(ttime,vecDx,vecDy)
     end
 end
