@@ -30,96 +30,6 @@ function distribsrcs(nsrc::Integer,nw::Integer)
     return grpsrc
 end
 
-######################################################
-"""
-$(TYPEDEF)
-
-A structure holding the 2D grid parameters, geometry and size.
-
-The fields are:    
-- `hgrid`: spacing of the grid nodes (same for x and y)
-- `xinit, yinit`: origin of the coordinates of the grid
-- `nx, ny`: number of nodes along x and y for the velocity array
-- `ntx, nty`: number of nodes along x and y for the time array when using a staggered grid, meaningful and used *only* for Podvin and Lecomte stencils
-
-
-# Example
-```julia-repl
-julia> Grid2D(hgrid=5.0,xinit=0.0,yinit=0.0,nx=300,ny=250)
-```
-"""
-struct Grid2D #Base.@kwdef 
-    hgrid::Float64
-    xinit::Float64
-    yinit::Float64
-    nx::Int64
-    ny::Int64
-    ntx::Int64
-    nty::Int64
-    x::Vector{Float64}
-    y::Vector{Float64}
-
-    function Grid2D(; hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
-        ntx::Int64 = nx+1
-        nty::Int64 = ny+1
-        x = [xinit+(i-1)*hgrid for i=1:nx]
-        y = [yinit+(i-1)*hgrid for i=1:ny]
-        new(hgrid,xinit,yinit,nx,ny,ntx,nty,x,y)
-    end
-end
-
-######################################################
-
-"""
-$(TYPEDEF)
-
-A structure holding the 3D grid parameters, geometry and size.
-
-# Fields 
-
-$(TYPEDFIELDS)
-
-The fields are:    
-- `hgrid`: spacing of the grid nodes (same for x, y and z)
-- `xinit, yinit, zinit`: origin of the coordinates of the grid
-- `nx, ny, nz`: number of nodes along x and y for the velocity array
-- `ntx, nty, ntz`: number of nodes along x and y for the time array when using a staggered grid, meaningful and used *only* for Podvin and Lecomte stencils
-
-
-# Example
-```julia-repl
-julia> Grid3D(hgrid=5.0,xinit=0.0,yinit=0.0,zinit=0.0,nx=60,ny=60,nz=40)
-```
-"""
-struct Grid3D #Base.@kwdef
-    hgrid::Float64
-    xinit::Float64
-    yinit::Float64
-    zinit::Float64
-    nx::Int64
-    ny::Int64
-    nz::Int64
-    ntx::Int64
-    nty::Int64
-    ntz::Int64
-    x::Vector{Float64}
-    y::Vector{Float64}
-    z::Vector{Float64}
-    
-    ## constructor function
-    function Grid3D(; hgrid::Float64,xinit::Float64,yinit::Float64, zinit::Float64,
-                    nx::Int64,ny::Int64,nz::Int64)
-        ntx::Int64 = nx+1
-        nty::Int64 = ny+1
-        ntz::Int64 = nz+1
-        x = [xinit+(i-1)*hgrid for i=1:nx]
-        y = [yinit+(i-1)*hgrid for i=1:ny]
-        z = [zinit+(i-1)*hgrid for i=1:nz]
-        new(hgrid,xinit,yinit,zinit,nx,ny,nz,ntx,nty,ntz,x,y,z)
-    end
-end
-
-########################################################
 
 """
 $(TYPEDSIGNATURES)
@@ -180,9 +90,12 @@ $(TYPEDSIGNATURES)
 
 Bilinear interpolation.
 """
-function bilinear_interp(f::Array{Float64,2},hgrid::Float64,
-                         xinit::Float64,yinit::Float64, xreq::Float64,yreq::Float64;
+function bilinear_interp(f::Array{Float64,2},grd::Grid2D, xreq::Float64,yreq::Float64;
                          return_coeffonly::Bool=false)
+    hgrid = grd.hgrid
+    xinit = grd.xinit
+    yinit = grd.yinit
+
     nx,ny = size(f)
     ## rearrange such that the coordinates of corners are (0,0), (0,1), (1,0), and (1,1)
     xh=(xreq-xinit)/hgrid
@@ -391,23 +304,6 @@ end
 
 ###################################################
 
-# structs for sparse matrices to represent derivatives (discrete adjoint)
-
-struct VecSPDerivMat
-    i::Vector{Int64}
-    j::Vector{Int64}
-    v::Vector{Float64}
-    Nnnz::Base.RefValue{Int64}
-    Nsize::Vector{Int64}
-
-    function VecSPDerivMat(; i,j,v,Nsize)
-        Nnnz = Ref(0)
-        new(i,j,v,Nnnz,Nsize) 
-    end
-end
-
-##=======================================================
-
 function addentry!(D::VecSPDerivMat,i::Integer,j::Integer,v::Float64)
     p = D.Nnnz[]+1
     D.i[p] = i
@@ -424,6 +320,7 @@ function cart2lin(i::Integer,j::Integer,ni::Integer)
     return l
 end
 
+###################################################
 
 function lin2cart!(l::Integer,ni::Integer,point::MVector) 
     point[2] = div(l-1,ni) + 1
@@ -431,10 +328,6 @@ function lin2cart!(l::Integer,ni::Integer,point::MVector)
     return 
 end
 
-###################################################
-
-###################################################
-#end # module EikUtils                           ##
 ###################################################
 
 

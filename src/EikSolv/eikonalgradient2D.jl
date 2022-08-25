@@ -21,30 +21,41 @@ The computations are run in parallel depending on the number of workers (nworker
 - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays 
 - `pickobs`: observed traveltime picks
 - `stdobs`: standard deviation of error on observed traveltime picks, an array with same shape than `pickobs`
-- `gradttalgo`: the algorithm to use to compute the forward and gradient, one amongst the following
-    * "gradFS\\_podlec", fast sweeping method using Podvin-Lecomte stencils for forward, fast sweeping method for adjoint   
-    * "gradFMM\\_podlec," fast marching method using Podvin-Lecomte stencils for forward, fast marching method for adjoint 
-    * "gradFMM\\_hiord", second order fast marching method for forward, high order fast marching method for adjoint 
 - `smoothgrad`: smooth the gradient? true or false
 
 # Returns
 - `grad`: the gradient as a 2D array
 
 """
-function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,2},coordrec::Vector{Array{Float64,2}},
-                     pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
+function gradttime2D(vel::Array{Float64,2}, grd::Union{Grid2D,Grid2DSphere},coordsrc::Array{Float64,2},
+                     coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
+                     stdobs::Vector{Vector{Float64}} ;
                      gradttalgo::String="gradFMM_hiord_discradj",
-                     smoothgradsourceradius::Integer=0,smoothgrad::Bool=false)
+                     smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
 
+    if typeof(grd)==Grid2D
+        simtype = :cartesian
+    elseif typeof(grd)==Grid2DSphere
+        simtype = :spherical
+    end
+    if simtype==:cartesian
+        n1,n2 = grd.nx,grd.ny #size(vel)  ## NOT A STAGGERED GRID!!!
+        ax1min,ax1max = grd.x[1],grd.x[end]
+        ax2min,ax2max = grd.y[1],grd.y[end]
+    elseif simtype==:spherical
+        n1,n2 = grd.nr,grd.nθ
+        ax1min,ax1max = grd.r[1],grd.r[end]
+        ax2min,ax2max = grd.θ[1],grd.θ[end]
+    end
+
+        # some checks
     @assert size(coordsrc,2)==2
-    #@assert size(coordrec,2)==2
     @assert all(vel.>0.0)
-    @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
-    @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
-
     @assert size(coordsrc,1)==length(coordrec)
+    @assert all(ax1min.<=coordsrc[:,1].<=ax1max)
+    @assert all(ax2min.<=coordsrc[:,2].<=ax2max)
 
-    nsrc=size(coordsrc,1)
+    nsrc = size(coordsrc,1)
     nw = nworkers()
 
     ## calculate how to subdivide the srcs among the workers
@@ -69,7 +80,7 @@ function gradttime2D(vel::Array{Float64,2}, grd::Grid2D,coordsrc::Array{Float64,
 
     ## smooth gradient
     if smoothgrad
-        l = 3  # 5 pixels kernel
+        l = 5  # 5 pixels kernel
         grad = smoothgradient(l,grad)
     end
  
@@ -85,19 +96,12 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
-                         coordrec::Vector{Array{Float64,2}},grd::Grid2D,
-                         stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
-                         adjalgo::String,smoothgradsourceradius::Integer)
-
+                           coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid3D},
+                           stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
+                           adjalgo::String,smoothgradsourceradius::Integer )
+                           
     nx,ny=size(vel)
     nsrc = size(xysrc,1)
-    #nrec = size(coordrec,1)                
-    #ttpicks1 = zeros(nrec)
-    # ttpicks1 = Vector{Vector{Float64}}(undef,nsrc)
-    # for i=1:nsrc
-    #     curnrec = size(coordrec[i],1) 
-    #     ttpicks1[i] = zeros(curnrec)
-    # end
 
     grad1 = zeros(nx,ny)
   
@@ -109,68 +113,17 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
         ttpicks1 = zeros(curnrec)
 
         ###########################################
-        ## calc ttime
+        ## calc ttime, etc.
+        ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord(vel,xysrc[s,:],grd,dodiscradj=true)
 
-        if adjalgo=="gradFMM_hiord_discradj"
-            # Discrete adjoint formulation
-            # Variables ordered according to FMM order
-            ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord_discradj(vel,xysrc[s,:],grd)
-
-        elseif adjalgo=="gradFMM_podlec"
-            ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
-      
-        elseif adjalgo=="gradFMM_hiord"
-            ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
-
-        elseif adjalgo=="gradFS_podlec"
-            ttgrdonesrc = ttFS_podlec(vel,xysrc[s,:],grd)
- 
-        else
-            println("\ncalcgradsomesrc(): Wrong adjalgo name: $(adjalgo)... \n")
-            return nothing
-        end
-            
-
-        if adjalgo=="gradFMM_hiord_discradj"
-            # projection operator P ordered according to FMM order
-            P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idxconv,coordrec[s])
-
-        else
-            ## ttime at receivers
-            for i=1:curnrec
-                ttpicks1[i] = bilinear_interp( ttgrdonesrc,grd.hgrid,grd.xinit,
-                                               grd.yinit,coordrec[s][i,1],coordrec[s][i,2] )
-            end
-        end
+        # projection operator P ordered according to FMM order
+        P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idxconv,coordrec[s])
 
         ###########################################
-        ## compute gradient for last ttime
-        ##  add gradients from different sources
+        # discrete adjoint formulation
+        grad1 .+= discradjoint_FMM_SINGLESRC(idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
+                                                 P_fmmord1,pickobs1[s],stdobs[s],vel)
 
-        if adjalgo=="gradFMM_hiord_discradj"
-            # discrete adjoint formulation
-            grad1 .+= discradjoint_hiord_SINGLESRC(idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
-                                                   P_fmmord1,pickobs1[s],stdobs[s],vel)
-
-        elseif adjalgo=="gradFS_podlec"
-
-            grad1 .+= eikgrad_FS_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],grd,
-                                     pickobs1[s],ttpicks1,stdobs[s])
-
-        elseif adjalgo=="gradFMM_podlec"
-
-            grad1 .+= eikgrad_FMM_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],
-                                          grd,pickobs1[s],ttpicks1,stdobs[s])
-            
-        elseif adjalgo=="gradFMM_hiord"
-            grad1 .+= eikgrad_FMM_hiord_SINGLESRC(ttgrdonesrc,vel,xysrc[s,:],coordrec[s],
-                                                  grd,pickobs1[s],ttpicks1,stdobs[s])
-
-        else
-            println("Wrong adjalgo algo name: $(adjalgo)... ")
-            return
-        end
-        
         ###########################################
         ## smooth gradient around the source
         smoothgradaroundsrc!(grad1,xysrc[s,1],xysrc[s,2],grd,

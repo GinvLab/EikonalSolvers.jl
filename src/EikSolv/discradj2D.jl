@@ -1,52 +1,13 @@
 
 ##############################################################################
 
-struct MapOrderGridFMM3D
-    "Linear grid indices in FMM order (as visited by FMM)"
-    lfmm2grid::Vector{Int64} # idx_fmmord
-    "Linear FMM indices in grid order"
-    lgrid2fmm::Vector{Int64} # idx_gridord
-    # cart2lin::LinearIndices
-    # lin2cart::CartesianIndices
-    nx::Int64
-    ny::Int64
-    nz::Int64
-
-    function MapOrderGridFMM3D(nx,ny,nz)
-        nxyz = nx*ny*nz
-        lfmm2grid = zeros(Int64,nxyz)
-        lgrid2fmm = zeros(Int64,nxyz)
-        return new(lfmm2grid,lgrid2fmm,nx,ny,nz)
-    end
-end
-
-
-struct VarsFMMOrder3D
-    ttime::Vector{Float64}
-    vecDx::VecSPDerivMat
-    vecDy::VecSPDerivMat
-    vecDy::VecSPDerivMat
-
-    function VarsFMMOrder2D(nx,ny)
-        nxyz =  nx*ny*nz
-        ttime = zeros(nxyz)
-        vecDx = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
-                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-        vecDy = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
-                               v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-        return new(ttime,vecDx,vecDy)
-    end
-end
-
-##############################################################################
-
 # """
 # $(TYPEDSIGNATURES)
 
 #  Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid 
 #   for discrete adjoint calculations. 
 # """
-# function ttFMM_hiord_discradj(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
+# function ttFMM_hiord_discradj(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
                                      
 #     # println(" -> init")
 #     # @time begin
@@ -54,7 +15,7 @@ end
 #     ## Sizes
 #     nx,ny = grd.nx,grd.ny #size(vel)  ## NOT A STAGGERED GRID!!!
 #     hgrid = grd.hgrid
-#     nxXny = nx*ny
+#     nxy = nx*ny
 #     epsilon = 1e-6
 
 #     ## 
@@ -74,7 +35,7 @@ end
 #     idxconv = MapOrderGridFMM2D(nx,ny)
 #     fmmord = VarsFMMOrder2D(nx,ny)
 #     idD = MVector(0,0)
-#     codeDxy = zeros(Int64,nxXny,2)
+#     codeDxy = zeros(Int64,nxy,2)
 #     ijpt = MVector(0,0) #IJPoint(0,0)
       
 #     ###########################################
@@ -87,17 +48,17 @@ end
 #         #
 #         ttaroundsrc_discradj!(status,ttime,vel,src,grd,inittt,idxconv,fmmord )
 
-#         ##-----------------------------------------
-#         ## 
-#         ## DISCRETE ADJOINT WORKAROUND FOR DERIVATIVES
-#         ##
+       
 #         ## get all i,j accepted
 #         ijss = findall(status.==2) 
 #         is = [l[1] for l in ijss]
 #         js = [l[2] for l in ijss]
 #         naccinit = length(ijss)
-
-#         #@show count(ttime.>=0.0),count(fmmord.ttime.>=0.0)
+        
+#         ##-----------------------------------------
+#         ## 
+#         ## DISCRETE ADJOINT WORKAROUND FOR DERIVATIVES
+#         ##
 
 #         # How many initial points to skip, considering them as "onsrc"?
 #         skipnptsDxy = 4
@@ -120,7 +81,7 @@ end
 #             end
 
 #             ## "reconstruct" derivative stencils from known FMM order and arrival times
-#             derivaroundsrcfmm!(l,idxconv,idD)
+#             derivaroundsrcfmm2d!(l,idxconv,idD)
 
 #             if idD==[0,0]
 #                 #################################################################
@@ -224,7 +185,7 @@ end
 #     # @show naccinit
 
 #     ## Init the min binary heap with void arrays but max size
-#     Nmax = nxXny
+#     Nmax = nxy
 #     bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
 
 #     ## pre-allocate
@@ -270,7 +231,7 @@ end
 
 #     #-------------------------------
 #     ## main FMM loop
-#     totnpts = nxXny
+#     totnpts = nxy
 #     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
 #         ## if no top left exit the game...
@@ -344,7 +305,7 @@ end
 #     # @time begin
 
 #     ## pre-compute the mapping between fmm and orig order
-#     for i=1:nxXny
+#     for i=1:nxy
 #         ifm = idxconv.lfmm2grid[i]
 #         idxconv.lgrid2fmm[ifm] = i
 #     end
@@ -352,7 +313,7 @@ end
 #     # pre-determine derivative coefficients for positive codes (0,+1,+2)
 #     allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
     
-#     for irow=1:nxXny
+#     for irow=1:nxy
         
 #         # compute the coefficients for X  derivatives
 #         setcoeffderiv!(fmmord.vecDx,irow,idxconv,codeDxy,allcoeff,ijpt,axis=:X)
@@ -385,157 +346,122 @@ end
 #     return ttime,idxconv,fmmord.ttime,Dx_fmmord,Dy_fmmord
 # end
 
-# ##====================================================================##
+##====================================================================##
 
 
-# """
-# $(TYPEDSIGNATURES)
+"""
+$(TYPEDSIGNATURES)
 
-#  Set the coefficients (elements) of the derivative matrices in the x and y directions.
-# """
-# function setcoeffderiv!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFMM2D,
-#                         codeDxy_orig,allcoeff,ijpt; axis)
-#                         #irow,idxconv,codeDxy_orig,allcoeff,ijpt; axis)
+ Set the coefficients (elements) of the derivative matrices in the x and y directions.
+"""
+function setcoeffderiv!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFMM2D,
+                        codeDxy_orig,allcoeff,ijpt; axis, simtype)
+                        #irow,idxconv,codeDxy_orig,allcoeff,ijpt; axis)
                     
-#                         # idx_orig,idxconv.lfmm2grid,codeDxy_orig,
-#                         # idxconv.lin2cart,idxconv.cart2lin,allcoeff; axis)
-#     nx = D.Nsize[1]
+                        # idx_orig,idxconv.lfmm2grid,codeDxy_orig,
+                        # idxconv.lin2cart,idxconv.cart2lin,allcoeff; axis)
+    nx = D.Nsize[1]
+    #ijpt = MVector(0,0)
+    #@time begin
+#@time begin
+    # get the linear index in the original grid
+    iptorig = idxconv.lfmm2grid[irow]
+#end
 
-#     #@time begin
-# #@time begin
-#     # get the linear index in the original grid
-#     iptorig = idxconv.lfmm2grid[irow]
-# #end
-
-#     # get the (i,j) indices in the original grid
-#     lin2cart!(iptorig,nx,ijpt)
-#     igrid = ijpt[1]
-#     jgrid = ijpt[2]
-#     # get the codes of the derivatives (+1,-2,...)
-#     #codes_orig = view(codeDxy_orig,iptorig,:)
-#     # extract codes for X and Y
-#     codex,codey = codeDxy_orig[iptorig,1],codeDxy_orig[iptorig,2]
+    # get the (i,j) indices in the original grid
+    lin2cart!(iptorig,nx,ijpt)
+    igrid = ijpt[1]
+    jgrid = ijpt[2]
+    # get the codes of the derivatives (+1,-2,...)
+    #codes_orig = view(codeDxy_orig,iptorig,:)
+    # extract codes for X and Y
+    codex,codey = codeDxy_orig[iptorig,1],codeDxy_orig[iptorig,2]
    
 
-#     whX::Int=0
-#     whY::Int=0
+    whX::Int=0
+    whY::Int=0
 
-#     if axis==:X
-#         if codex==0
-#             # no derivatives have been used...
-#             return
-#         else
-#             code = codex
-#             whX=1
-#             whY=0
-#         end
+    if axis==:X
+        if codex==0
+            # no derivatives have been used...
+            return
+        else
+            code = codex
+            whX=1
+            whY=0
+        end
 
-#     elseif axis==:Y
-#         if codey==0
-#             # no derivatives have been used...
-#             return
-#         else
-#             code = codey
-#             whX=0
-#             whY=1
-#         end
+    elseif axis==:Y
+        if codey==0
+            # no derivatives have been used...
+            return
+        else
+            code = codey
+            whX=0
+            whY=1
+        end
         
-#     else
-#         error("if axis==:X ...")
-#     end
+    else
+        error("if axis==:X ...")
+    end
 
+    # ##--------------------------
+    # # closure over idx_orig
+    # function ijgrid2fmmord(i,j)
+    #     iorig = cart2lin(i,j,idxconv.nx)
+    #     #ifmmord = findfirst(idxconv.lfmm2grid.==iorig)
+    #     ifmmord = idxconv.lgrid2fmm[iorig] #findfirst(idxconv.lfmm2grid.==iorig)
+    #     return ifmmord
+    # end
+    # ##--------------------------
 
-#     ##--------------------------
-#     # closure over idx_orig
-#     function ijgrid2fmmord(i,j)
-#         iorig = cart2lin(i,j,idxconv.nx)
-#         #ifmmord = findfirst(idxconv.lfmm2grid.==iorig)
-#         ifmmord = idxconv.lgrid2fmm[iorig] #findfirst(idxconv.lfmm2grid.==iorig)
-#         return ifmmord
-#     end
-#     ##--------------------------
+    # at this point abs(code) can only be 1 or 2
+    abscode = abs(code)
+    signcod = sign(code)
+    ## select first or second order coefficients
+    if abscode==1
+        coeff = allcoeff.firstord
+    else
+        coeff = allcoeff.secondord
+    end
 
-#     abscode = abs(code)
-#     signcod = sign(code)
-#     ## select first or second order coefficients
-#     coeff = allcoeff[abscode]
+    if simtype==:cartesian
+        ## store coefficients in the struct for sparse matrices
+        for p=1:abscode+1 
+            i = igrid + whX*signcod*(p-1)  # start from 0  (e.g., 0,+1,+2)
+            j = jgrid + whY*signcod*(p-1)  # start from 0  (e.g., 0,-1)
+            mycoeff = signcod * coeff[p]
+            ##
+            iorig = cart2lin(i,j,idxconv.nx)
+            ifmmord = idxconv.lgrid2fmm[iorig]
+            ##
+            addentry!(D, irow, ifmmord, mycoeff )
+        end
 
-#     ## store coefficients in the struct for sparse matrices
-#     for p=1:abscode+1 
-#         i = igrid + whX*signcod*(p-1)  # start from 0  (e.g., 0,+1,+2)
-#         j = jgrid + whY*signcod*(p-1)  # start from 0  (e.g., 0,-1)
-#         mycoeff = signcod * coeff[p]
-#         addentry!(D, irow, ijgrid2fmmord(i,j), mycoeff )
-#     end
+    elseif simtype==:spherical
+        ## store coefficients in the struct for sparse matrices
+        for p=1:abscode+1 
+            i = igrid + whX*signcod*(p-1)  # start from 0  (e.g., 0,+1,+2)
+            j = jgrid + whY*signcod*(p-1)  # start from 0  (e.g., 0,-1)
+            if axis==:X
+                mycoeff = signcod * coeff[p]
+            elseif axis==:Y
+                # in this case coeff depends on radius (index i)
+                mycoeff = signcod * coeff[i,p]
+            end
+            ##
+            iorig = cart2lin(i,j,idxconv.nx)
+            ifmmord = idxconv.lgrid2fmm[iorig]
+            ##
+            addentry!(D, irow, ifmmord, mycoeff )
+        end
 
-#     ## old version...
-#     # if axis==:X
-#     #     code = codex
+    end
 
-#     #     if code==0
-#     #         nothing
+    return
+end
 
-#     #     elseif code==-2
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid),    3.0/(2.0*dh) ) #  0   
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid-1,jgrid), -4.0/(2.0*dh) ) # -1
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid-2,jgrid),  1.0/(2.0*dh) ) # -2
-
-#     #     elseif code==-1
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid),    1.0/dh ) #  0
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid-1,jgrid), -1.0/dh ) # -1
-
-#     #     elseif code==1
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid),  -1.0/dh ) #  0
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid+1,jgrid), 1.0/dh ) # +1
-
-#     #     elseif code==2
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid),   -3.0/(2.0*dh) ) #  0
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid+1,jgrid),  4.0/(2.0*dh) ) # +1
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid+2,jgrid), -1.0/(2.0*dh) ) # +2
-
-#     #     else
-#     #         error("setcoeffderiv(): Wrong code...")
-
-#     #     end
-
-#     # elseif axis==:Y
-#     #     code = codey
-
-#     #     if code==0
-#     #         nothing
-
-#     #     elseif code==-2
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid),   -3.0/(2.0*dh) ) #  0                        
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid-1),  4.0/(2.0*dh) ) # -1
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid-2), -1.0/(2.0*dh) ) # -2
-
-#     #     elseif code==-1
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid),    1.0/dh ) #  0
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid-1), -1.0/dh ) # -1
-
-#     #     elseif code==1
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid),  -1.0/dh ) #  0
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid+1), 1.0/dh ) # +1
-
-#     #     elseif code==2
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid),   -3.0/(2.0*dh) ) #  0
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid+1),  4.0/(2.0*dh) ) # +1
-#     #         addentry!(D, irow, ijgrid2fmmord(igrid,jgrid+2), -1.0/(2.0*dh) ) # +2
-
-#     #     else
-#     #         error("setcoeffderiv(): Wrong code...")
-
-#     #     end
-
-#     # else
-#     #     error("setcoeffderiv(): Wrong axis...")
-#     # end
-    
-#     #end # begin
-#     return
-# end
-
-# ##############################################################################
+##############################################################################
 
 # """
 # $(TYPEDSIGNATURES)
@@ -793,96 +719,95 @@ end
 
 # end
 
-# ##############################################################################
+##############################################################################
 
 
-# """
-# $(TYPEDSIGNATURES)
+"""
+$(TYPEDSIGNATURES)
 
-#  Projection operator P containing interpolation coefficients, ordered according to FMM order.
-# """
-# function calcprojttfmmord(ttime,grd,idxconv,coordrec)
+ Projection operator P containing interpolation coefficients, ordered according to FMM order.
+"""
+function calcprojttfmmord(ttime,grd,idxconv,coordrec)
 
     
-#     # calculate the coefficients and their indices using bilinear interpolation
-#     nrec = size(coordrec,1)
-#     Ncoe = 4
-#     P_i = zeros(Int64,nrec*Ncoe)
-#     P_j = zeros(Int64,nrec*Ncoe)
-#     P_v = zeros(nrec*Ncoe)
+    # calculate the coefficients and their indices using bilinear interpolation
+    nrec = size(coordrec,1)
+    Ncoe = 4
+    P_i = zeros(Int64,nrec*Ncoe)
+    P_j = zeros(Int64,nrec*Ncoe)
+    P_v = zeros(nrec*Ncoe)
 
-#     q::Int64=1
-#     for r=1:nrec
-#         coeff,ijcoe = bilinear_interp( ttime,grd.hgrid,grd.xinit,
-#                                        grd.yinit,coordrec[r,1],coordrec[r,2],
-#                                        return_coeffonly=true )
-#         @assert size(ijcoe,1)==4
+    q::Int64=1
+    for r=1:nrec
+        coeff,ijcoe = bilinear_interp( ttime,grd,coordrec[r,1],coordrec[r,2],
+                                       return_coeffonly=true )
+        @assert size(ijcoe,1)==4
 
-#         # convert (i,j) from original grid to fmmord
-#         for l=1:Ncoe
-#             i,j = ijcoe[l,1],ijcoe[l,2]
-#             iorig = cart2lin(i,j,idxconv.nx)
-#             jfmmord = idxconv.lgrid2fmm[iorig]  # jfmmord = findfirst(idxconv.lfmm2grid.==iorig)
-#             # the order for P is:
-#             #   rows: according to coordrec, stdobs, pickobs
-#             #   columns: according to the FMM order
-#             ## P[r,jfmmord] =
-#             P_i[q] = r
-#             P_j[q] = jfmmord
-#             P_v[q] = coeff[l]
-#             q+=1
-#         end
+        # convert (i,j) from original grid to fmmord
+        for l=1:Ncoe
+            i,j = ijcoe[l,1],ijcoe[l,2]
+            iorig = cart2lin(i,j,idxconv.nx)
+            jfmmord = idxconv.lgrid2fmm[iorig]  # jfmmord = findfirst(idxconv.lfmm2grid.==iorig)
+            # the order for P is:
+            #   rows: according to coordrec, stdobs, pickobs
+            #   columns: according to the FMM order
+            ## P[r,jfmmord] =
+            P_i[q] = r
+            P_j[q] = jfmmord
+            P_v[q] = coeff[l]
+            q+=1
+        end
 
-#     end
+    end
 
-#     P = sparse(P_i,P_j,P_v,nrec,grd.nx*grd.ny)
-#     return P
-# end
+    P = sparse(P_i,P_j,P_v,nrec,grd.nx*grd.ny)
+    return P
+end
 
-# ##############################################################################
+##############################################################################
 
 
-# """
-# $(TYPEDSIGNATURES)
+"""
+$(TYPEDSIGNATURES)
 
-#  Solve the discrete adjoint equations and return the gradient of the misfit.
-# """
-# function discradjoint_hiord_SINGLESRC(idxconv,tt,Dx,Dy,P,pickobs,stdobs,vel2d)
-#     #                                                                       #
-#     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
-#     #                                                                       #
+ Solve the discrete adjoint equations and return the gradient of the misfit.
+"""
+function discradjoint_FMM_SINGLESRC(idxconv,tt,Dx,Dy,P,pickobs,stdobs,vel2d)
+    #                                                                       #
+    # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
+    #                                                                       #
 
-#     rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
-#     ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
-#     ##   the solver (\) does not use the correct sparse algo for matrix division
-#     tmplhs = copy(transpose( (2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) ))
-#     lhs = UpperTriangular(tmplhs)
-#     # solve the linear system
-#     lambda_fmmord = lhs\rhs
+    rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
+    ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
+    ##   the solver (\) does not use the correct sparse algo for matrix division
+    tmplhs = copy(transpose( (2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) ))
+    lhs = UpperTriangular(tmplhs)
+    # solve the linear system
+    lambda_fmmord = lhs\rhs
 
-#     # println("reorder lambda, calc grad")
-#     # @time begin
+    # println("reorder lambda, calc grad")
+    # @time begin
 
-#     ##--------------------------------------
-#     # reorder lambda from fmmord to original grid!!
-#     N = length(lambda_fmmord)
-#     lambda = Vector{Float64}(undef,N)
-#     for p=1:N
-#         iorig = idxconv.lfmm2grid[p]
-#         lambda[iorig] = lambda_fmmord[p]
-#     end
+    ##--------------------------------------
+    # reorder lambda from fmmord to original grid!!
+    N = length(lambda_fmmord)
+    lambda = Vector{Float64}(undef,N)
+    for p=1:N
+        iorig = idxconv.lfmm2grid[p]
+        lambda[iorig] = lambda_fmmord[p]
+    end
 
-#     #gradvec = 2.0 .* transpose(lambda) * Diagonal(1.0./ (vec(vel2d).^2) )
-#     gradvec = 2.0 .* lambda ./ vec(vel2d).^3
+    #gradvec = 2.0 .* transpose(lambda) * Diagonal(1.0./ (vec(vel2d).^2) )
+    gradvec = 2.0 .* lambda ./ vec(vel2d).^3
 
-#     grad2d = reshape(gradvec,idxconv.nx,idxconv.ny)
+    grad2d = reshape(gradvec,idxconv.nx,idxconv.ny)
 
-#     # end
-#     grad2d[:,:] .= grad2d
-#     return grad2d
-# end
+    # end
+    grad2d[:,:] .= grad2d
+    return grad2d
+end
 
-# ##############################################################################
+##############################################################################
 
 # """
 # $(TYPEDSIGNATURES)
@@ -891,8 +816,7 @@ end
 #     and then passed on to coarser grid
 # """
 # function ttaroundsrc_discradj!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2},
-#                                vel::Array{Float64,2},src::Vector{Float64},grdcoarse::Grid2D,inittt::Float64, 
-#                                idxconv, fmmord )
+#                                vel::Array{Float64,2},src::Vector{Float64},grdcoarse::Grid2D,inittt::Float64, idxconv, fmmord )
     
 #     ##
 #     ## 2x10 nodes -> 2x50 nodes
@@ -1202,114 +1126,114 @@ end
 # end
 
 
-# #######################################################################################
+#######################################################################################
 
-# function isacoarsegridnode(i::Int,j::Int,downscalefactor::Int,i1coarse::Int,j1coarse)
-#     a = rem(i, downscalefactor)
-#     b = rem(j, downscalefactor)
-#     if a==b==0
-#         icoa = div(i,downscalefactor)+i1coarse
-#         jcoa = div(j,downscalefactor)+j1coarse
-#         return true,icoa,jcoa
-#     else
-#         return false,nothing,nothing
-#     end
-#     return
-# end
+function isacoarsegridnode(i::Int,j::Int,downscalefactor::Int,i1coarse::Int,j1coarse)
+    a = rem(i, downscalefactor)
+    b = rem(j, downscalefactor)
+    if a==b==0
+        icoa = div(i,downscalefactor)+i1coarse
+        jcoa = div(j,downscalefactor)+j1coarse
+        return true,icoa,jcoa
+    else
+        return false,nothing,nothing
+    end
+    return
+end
 
-# #######################################################################################
+#######################################################################################
 
-# """
-# $(TYPEDSIGNATURES)
+"""
+$(TYPEDSIGNATURES)
 
-#  Attempt to reconstruct how derivatives have been calculated in the area of 
-#   the refinement of the source. Updates the codes for derivatives used to construct
-#    Dx and Dy.
-# """
-# function derivaroundsrcfmm!(lseq,idxconv,codeD)
-#     # lipt = index in fmmord in sequential order (1,2,3,4,...)
+ Attempt to reconstruct how derivatives have been calculated in the area of 
+  the refinement of the source. Updates the codes for derivatives used to construct
+   Dx and Dy.
+"""
+function derivaroundsrcfmm2d!(lseq::Integer,idxconv,codeD::MVector)
+    # lipt = index in fmmord in sequential order (1,2,3,4,...)
     
-#     nx = idxconv.nx
-#     ny = idxconv.ny
+    nx = idxconv.nx
+    ny = idxconv.ny
 
-#     ijpt = MVector(0,0)
-#     idxpt = idxconv.lfmm2grid[lseq]
-#     lin2cart!(idxpt,nx,ijpt)
-#     ipt,jpt = ijpt[1],ijpt[2]
+    ijpt = MVector(0,0)
+    idxpt = idxconv.lfmm2grid[lseq]
+    lin2cart!(idxpt,nx,ijpt)
+    ipt,jpt = ijpt[1],ijpt[2]
     
-#     codeD[:] .= 0
-#     for axis=1:2
+    codeD[:] .= 0
+    for axis=1:2
 
-#         chosenidx = lseq
-#         for dir=1:2
+        chosenidx = lseq
+        for dir=1:2
 
-#             ## map the 4 cases to an integer as in linear indexing...
-#             lax = dir + 2*(axis-1)
-#             if lax==1 # axis==1
-#                 ish = 1
-#                 jsh = 0
-#             elseif lax==2 # axis==1
-#                 ish = -1
-#                 jsh = 0
-#             elseif lax==3 # axis==2
-#                 ish = 0
-#                 jsh = 1
-#             elseif lax==4 # axis==2
-#                 ish = 0
-#                 jsh = -1
-#             end
+            ## map the 4 cases to an integer as in linear indexing...
+            lax = dir + 2*(axis-1)
+            if lax==1 # axis==1
+                ish = 1
+                jsh = 0
+            elseif lax==2 # axis==1
+                ish = -1
+                jsh = 0
+            elseif lax==3 # axis==2
+                ish = 0
+                jsh = 1
+            elseif lax==4 # axis==2
+                ish = 0
+                jsh = -1
+            end
             
-#             ##=========================
-#             ## first order
-#             i = ipt+ish
-#             j = jpt+jsh
+            ##=========================
+            ## first order
+            i = ipt+ish
+            j = jpt+jsh
 
-#             ## check if on boundaries
-#             isonb1st,isonb2nd = isonbord(i,j,nx,ny)
+            ## check if on boundaries
+            isonb1st,isonb2nd = isonbord(i,j,nx,ny)
 
-#             if !isonb1st
-#                 ## calculate the index of the neighbor in the fmmord
-#                 l = cart2lin(i,j,nx)
-#                 #idxne1 = findfirst(idxconv.lfmm2grid.==l)
-#                 idxne1 = idxconv.lgrid2fmm[l]
+            if !isonb1st
+                ## calculate the index of the neighbor in the fmmord
+                l = cart2lin(i,j,nx)
+                #idxne1 = findfirst(idxconv.lfmm2grid.==l)
+                idxne1 = idxconv.lgrid2fmm[l]
                 
-#                 #@show lseq,l,idxne1,chosenidx
+                #@show lseq,l,idxne1,chosenidx
             
-#                 if idxne1!=nothing && idxne1<chosenidx                   
+                if idxne1!=nothing && idxne1<chosenidx                   
 
-#                     # to make sure we chose correctly the direction
-#                     chosenidx = idxne1
-#                     # save derivative choices [first order]
-#                     axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+                    # to make sure we chose correctly the direction
+                    chosenidx = idxne1
+                    # save derivative choices [first order]
+                    axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
 
-#                     if !isonb2nd
-#                         ##=========================
-#                         ## second order
-#                         i = ipt + 2*ish
-#                         j = jpt + 2*jsh
+                    if !isonb2nd
+                        ##=========================
+                        ## second order
+                        i = ipt + 2*ish
+                        j = jpt + 2*jsh
                         
-#                         ## calculate the index of the neighbor in the fmmord
-#                         l = cart2lin(i,j,nx)
-#                         idxne2 = idxconv.lgrid2fmm[l]
+                        ## calculate the index of the neighbor in the fmmord
+                        l = cart2lin(i,j,nx)
+                        idxne2 = idxconv.lgrid2fmm[l]
                         
-#                         ##===========================================================
-#                         ## WARNING! The traveltime for the second order point must
-#                         ##   be smaller than the one for the first order for selecting
-#                         ##   second order. Otherwise first order only.
-#                         ##  Therefore we compare idxne2<idxne1 instead of idxne2<idxpt
-#                         ##===========================================================
-#                         if idxne2<idxne1
-#                             # save derivative choices [second order]
-#                             axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
-#                         end
+                        ##===========================================================
+                        ## WARNING! The traveltime for the second order point must
+                        ##   be smaller than the one for the first order for selecting
+                        ##   second order. Otherwise first order only.
+                        ##  Therefore we compare idxne2<idxne1 instead of idxne2<idxpt
+                        ##===========================================================
+                        if idxne2<idxne1
+                            # save derivative choices [second order]
+                            axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
+                        end
 
-#                     end
-#                 end
-#             end            
-#         end
-#     end
+                    end
+                end
+            end            
+        end
+    end
 
-#     return 
-# end
+    return 
+end
 
-# #######################################################################################
+#######################################################################################

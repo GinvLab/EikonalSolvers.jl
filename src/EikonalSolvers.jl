@@ -21,6 +21,7 @@ module EikonalSolvers
 
 
 export Grid2D,traveltime2D,gradttime2D
+export traveltime2Dgen,gradttime2Dgen
 export Grid2DSphere,traveltime2Dsphere,gradttime2Dsphere
 
 export Grid3D,traveltime3D,gradttime3D
@@ -47,13 +48,15 @@ include("BinHeap/BinHeaps.jl")
 using .BinHeaps
 
 ## general utils
+include("EikSolv/eikstructs.jl")
 include("EikSolv/eikonalutils_spherical.jl")
 include("EikSolv/eikonalutils.jl")
 include("EikSolv/utils.jl")
 
 ## 2D stuff
 include("EikSolv/eikonalforward2D.jl")
-include("EikSolv/discradj2d.jl")
+include("EikSolv/eikonal2D_generic.jl")
+include("EikSolv/discradj2D.jl")
 include("EikSolv/eikonalgradient2D.jl")
 # spherical/polar coodinates
 include("EikSolv/eikonalforward2D_spherical.jl")
@@ -61,7 +64,8 @@ include("EikSolv/eikonalgradient2D_spherical.jl")
 
 ## 3D stuff
 include("EikSolv/eikonalforward3D.jl")
-include("EikSolv/discradj3d.jl")
+include("EikSolv/eikonal3D_generic.jl")
+include("EikSolv/discradj3D.jl")
 include("EikSolv/eikonalgradient3D.jl")
 # spherical/polar coodinates
 include("EikSolv/eikonalforward3D_spherical.jl")
