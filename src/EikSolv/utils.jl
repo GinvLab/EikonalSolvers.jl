@@ -118,14 +118,20 @@ end
 
 ########################################################################
 
-function smoothgradaroundsrc!(grad::AbstractArray,xsrc::Real,ysrc::Real,grd::Grid2D ;
+function smoothgradaroundsrc!(grad::AbstractArray,xsrc::Real,ysrc::Real,grd::Union{Grid2D,Grid2DSphere} ;
                               radiuspx::Integer)
-    ## no smoothing
+
+      ## no smoothing
     if radiuspx==0
         return
     elseif radiuspx<0
         error("smoothgradaroundsrc!(): 'radius'<0 ")
     end
+
+    if typeof(grd)==Grid2DSphere
+        @warn("smoothgradaroundsrc!() not yet implemented for spherical coordinates.")
+        return
+    end  
 
     isr,jsr = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid)
     nx,ny = grd.nx,grd.ny
@@ -158,6 +164,9 @@ function smoothgradaroundsrc!(grad::AbstractArray,xsrc::Real,ysrc::Real,grd::Gri
 
     return 
 end
+
+########################################################################
+
 
 ########################################################################
 

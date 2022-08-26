@@ -206,6 +206,27 @@ struct MapOrderGridFMM2D
     end
 end
 
+
+struct MapOrderGridFMM3D
+    "Linear grid indices in FMM order (as visited by FMM)"
+    lfmm2grid::Vector{Int64} # idx_fmmord
+    "Linear FMM indices in grid order"
+    lgrid2fmm::Vector{Int64} # idx_gridord
+    # cart2lin::LinearIndices
+    # lin2cart::CartesianIndices
+    nx::Int64
+    ny::Int64
+    nz::Int64
+
+    function MapOrderGridFMM3D(nx,ny,nz)
+        nxyz = nx*ny*nz
+        lfmm2grid = zeros(Int64,nxyz)
+        lgrid2fmm = zeros(Int64,nxyz)
+        return new(lfmm2grid,lgrid2fmm,nx,ny,nz)
+    end
+end
+
+
 ########################################################
 
 # structs for sparse matrices to represent derivatives (discrete adjoint)
@@ -241,17 +262,45 @@ struct VarsFMMOrder2D
     end
 end
 
+struct VarsFMMOrder3D
+    ttime::Vector{Float64}
+    vecDx::VecSPDerivMat
+    vecDy::VecSPDerivMat
+    vecDz::VecSPDerivMat
+
+    function VarsFMMOrder3D(nx,ny)
+        nxyz =  nx*ny*nz
+        ttime = zeros(nxyz)
+        vecDx = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
+                               v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
+        vecDy = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
+                               v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
+        vecDz = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
+                               v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
+
+        return new(ttime,vecDx,vecDy,vecDz)
+    end
+end
+
 ###################################################
 
-struct CoeffDerivCartesian2D
+abstract type CoeffDerivatives end
+
+struct CoeffDerivCartesian <: CoeffDerivatives
     firstord::MVector{2,Float64}
     secondord::MVector{3,Float64}
 end
 
-
-struct CoeffDerivSpherical2D
-    firstord::Vector{Float64}
-    secondord::Vector{Float64}
+struct CoeffDerivSpherical2D <: CoeffDerivatives
+    firstord::Matrix{Float64}
+    secondord::Matrix{Float64}
 end
+
+struct CoeffDerivSpherical3D <: CoeffDerivatives
+    firstord::Matrix{Float64}
+    secondord::Matrix{Float64}
+end
+
+
 
 ###################################################

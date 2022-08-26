@@ -66,7 +66,7 @@ function traveltime2D(vel::Array{Float64,2},grd::Union{Grid2D,Grid2DSphere},coor
 
     if returntt
         # return traveltime array and picks at receivers
-        ttime = zeros(grd.nx,grd.ny,nsrc)
+        ttime = zeros(n1,n2,nsrc)
     end
 
     @sync begin
@@ -111,10 +111,10 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
                          returntt::Bool=false )
     
     if typeof(grd)==Grid2D
-        simtype = :cartesian
+        #simtype = :cartesian
         n1,n2 = grd.nx,grd.ny
     elseif typeof(grd)==Grid2DSphere
-        simtype = :spherical
+        #simtype = :spherical
         n1,n2 = grd.nr,grd.nθ
     end
 
@@ -136,13 +136,8 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
 
         ## interpolate at receivers positions
         for i=1:size(coordrec[s],1)
-            if simtype == :cartesian
-                ttpicksGRPSRC[s][i] = bilinear_interp(ttGRPSRC[:,:,s],grd,coordrec[s][i,1],
-                                                      coordrec[s][i,2])
-            elseif simtype == :spherical
-                ttpicksGRPSRC[s][i] = bilinear_interp_sph(ttGRPSRC[:,:,s],grd,coordrec[s][i,1],
-                                                          coordrec[s][i,2])
-            end
+            ttpicksGRPSRC[s][i] = bilinear_interp(ttGRPSRC[:,:,s],grd,coordrec[s][i,1],
+                                                  coordrec[s][i,2])
         end
     end
 
@@ -334,7 +329,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
                 end
 
                 ## "reconstruct" derivative stencils from known FMM order and arrival times
-                derivaroundsrcfmm2d!(l,idxconv,idD)
+                derivaroundsrcfmm2D!(l,idxconv,idD)
 
                 if idD==[0,0]
                     #################################################################
@@ -365,7 +360,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
         if simtype==:cartesian
             onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=false )
         elseif simtype==:spherical
-            onsrc = sourceboxloctt_sph!(ttime,vel,src,grd, staggeredgrid=false )
+            onsrc = sourceboxloctt_sph!(ttime,vel,src,grd )
         end
 
         ##
@@ -397,7 +392,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
                 # ordered index
                 p = spidx[l]
                 # go from cartesian (i,j) to linear
-                idxconv.lfmm2grid[l] = cart2lin(is[p],js[p],n1)
+                idxconv.lfmm2grid[l] = cart2lin2D(is[p],js[p],n1)
 
                 ######################################
                 # store arrival time for first points in FMM order
@@ -432,12 +427,6 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
                0  1;
               -1  0;
                0 -1]
-    
-    # ## get all i,j accepted
-    # ijss = findall(status.==2) 
-    # is = [l[1] for l in ijss]
-    # js = [l[2] for l in ijss]
-    # naccinit = length(ijss)
 
     ## Init the min binary heap with void arrays but max size
     Nmax = n1*n2
@@ -466,7 +455,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
                 tmptt = calcttpt_2ndord!(ttime,vel,grd,status,i,j,idD)
 
                 # get handle
-                han = cart2lin(i,j,n1)
+                han = cart2lin2D(i,j,n1)
                 # insert into heap
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
@@ -492,7 +481,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
 
         han,tmptt = pop_minheap!(bheap)
         #ia,ja = ind2sub((n1,n2),han)
-        lin2cart!(han,n1,ptij)
+        lin2cart2D!(han,n1,ptij)
         ia,ja = ptij[1],ptij[2]
         #ja = div(han-1,n1) +1
         #ia = han - n1*(ja-1)
@@ -504,7 +493,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
 
         if dodiscradj
             # store the linear index of FMM order
-            idxconv.lfmm2grid[node] = cart2lin(ia,ja,n1)
+            idxconv.lfmm2grid[node] = cart2lin2D(ia,ja,n1)
             # store arrival time for first points in FMM order
             fmmord.ttime[node] = tmptt  
         end
@@ -525,12 +514,12 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
 
                 ## add tt of point to binary heap and give handle
                 tmptt = calcttpt_2ndord!(ttime,vel,grd,status,i,j,idD)
-                han = cart2lin(i,j,n1)
+                han = cart2lin2D(i,j,n1)
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
                 status[i,j]=1
 
-                 if dodiscradj
+                if dodiscradj
                     # codes of chosen derivatives for adjoint
                     codeDxy[han,:] .= idD
                 end
@@ -541,7 +530,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
                 tmptt = calcttpt_2ndord!(ttime,vel,grd,status,i,j,idD)
 
                 # get handle
-                han = cart2lin(i,j,n1)
+                han = cart2lin2D(i,j,n1)
                 # update the traveltime for this point in the heap
                 update_node_minheap!(bheap,tmptt,han)
 
@@ -556,7 +545,6 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
     end
 
     ##======================================================
-
     if dodiscradj
 
         ## pre-compute the mapping between fmm and orig order
@@ -569,7 +557,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
         if simtype==:cartesian
             hgrid = grd.hgrid
             #allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
-            allcoeffx = CoeffDerivCartesian2D( MVector(-1.0/hgrid,
+            allcoeffx = CoeffDerivCartesian( MVector(-1.0/hgrid,
                                                        1.0/hgrid), 
                                                MVector(-3.0/(2.0*hgrid),
                                                        4.0/(2.0*hgrid),
@@ -582,10 +570,11 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
             ## DEG to RAD !!!!
             Δarc = [grd.r[i] * deg2rad(grd.Δθ) for i=1:grd.nr]
             # coefficients
-            coe_r_1st = [-1.0/Δr,  1.0/Δr]
-            coe_r_2nd = [-3.0/(2.0*Δr),  4.0/(2.0*Δr), -1.0/(2.0*Δr) ]
-            coe_θ_1st = [-1.0 ./ Δarc;  1.0 ./ Δarc ]
-            coe_θ_2nd = [-3.0./(2.0*Δarc); 4.0./(2.0*Δr); -1.0./(2.0*Δarc) ]
+            coe_r_1st = [-1.0/Δr  1.0/Δr]
+            coe_r_2nd = [-3.0/(2.0*Δr)  4.0/(2.0*Δr) -1.0/(2.0*Δr) ]
+            coe_θ_1st = [-1.0 ./ Δarc  1.0 ./ Δarc ]
+            coe_θ_2nd = [-3.0./(2.0*Δarc)  4.0./(2.0*Δarc)  -1.0./(2.0*Δarc) ]
+            #@show size(coe_θ_1st),size(coe_θ_2nd)
 
             allcoeffx = CoeffDerivSpherical2D( coe_r_1st, coe_r_2nd )
             allcoeffy = CoeffDerivSpherical2D( coe_θ_1st, coe_θ_2nd )
@@ -598,11 +587,11 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
         for irow=1:n12
             
             # compute the coefficients for X  derivatives
-            setcoeffderiv!(fmmord.vecDx,irow,idxconv,codeDxy,allcoeffx,ptij,
+            setcoeffderiv2D!(fmmord.vecDx,irow,idxconv,codeDxy,allcoeffx,ptij,
                            axis=:X,simtype=simtype)
             
             # compute the coefficients for Y derivatives
-            setcoeffderiv!(fmmord.vecDy,irow,idxconv,codeDxy,allcoeffy,ptij,
+            setcoeffderiv2D!(fmmord.vecDy,irow,idxconv,codeDxy,allcoeffy,ptij,
                            axis=:Y,simtype=simtype)
             
         end
@@ -632,7 +621,7 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2
     return ttime
 end
 
-##====================================================================##
+##########################################################################
 
 """
 $(TYPEDSIGNATURES)
@@ -915,252 +904,6 @@ function calcttpt_2ndord!(ttime::Array{Float64,2},vel::Array{Float64,2},
 
 end
 
-###########################################################################
-
-# """
-# $(TYPEDSIGNATURES)
-
-#    Compute the traveltime at a given node using 2nd order stencil 
-#     where possible, otherwise revert to 1st order. 
-#    Two-dimensional Cartesian or  spherical grid depending on the type of 'grd'.
-# """
-# function calcttpt_2ndord(ttime::Array{Float64,2},vel::Array{Float64,2},
-#                          grd::Union{Grid2D,Grid2DSphere},status::Array{Int64,2},
-#                          i::Int64,j::Int64)
-    
-#     #######################################################
-#     ##  Local solver Sethian et al., Rawlison et al.  ???##
-#     #######################################################
-
-#     # The solution from the quadratic eq. to pick is the larger, see 
-#     #  Sethian, 1996, A fast marching level set method for monotonically
-#     #  advancing fronts, PNAS
-
-#     if typeof(grd)==Grid2D
-#         simtype=:cartesian
-#     elseif typeof(grd)==Grid2DSphere
-#         simtype=:spherical
-#     end
-
-#     # sizes, etc.
-#     if simtype==:cartesian
-#         n1 = grd.nx
-#         n2 = grd.ny
-#         Δh = MVector(grd.hgrid,grd.hgrid)
-#     elseif simtype==:spherical
-#         n1 = grd.nr
-#         n2 = grd.nθ
-#         Δh = MVector(grd.Δr, grd.r[i]*deg2rad(grd.Δθ))
-#     end
-#     # slowness
-#     slowcurpt = 1.0/vel[i,j]
-
-#     ## Finite differences:
-#     ##
-#     ##  Dx_fwd = (tX[i+1] - tcur[i])/dx 
-#     ##  Dx_bwd = (tcur[i] - tX[i-1])/dx 
-#     ##
-
-#     ##################################################
-#     ### Solve the quadratic equation
-#     #  "A second-order fast marching eikonal solver"
-#     #    James Rickett and Sergey Fomel, 2000
-#     ##################################################
-    
-#     alpha = 0.0
-#     beta  = 0.0
-#     gamma = - slowcurpt^2 ## !!!!
-#     HUGE = 1.0e30
-
-#     ## 2 directions
-#     for axis=1:2
-        
-#         use1stord = false
-#         use2ndord = false
-#         chosenval1 = HUGE
-#         chosenval2 = HUGE
-        
-#         ## two sides for each direction
-#         for l=1:2
-
-#             ## map the 4 cases to an integer as in linear indexing...
-#             lax = l + 2*(axis-1)
-#             if lax==1 # axis==1
-#                 ish = 1
-#                 jsh = 0
-#             elseif lax==2 # axis==1
-#                 ish = -1
-#                 jsh = 0
-#             elseif lax==3 # axis==2
-#                 ish = 0
-#                 jsh = 1
-#             elseif lax==4 # axis==2
-#                 ish = 0
-#                 jsh = -1
-#             end
-
-#             ## check if on boundaries
-#             isonb1st,isonb2nd = isonbord(i+ish,j+jsh,n1,n2)
-                                    
-#             ## 1st order
-#             if !isonb1st && status[i+ish,j+jsh]==2 ## 2==accepted
-#                 testval1 = ttime[i+ish,j+jsh]
-#                 ## pick the lowest value of the two
-#                 if testval1<chosenval1 ## < only
-#                     chosenval1 = testval1
-#                     use1stord = true
-
-#                     ## 2nd order
-#                     ish2::Int64 = 2*ish
-#                     jsh2::Int64 = 2*jsh
-#                     if !isonb2nd && status[i+ish2,j+jsh2]==2 ## 2==accepted
-#                         testval2 = ttime[i+ish2,j+jsh2]
-#                         ## pick the lowest value of the two
-#                         ## <=, compare to chosenval 1, *not* 2!!
-#                         ## This because the direction has already been chosen
-#                         ##  at the line "testval1<chosenval1"
-#                         if testval2<=chosenval1 
-#                             chosenval2=testval2
-#                             use2ndord=true
-#                         else
-#                             chosenval2=HUGE
-#                             use2ndord=false # this is needed!
-#                         end
-#                     end
-                    
-#                 end
-#             end
-#         end # end two sides
-
-#         ## spacing
-#         deltah = Δh[axis]
-                
-#         if use2ndord && use1stord # second order
-#             tmpa2 = 1.0/3.0 * (4.0*chosenval1-chosenval2)
-#             ## curalpha: make sure you multiply only times the
-#             ##   current alpha for beta and gamma...
-#             curalpha = 9.0/(4.0 * deltah^2)
-#             alpha += curalpha
-#             beta  += ( -2.0*curalpha * tmpa2 )
-#             gamma += curalpha * tmpa2^2
-
-#         elseif use1stord # first order
-#             ## curalpha: make sure you multiply only times the
-#             ##   current alpha for beta and gamma...
-#             curalpha = 1.0/deltah^2 
-#             alpha += curalpha
-#             beta  += ( -2.0*curalpha * chosenval1 )
-#             gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
-#         end
-
-#     end
-
-#     ## compute discriminant 
-#     sqarg = beta^2-4.0*alpha*gamma
-
-#     ## To get a non-negative discriminant, need to fulfil:
-#     ##    (tx-ty)^2 - 2*s^2/curalpha <= 0
-#     ##    where tx,ty can be
-#     ##     t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order
-#     ##     t? = chosenval1  if 1st order 
-#     ##  
-#     ## If discriminant is negative (probably because of sharp contrasts in
-#     ##  velocity) revert to 1st order for both x and y
-#     if sqarg<0.0
-
-#         begin
-#             alpha = 0.0
-#             beta  = 0.0
-#             gamma = - slowcurpt^2 ## !!!!
-
-#             ## 2 directions
-#             for axis=1:2
-                
-#                 use1stord = false
-#                 chosenval1 = HUGE
-                
-#                 ## two sides for each direction
-#                 for l=1:2
-
-#                     ## map the 4 cases to an integer as in linear indexing...
-#                     lax = l + 2*(axis-1)
-#                     if lax==1 # axis==1
-#                         ish = 1
-#                         jsh = 0
-#                     elseif lax==2 # axis==1
-#                         ish = -1
-#                         jsh = 0
-#                     elseif lax==3 # axis==2
-#                         ish = 0
-#                         jsh = 1
-#                     elseif lax==4 # axis==2
-#                         ish = 0
-#                         jsh = -1
-#                     end
-
-#                     ## check if on boundaries
-#                     isonb1st,isonb2nd = isonbord(i+ish,j+jsh,n1,n2)
-                    
-#                     ## 1st order
-#                     if !isonb1st && status[i+ish,j+jsh]==2 ## 2==accepted
-#                         testval1 = ttime[i+ish,j+jsh]
-#                         ## pick the lowest value of the two
-#                         if testval1<chosenval1 ## < only
-#                             chosenval1 = testval1
-#                             use1stord = true
-#                         end
-#                     end
-#                 end # end two sides
-
-#                 ## spacing
-#                 deltah = Δh[axis]
-                
-#                 if use1stord # first order
-#                     ## curalpha: make sure you multiply only times the
-#                     ##   current alpha for beta and gamma...
-#                     curalpha = 1.0/deltah^2 
-#                     alpha += curalpha
-#                     beta  += ( -2.0*curalpha * chosenval1 )
-#                     gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
-#                 end
-#             end
-            
-#             ## recompute sqarg
-#             sqarg = beta^2-4.0*alpha*gamma
-
-#         end ## begin...
-
-#         if sqarg<0.0
-
-#             if extrapars.allowfixsqarg==true
-            
-#                 gamma = beta^2/(4.0*alpha)
-#                 sqarg = beta^2-4.0*alpha*gamma
-#                 println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
-                
-#             else
-#                 println("\n To get a non-negative discriminant, need to fulfil: ")
-#                 println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
-#                 println(" where tx,ty can be")
-#                 println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
-#                 println(" t? = chosenval1  if 1st order ")
-                
-#                 error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j)")
-#             end
-#         end
-#     end ## if sqarg<0.0
-
-#     ### roots of the quadratic equation
-#     tmpsq = sqrt(sqarg)
-#     soughtt1 =  (-beta + tmpsq)/(2.0*alpha)
-#     soughtt2 =  (-beta - tmpsq)/(2.0*alpha)
-#     ## choose the largest solution
-#     soughtt = max(soughtt1,soughtt2)
-
-#     return soughtt
-
-# end
-
 ################################################################################
 
 """
@@ -1171,8 +914,7 @@ $(TYPEDSIGNATURES)
 """
 function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2},
                       vel::Array{Float64,2},src::Vector{Float64},grdcoarse::Union{Grid2D,Grid2DSphere},
-                      inittt::Float64 ;
-                      
+                      inittt::Float64 ;                      
                       dodiscradj::Bool=false,idxconv::Union{MapOrderGridFMM2D,Nothing}=nothing,
                       fmmord::Union{VarsFMMOrder2D,Nothing}=nothing )
 
@@ -1187,12 +929,15 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     ##
     ## 2x10 nodes -> 2x50 nodes
     ##
+    downscalefactor::Int = 0
+    noderadius::Int = 0
     if dodiscradj
-        downscalefactor::Int = 5
-        noderadius::Int = 5
+        downscalefactor = 5
+        ## 2 instead of 5 for adjoint to avoid messing up...
+        noderadius = 2 
     else
         downscalefactor = 5
-        noderadius = 3
+        noderadius = 5
     end        
 
     ## find indices of closest node to source in the "big" array
@@ -1201,10 +946,10 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         n1_coarse,n2_coarse = grdcoarse.nx,grdcoarse.ny
         ixsrcglob,iysrcglob = findclosestnode(src[1],src[2],grdcoarse.xinit,grdcoarse.yinit,grdcoarse.hgrid) 
     elseif simtype==:spherical
-        n1_coarse,n2_coarse = grdcoarse.Δr,grdcoarse.Δθ
+        n1_coarse,n2_coarse = grdcoarse.nr,grdcoarse.nθ
         ixsrcglob,iysrcglob = findclosestnode_sph(src[1],src[2],grdcoarse.rinit,grdcoarse.θinit,grdcoarse.Δr,grdcoarse.Δθ) 
     end
-    
+  
     ##
     ## Define chunck of coarse grid
     ##
@@ -1366,7 +1111,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
             oncoa,ia_coarse,ja_coarse = isacoarsegridnode(is[p],js[p],downscalefactor,i1coarse,j1coarse)
             if oncoa
                 # go from cartesian (i,j) to linear
-                idxconv.lfmm2grid[node_coarse] = cart2lin(ia_coarse,ja_coarse,idxconv.nx)
+                idxconv.lfmm2grid[node_coarse] = cart2lin2D(ia_coarse,ja_coarse,idxconv.nx)
 
                 # store arrival time for first points in FMM order
                 fmmord.ttime[node_coarse] = ttime[is[p],js[p]]
@@ -1386,11 +1131,6 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     ## pre-allocate
     tmptt::Float64 = 0.0 
     
-    # ## conversion cart to lin indices, old sub2ind
-    # linid_n1n2 = LinearIndices((n1,n2))
-    # ## conversion lin to cart indices, old ind2sub
-    # lin2cart!( = CartesianIndices((n1,n2))
-    
     ## construct initial narrow band
     for l=1:naccinit ##
         
@@ -1409,7 +1149,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
                 ## add tt of point to binary heap and give handle
                 tmptt = calcttpt_2ndord!(ttime,velfinegrd,grdfine,status,i,j,idD)
                 # get handle
-                han = cart2lin(i,j,n1)
+                han = cart2lin2D(i,j,n1)
                 # insert into heap
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
@@ -1432,7 +1172,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
 
         han,tmptt = pop_minheap!(bheap)
         #ia,ja = ind2sub((n1,n2),han)
-        cija = lin2cart!(han,n1,ptij)
+        cija = lin2cart2D!(han,n1,ptij)
         ia,ja = ptij[1],ptij[2]
         # set status to accepted
         status[ia,ja] = 2 # 2=accepted
@@ -1453,7 +1193,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
             # Discrete adjoint
             if dodiscradj
                 # store the linear index of FMM order
-                idxconv.lfmm2grid[node_coarse] = cart2lin(ia_coarse,ja_coarse,idxconv.nx)
+                idxconv.lfmm2grid[node_coarse] = cart2lin2D(ia_coarse,ja_coarse,idxconv.nx)
                 # store arrival time for first points in FMM order
                 fmmord.ttime[node_coarse] = tmptt
                 # increase the counter
@@ -1502,7 +1242,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
 
                 ## add tt of point to binary heap and give handle
                 tmptt = calcttpt_2ndord!(ttime,velfinegrd,grdfine,status,i,j,idD)
-                han = cart2lin(i,j,n1)
+                han = cart2lin2D(i,j,n1)
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
                 status[i,j]=1                
@@ -1512,7 +1252,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
                 # update the traveltime for this point
                 tmptt = calcttpt_2ndord!(ttime,velfinegrd,grdfine,status,i,j,idD)
                 # get handle
-                han = cart2lin(i,j,n1)
+                han = cart2lin2D(i,j,n1)
                 # update the traveltime for this point in the heap
                 update_node_minheap!(bheap,tmptt,han)
 
@@ -1526,6 +1266,67 @@ end
 
 #######################################################################################
 
+#################################################################################
+
+"""
+$(TYPEDSIGNATURES)
+"""
+function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::AbstractVector,
+                             grd::Grid2DSphere )
+
+    ## source location, etc.      
+    mindistsrc = 1e-5   
+    rsrc,θsrc=srcpos[1],srcpos[2]
+
+    ## regular grid
+    onsrc = zeros(Bool,grd.nr,grd.nθ)
+    onsrc[:,:] .= false
+    ix,iy = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
+    rr = rsrc-((ix-1)*grd.Δr+grd.rinit)
+    rθ = θsrc-((iy-1)*grd.Δθ+grd.θinit)
+
+    halfg = 0.0 #hgrid/2.0
+    ## distance in POLAR COORDINATES
+    ## sqrt(r1^+r2^2 - 2*r1*r2*cos(θ1-θ2))
+    r1=rsrc
+    r2=grd.r[ix]
+    dist = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iy]) )  #sqrt(rr^2+grd.r[ix]^2*rθ^2)
+    #@show dist,src,rr,rθ
+    if dist<=mindistsrc
+        onsrc[ix,iy] = true
+        ttime[ix,iy] = 0.0 
+    else
+        if (rr>=halfg) & (rθ>=halfg)
+            onsrc[ix:ix+1,iy:iy+1] .= true
+        elseif (rr<halfg) & (rθ>=halfg)
+            onsrc[ix-1:ix,iy:iy+1] .= true
+        elseif (rr<halfg) & (rθ<halfg)
+            onsrc[ix-1:ix,iy-1:iy] .= true
+        elseif (rr>=halfg) & (rθ<halfg)
+            onsrc[ix:ix+1,iy-1:iy] .= true
+        end
+        
+        ## set ttime around source ONLY FOUR points!!!
+        ijsrc = findall(onsrc)
+        for lcart in ijsrc
+            i = lcart[1]
+            j = lcart[2]
+            ## regular grid
+            # xp = (i-1)*grd.Δr+grd.rinit
+            # yp = (j-1)*grd.Δθ+grd.θinit
+            ii = Int(floor((rsrc-grd.rinit)/grd.Δr)) +1
+            jj = Int(floor((θsrc-grd.θinit)/grd.Δθ)) +1
+            ##ttime[i,j] = sqrt((rsrc-xp)^2+(θsrc-yp)^2) / vel[ii,jj]
+            ## sqrt(r1^+r2^2 -2*r1*r2*cos(θ1-θ2))
+            r1=rsrc
+            r2=grd.r[ii]
+            distp = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iy]))
+            ttime[i,j] = distp / vel[ii,jj]
+        end
+    end
+
+    return onsrc
+end 
 #########################################################
 #end                                                    #
 #########################################################

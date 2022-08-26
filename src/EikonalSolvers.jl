@@ -1,7 +1,7 @@
 
 #
 # MIT License
-# Copyright (c) 2019 Andrea Zunino
+# Copyright (c) 2022 Andrea Zunino
 # 
 
 ##############################################
@@ -55,18 +55,17 @@ include("EikSolv/utils.jl")
 
 ## 2D stuff
 include("EikSolv/eikonalforward2D.jl")
-include("EikSolv/eikonal2D_generic.jl")
-include("EikSolv/discradj2D.jl")
+include("EikSolv/eikonalforward2D_generic.jl")
 include("EikSolv/eikonalgradient2D.jl")
-# spherical/polar coodinates
-include("EikSolv/eikonalforward2D_spherical.jl")
-include("EikSolv/eikonalgradient2D_spherical.jl")
+include("EikSolv/eikonalgradient2D_generic.jl")
+
 
 ## 3D stuff
 include("EikSolv/eikonalforward3D.jl")
-include("EikSolv/eikonal3D_generic.jl")
+#include("EikSolv/eikonalforward3D_generic.jl")
 include("EikSolv/discradj3D.jl")
 include("EikSolv/eikonalgradient3D.jl")
+#include("EikSolv/eikonalgradient3D_generic.jl")
 # spherical/polar coodinates
 include("EikSolv/eikonalforward3D_spherical.jl")
 include("EikSolv/eikonalgradient3D_spherical.jl")
@@ -79,7 +78,7 @@ using .HMCtraveltimes
 include("extraparams.jl")
 
 const extrapars = ExtraParams(allowfixsqarg=false,
-                        refinearoundsrc=true)
+                              refinearoundsrc=true)
 warningextrapar(extrapars)
 
 

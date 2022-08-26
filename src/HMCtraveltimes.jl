@@ -90,7 +90,8 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         if typeof(eikprob.grd)==Grid2D
             grad = gradttime2D(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
-                               smoothgradsourceradius=eikprob.smoothgradsourceradius) #,gradttalgo="gradFMM_hiord")
+                               smoothgradsourceradius=eikprob.smoothgradsourceradius) 
+
         elseif typeof(eikprob.grd)==Grid3D
             grad = gradttime3D(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs)
