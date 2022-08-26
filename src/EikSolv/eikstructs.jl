@@ -268,7 +268,7 @@ struct VarsFMMOrder3D
     vecDy::VecSPDerivMat
     vecDz::VecSPDerivMat
 
-    function VarsFMMOrder3D(nx,ny)
+    function VarsFMMOrder3D(nx,ny,nz)
         nxyz =  nx*ny*nz
         ttime = zeros(nxyz)
         vecDx = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),

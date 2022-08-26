@@ -118,10 +118,10 @@ end
 
 ########################################################################
 
-function smoothgradaroundsrc!(grad::AbstractArray,xsrc::Real,ysrc::Real,grd::Union{Grid2D,Grid2DSphere} ;
-                              radiuspx::Integer)
+function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::Vector{<:Real},grd::Union{Grid2D,Grid2DSphere} ;
+                                radiuspx::Integer)
 
-      ## no smoothing
+    ## no smoothing
     if radiuspx==0
         return
     elseif radiuspx<0
@@ -133,8 +133,10 @@ function smoothgradaroundsrc!(grad::AbstractArray,xsrc::Real,ysrc::Real,grd::Uni
         return
     end  
 
+    xsrc,ysrc = xysrc[1],xysrc[2]
     isr,jsr = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid)
     nx,ny = grd.nx,grd.ny
+
 
     rmax = (radiuspx-1)*grd.hgrid
     imin = isr-radiuspx
@@ -149,14 +151,71 @@ function smoothgradaroundsrc!(grad::AbstractArray,xsrc::Real,ysrc::Real,grd::Uni
                 continue
 
             else
-                xcur = grd.xinit + (i-1)*grd.hgrid
-                ycur = grd.yinit + (j-1)*grd.hgrid
+                xcur = grd.x[i]
+                ycur = grd.y[j]
                 # inverse of geometrical spreading
                 r = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2)
                 if r<=rmax
                     # normalized inverse of geometrical spreading
                     att = r/rmax
                     grad[i,j] *= att
+                end
+            end
+        end
+    end
+
+    return 
+end
+
+
+########################################################################
+
+function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::Vector{<:Real},grd::Union{Grid3D,Grid3DSphere} ;
+                                radiuspx::Integer)
+
+    ## no smoothing
+    if radiuspx==0
+        return
+    elseif radiuspx<0
+        error("smoothgradaroundsrc!(): 'radius'<0 ")
+    end
+
+    if typeof(grd)==Grid2DSphere
+        @warn("smoothgradaroundsrc!() not yet implemented for spherical coordinates.")
+        return
+    end  
+
+    xsrc,ysrc,zsrc = xyzsrc[1],xyzsrc[2],xyzsrc[2]
+    isr,jsr,ksr = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
+    nx,ny,nz = grd.nx,grd.ny,grd.nz
+
+
+    rmax = (radiuspx-1)*grd.hgrid
+    imin = isr-radiuspx
+    imax = isr+radiuspx
+    jmin = jsr-radiuspx
+    jmax = jsr+radiuspx
+    kmin = ksr-radiuspx
+    kmax = ksr+radiuspx
+
+    for k=kmin:kmax
+        for j=jmin:jmax
+            for i=imin:imax
+                # deal with the borders
+                if i<1 || i>nx || j<1 || j>ny || k<1 || k>nz
+                    continue
+
+                else
+                    xcur = grd.x[i]
+                    ycur = grd.y[j]
+                    zcur = grd.z[k]
+                    # inverse of geometrical spreading
+                    r = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2+(zsrc-zcur)^2)
+                    if r<=rmax
+                        # normalized inverse of geometrical spreading
+                        att = r/rmax
+                        grad[i,j,k] *= att
+                    end
                 end
             end
         end

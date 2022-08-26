@@ -169,8 +169,7 @@ function calcgradsomesrc2Dgen(vel::Array{Float64,2},xysrc::Array{Float64,2},
         
         ###########################################
         ## smooth gradient around the source
-        smoothgradaroundsrc!(grad1,xysrc[s,1],xysrc[s,2],grd,
-                             radiuspx=smoothgradsourceradius)
+        smoothgradaroundsrc2D!(grad1,xysrc[s,:],grd,radiuspx=smoothgradsourceradius)
 
     end
 

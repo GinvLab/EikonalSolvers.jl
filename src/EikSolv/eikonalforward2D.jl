@@ -150,86 +150,6 @@ end
 
 #################################################################################
 
-"""
-$(TYPEDSIGNATURES)
-
- Define the "box" of nodes around/including the source.
-"""
-function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::AbstractVector,
-                         grd::Grid2D; staggeredgrid::Bool )
-    ## staggeredgrid keyword required!
-    
-    ## source location, etc.      
-    mindistsrc = 1e-5   
-    xsrc,ysrc=srcpos[1],srcpos[2]
-
-    if staggeredgrid==false
-        ## regular grid
-        onsrc = zeros(Bool,grd.nx,grd.ny)
-        onsrc[:,:] .= false
-        ix,iy = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-
-    elseif staggeredgrid==true
-        ## STAGGERED grid
-        onsrc = zeros(Bool,grd.ntx,grd.nty)
-        onsrc[:,:] .= false
-        ## grd.xinit-hgr because TIME array on STAGGERED grid
-        hgr = grd.hgrid/2.0
-        ix,iy = findclosestnode(xsrc,ysrc,grd.xinit-hgr,grd.yinit-hgr,grd.hgrid)
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-    end
-
-    halfg = 0.0 #hgrid/2.0
-    # Euclidean distance
-    dist = sqrt(rx^2+ry^2)
-    #@show dist,src,rx,ry
-    if dist<=mindistsrc
-        onsrc[ix,iy] = true
-        ttime[ix,iy] = 0.0 
-    else
-        if (rx>=halfg) & (ry>=halfg)
-            onsrc[ix:ix+1,iy:iy+1] .= true
-        elseif (rx<halfg) & (ry>=halfg)
-            onsrc[ix-1:ix,iy:iy+1] .= true
-        elseif (rx<halfg) & (ry<halfg)
-            onsrc[ix-1:ix,iy-1:iy] .= true
-        elseif (rx>=halfg) & (ry<halfg)
-            onsrc[ix:ix+1,iy-1:iy] .= true
-        end
-        
-        ## set ttime around source ONLY FOUR points!!!
-        ijsrc = findall(onsrc)
-        for lcart in ijsrc
-            i = lcart[1]
-            j = lcart[2]
-            if staggeredgrid==false
-                ## regular grid
-                xp = (i-1)*grd.hgrid+grd.xinit
-                yp = (j-1)*grd.hgrid+grd.yinit
-                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
-                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
-                ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
-            elseif staggeredgrid==true
-                ## STAGGERED grid
-                ## grd.xinit-hgr because TIME array on STAGGERED grid
-                xp = (i-1)*grd.hgrid+grd.xinit-hgr
-                yp = (j-1)*grd.hgrid+grd.yinit-hgr
-                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1 # i-1
-                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1 # j-1            
-                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-                ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
-            end
-        end
-    end
-    
-    return onsrc
-end 
-
-#################################################################################
-
 #########################################################################
 
 """
@@ -1326,8 +1246,88 @@ function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpo
     end
 
     return onsrc
+end
+
+#########################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+ Define the "box" of nodes around/including the source.
+"""
+function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::AbstractVector,
+                         grd::Grid2D; staggeredgrid::Bool )
+    ## staggeredgrid keyword required!
+    
+    ## source location, etc.      
+    mindistsrc = 1e-5   
+    xsrc,ysrc=srcpos[1],srcpos[2]
+
+    if staggeredgrid==false
+        ## regular grid
+        onsrc = zeros(Bool,grd.nx,grd.ny)
+        onsrc[:,:] .= false
+        ix,iy = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+
+    elseif staggeredgrid==true
+        ## STAGGERED grid
+        onsrc = zeros(Bool,grd.ntx,grd.nty)
+        onsrc[:,:] .= false
+        ## grd.xinit-hgr because TIME array on STAGGERED grid
+        hgr = grd.hgrid/2.0
+        ix,iy = findclosestnode(xsrc,ysrc,grd.xinit-hgr,grd.yinit-hgr,grd.hgrid)
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+    end
+
+    halfg = 0.0 #hgrid/2.0
+    # Euclidean distance
+    dist = sqrt(rx^2+ry^2)
+    #@show dist,src,rx,ry
+    if dist<=mindistsrc
+        onsrc[ix,iy] = true
+        ttime[ix,iy] = 0.0 
+    else
+        if (rx>=halfg) & (ry>=halfg)
+            onsrc[ix:ix+1,iy:iy+1] .= true
+        elseif (rx<halfg) & (ry>=halfg)
+            onsrc[ix-1:ix,iy:iy+1] .= true
+        elseif (rx<halfg) & (ry<halfg)
+            onsrc[ix-1:ix,iy-1:iy] .= true
+        elseif (rx>=halfg) & (ry<halfg)
+            onsrc[ix:ix+1,iy-1:iy] .= true
+        end
+        
+        ## set ttime around source ONLY FOUR points!!!
+        ijsrc = findall(onsrc)
+        for lcart in ijsrc
+            i = lcart[1]
+            j = lcart[2]
+            if staggeredgrid==false
+                ## regular grid
+                xp = (i-1)*grd.hgrid+grd.xinit
+                yp = (j-1)*grd.hgrid+grd.yinit
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
+                ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+            elseif staggeredgrid==true
+                ## STAGGERED grid
+                ## grd.xinit-hgr because TIME array on STAGGERED grid
+                xp = (i-1)*grd.hgrid+grd.xinit-hgr
+                yp = (j-1)*grd.hgrid+grd.yinit-hgr
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1 # i-1
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1 # j-1            
+                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+                ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+            end
+        end
+    end
+    
+    return onsrc
 end 
-#########################################################
-#end                                                    #
-#########################################################
+
+#################################################################################
+
 

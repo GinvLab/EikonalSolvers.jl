@@ -101,32 +101,28 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
                            
     nx,ny=size(vel)
     nsrc = size(xysrc,1)
-
     grad1 = zeros(nx,ny)
   
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
 
-        curnrec = size(coordrec[s],1) 
-        ttpicks1 = zeros(curnrec)
-
         ###########################################
         ## calc ttime, etc.
-        ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord(vel,xysrc[s,:],grd,dodiscradj=true)
+        ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord(vel,xysrc[s,:],
+                                                                           grd,dodiscradj=true)
 
         # projection operator P ordered according to FMM order
         P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idxconv,coordrec[s])
 
         ###########################################
         # discrete adjoint formulation
-        grad1 .+= discradjoint_FMM_SINGLESRC(idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
+        grad1 .+= discradjoint2D_FMM_SINGLESRC(idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
                                                  P_fmmord1,pickobs1[s],stdobs[s],vel)
 
         ###########################################
         ## smooth gradient around the source
-        smoothgradaroundsrc!(grad1,xysrc[s,1],xysrc[s,2],grd,
-                             radiuspx=smoothgradsourceradius)
+        smoothgradaroundsrc2D!(grad1,xysrc[s,:],grd,radiuspx=smoothgradsourceradius)
 
     end
 
@@ -264,7 +260,7 @@ function calcprojttfmmord(ttime,grd,idxconv,coordrec)
 
         end
 
-        @assert size(ijcoe,1)==4
+        #@assert size(ijcoe,1)==4
         for l=1:Ncoe
 
             # convert (i,j) from original grid to fmmord
@@ -303,7 +299,7 @@ $(TYPEDSIGNATURES)
 
  Solve the discrete adjoint equations and return the gradient of the misfit.
 """
-function discradjoint_FMM_SINGLESRC(idxconv,tt,Dx,Dy,P,pickobs,stdobs,vel2d)
+function discradjoint2D_FMM_SINGLESRC(idxconv,tt,Dx,Dy,P,pickobs,stdobs,vel2d)
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
@@ -333,8 +329,6 @@ function discradjoint_FMM_SINGLESRC(idxconv,tt,Dx,Dy,P,pickobs,stdobs,vel2d)
 
     grad2d = reshape(gradvec,idxconv.nx,idxconv.ny)
 
-    # end
-    grad2d[:,:] .= grad2d
     return grad2d
 end
 

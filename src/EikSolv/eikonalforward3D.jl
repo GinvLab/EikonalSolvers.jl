@@ -141,8 +141,7 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         ttimeGRPSRC[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
         
         ## Interpolate at receivers positions
-        for i=1:size(coordrec[s],1)
-            
+        for i=1:size(coordrec[s],1)            
             ttpicksGRPSRC[s][i] = trilinear_interp( ttimeGRPSRC[:,:,:,s], grd,
                                                     coordrec[s][i,1],coordrec[s][i,2],
                                                     coordrec[s][i,3])
@@ -155,111 +154,18 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
     return ttpicksGRPSRC
 end
 
-###############################################################################
-
-"""
-$(TYPEDSIGNATURES)
-
- Define the "box" of nodes around/including the source.
-"""
-function sourceboxloctt!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},grd::Grid3D; staggeredgrid::Bool )
-    ## staggeredgrid keyword required!
-
-    mindistsrc = 1e-5
-  
-    xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
-    
-    if staggeredgrid==false
-        ## regular grid
-        onsrc = zeros(Bool,grd.nx,grd.ny,grd.nz)
-        onsrc[:,:,:] .= false
-        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
-
-    elseif staggeredgrid==true
-        ## grd.xinit-hgr because TIME array on STAGGERED grid
-        onsrc = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
-        onsrc[:,:,:] .= false
-        hgr = grd.hgrid/2.0
-        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
-
-    end
-
-  
-    halfg = 0.0 #hgrid/2.0
-    dist = sqrt(rx^2+ry^2+rz^2)
-    #@show dist,src,rx,ry
-    if dist<=mindistsrc
-        onsrc[ix,iy,iz] = true
-        ttime[ix,iy,iz] = 0.0 
-    else
-        
-        if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-        elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-        elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-        elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
-
-        elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-        elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-        elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-        elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
-        end
-
-        ## set ttime around source ONLY FOUR points!!!
-        ijksrc = findall(onsrc)
-        for lcart in ijksrc
-            i = lcart[1]
-            j = lcart[2]
-            k = lcart[3]
-            if staggeredgrid==false
-                ## regular grid
-                xp = (i-1)*grd.hgrid+grd.xinit
-                yp = (j-1)*grd.hgrid+grd.yinit
-                zp = (k-1)*grd.hgrid+grd.zinit
-                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-                kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-            elseif staggeredgrid==true
-                ## grd.xinit-hgr because TIME array on STAGGERED grid
-                xp = (i-1)*grd.hgrid+grd.xinit-hgr
-                yp = (j-1)*grd.hgrid+grd.yinit-hgr
-                zp = (k-1)*grd.hgrid+grd.zinit-hgr
-                ii = i-1 
-                jj = j-1 
-                kk = k-1 
-                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-            end
-        end
-    end
-    return onsrc
-end
-
 #############################################################################
-##=========================================================================##
+
 """
 $(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 3D using traditional stencils on regular grid. 
 """
-function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3D,Grid3DSphere}) 
+function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3D,Grid3DSphere} ;
+                    dodiscradj::Bool=false ) 
 
     ## Sizes
-       ## Sizes
+    ## Sizes
     if typeof(grd)==Grid3D
         simtype = :cartesian
     elseif typeof(grd)==Grid3DSphere
@@ -316,6 +222,13 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
             ttaroundsrc!(status,ttime,vel,src,grd,inittt)
         end
 
+        ## get all i,j accepted
+        ijss = findall(status.==2) 
+        is = [l[1] for l in ijss]
+        js = [l[2] for l in ijss]
+        ks = [l[3] for l in ijss]
+        naccinit = length(ijss)
+
         ##======================================================
         if dodiscradj
             ## 
@@ -346,7 +259,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
                 ## "reconstruct" derivative stencils from known FMM order and arrival times
                 derivaroundsrcfmm3D!(l,idxconv,idD)
 
-                if idD==[0,0]
+                if idD==[0,0,0] # 3 elements!!!
                     #################################################################
                     # Here we store a 1 in the diagonal because we are on a source node...
                     #  store arrival time for first points in FMM order
@@ -356,7 +269,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
                     #################################################################
                 else
                     l_fmmord = idxconv.lfmm2grid[l]
-                    codeDxy[l_fmmord,:] .= idD
+                    codeDxyz[l_fmmord,:] .= idD
                 end
             end
 
@@ -393,7 +306,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
 
         ##======================================================
         if dodiscradj
-
+            
             # discrete adjoint: first visited points in FMM order
             ttfirstpts = Vector{Float64}(undef,naccinit)
             for l=1:naccinit
@@ -428,7 +341,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
                 #
                 addentry!(fmmord.vecDx,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
                 addentry!(fmmord.vecDy,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                addentry!(fmmord.vecDZ,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                addentry!(fmmord.vecDz,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
                 #
                 #################################################################
 
@@ -467,7 +380,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
             k = ks[l] + neigh[ne,3]
             
             ## if the point is out of bounds skip this iteration
-            if ( (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1) )
+            if ( (i>n1) || (i<1) || (j>n2) || (j<1) || (k>n3) || (k<1) )
                 continue
             end
 
@@ -525,7 +438,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
             k = ka + neigh[ne,3]
             
             ## if the point is out of bounds skip this iteration
-            if ( (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1) )
+            if ( (i>n1) || (i<1) || (j>n2) || (j<1) || (k>n3) || (k<1) )
                 continue
             end
 
@@ -540,7 +453,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
-                    codeDxy[han,:] .= idD
+                    codeDxyz[han,:] .= idD
                 end
 
             elseif status[i,j,k]==1 ## narrow band
@@ -554,7 +467,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
-                    codeDxy[han,:] .= idD
+                    codeDxyz[han,:] .= idD
                 end
             end
         end
@@ -576,11 +489,11 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
         if simtype==:cartesian
             hgrid = grd.hgrid
             #allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
-            allcoeffx = CoeffDerivCartesian2D( MVector(-1.0/hgrid,
-                                                       1.0/hgrid), 
-                                               MVector(-3.0/(2.0*hgrid),
-                                                       4.0/(2.0*hgrid),
-                                                       -1.0/(2.0*hgrid)) )
+            allcoeffx = CoeffDerivCartesian( MVector(-1.0/hgrid,
+                                                     1.0/hgrid), 
+                                             MVector(-3.0/(2.0*hgrid),
+                                                     4.0/(2.0*hgrid),
+                                                     -1.0/(2.0*hgrid)) )
             # coefficients along X are the same than along Y
             allcoeffy = allcoeffx
 
@@ -613,15 +526,15 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
         for irow=1:n123
             
             # compute the coefficients for X  derivatives
-            setcoeffderiv3D!(fmmord.vecDx,irow,idxconv,codeDxy,allcoeffx,ptijk,
+            setcoeffderiv3D!(fmmord.vecDx,irow,idxconv,codeDxyz,allcoeffx,ptijk,
                              axis=:X,simtype=simtype)
             
             # compute the coefficients for Y derivatives
-            setcoeffderiv3D!(fmmord.vecDy,irow,idxconv,codeDxy,allcoeffy,ptijk,
+            setcoeffderiv3D!(fmmord.vecDy,irow,idxconv,codeDxyz,allcoeffy,ptijk,
                              axis=:Y,simtype=simtype)
 
             # compute the coefficients for Z derivatives
-            setcoeffderiv3D!(fmmord.vecDy,irow,idxconv,codeDxy,allcoeffy,ptijk,
+            setcoeffderiv3D!(fmmord.vecDz,irow,idxconv,codeDxyz,allcoeffz,ptijk,
                              axis=:Z,simtype=simtype)
 
         end
@@ -633,19 +546,19 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3
         Dx_fmmord = sparse(fmmord.vecDx.i[1:Nxnnz],
                            fmmord.vecDx.j[1:Nxnnz],
                            fmmord.vecDx.v[1:Nxnnz],
-                           fmmord.vecDx.Nsize[1], fmmord.vecDx.Nsize[2], fmmord.vecDx.Nsize[3] )
+                           fmmord.vecDx.Nsize[1], fmmord.vecDx.Nsize[2])
 
         Nynnz = fmmord.vecDy.Nnnz[]
         Dy_fmmord = sparse(fmmord.vecDy.i[1:Nynnz],
                            fmmord.vecDy.j[1:Nynnz],
                            fmmord.vecDy.v[1:Nynnz],
-                           fmmord.vecDy.Nsize[1], fmmord.vecDy.Nsize[2], fmmord.vecDy.Nsize[3] ) 
+                           fmmord.vecDy.Nsize[1], fmmord.vecDy.Nsize[2]) 
         
         Nynnz = fmmord.vecDz.Nnnz[]
         Dz_fmmord = sparse(fmmord.vecDz.i[1:Nynnz],
                            fmmord.vecDz.j[1:Nynnz],
                            fmmord.vecDz.v[1:Nynnz],
-                           fmmord.vecDz.Nsize[1], fmmord.vecDz.Nsize[2], fmmord.vecDz.Nsize[3] ) 
+                           fmmord.vecDz.Nsize[1], fmmord.vecDz.Nsize[2]) 
 
         ## return all the stuff for discrete adjoint computations
         return ttime,idxconv,fmmord.ttime,Dx_fmmord,Dy_fmmord,Dz_fmmord
@@ -685,7 +598,7 @@ $(TYPEDSIGNATURES)
    Compute the traveltime at a given node using 2nd order stencil 
     where possible, otherwise revert to 1st order.
 """
-function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere},
+function calcttpt_2ndord!(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere},
                          status::Array{Int64,3},i::Int64,j::Int64,k::Int64,codeD::MVector{3,Int64})
 
     
@@ -782,7 +695,7 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Unio
             end
 
             ## check if on boundaries
-            isonb1,isonb2 = isonbord(i+ish,j+jsh,k+ksh,nx,ny,nz)
+            isonb1,isonb2 = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
                                     
             ## 1st order
             if !isonb1 && status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
@@ -793,7 +706,13 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Unio
                     use1stord = true
                     
                     # save derivative choices
-                    axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+                    if axis==1
+                        codeD[axis]=ish
+                    elseif axis==2
+                        codeD[axis]=jsh
+                    else
+                        codeD[axis]=ksh
+                    end
 
                     ## 2nd order
                     ish2::Int64 = 2*ish
@@ -808,14 +727,26 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Unio
                             use2ndord=true
                             
                             # save derivative choices
-                            axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
-
+                            if axis==1
+                                codeD[axis]=2*ish
+                            elseif axis==2
+                                codeD[axis]=2*jsh
+                            else
+                                codeD[axis]=2*ksh
+                            end
+                                
                         else
                             chosenval2=HUGE
                             use2ndord=false # this is needed!
 
                             # save derivative choices
-                            axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+                            if axis==1
+                                codeD[axis]=ish
+                            elseif axis==2
+                                codeD[axis]=jsh
+                            else
+                                codeD[axis]=ksh
+                            end
 
                         end
                     end
@@ -905,7 +836,7 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Unio
                     end
                     
                     ## check if on boundaries
-                    isonb1,isonb2 = isonbord(i+ish,j+jsh,k+ksh,nx,ny,nz)
+                    isonb1,isonb2 = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
                     
                     ## 1st order
                     if !isonb1 && status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
@@ -916,7 +847,13 @@ function calcttpt_2ndord(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Unio
                             use1stord = true
 
                             # save derivative choices
-                            axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+                            if axis==1
+                                codeD[axis]=ish
+                            elseif axis==2
+                                codeD[axis]=jsh
+                            else
+                                codeD[axis]=ksh
+                            end
 
                         end
                     end
@@ -1007,11 +944,10 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
                                                         grdcoarse.yinit,grdcoarse.zinit,grdcoarse.hgrid) 
         
     elseif simtype==:spherical
-        n1_coarse,n2_coarse,n3_coarse = grdcoarse.Δr,grdcoarse.Δθ,grdcoarse.Δφ
+        n1_coarse,n2_coarse,n3_coarse = grdcoarse.nr,grdcoarse.nθ,grdcoarse.nφ
         ixsrcglob,iysrcglob,izsrcglob = findclosestnode_sph(src[1],src[2],src[3],grdcoarse.rinit,grdcoarse.θinit,grdcoarse.φinit,grdcoarse.Δr,grdcoarse.Δθ,grdcoarse.Δφ ) 
      end
 
-    
     ##
     ## Define the chunck of coarse grid
     ##
@@ -1040,7 +976,6 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     ##
     ## Refined grid parameters
     ##
-    dh = grdcoarse.hgrid/downscalefactor
     # fine grid size
     n1 = (i2coarse-i1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
     n2 = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
@@ -1054,7 +989,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     ##
     ## Nearest neighbor interpolation for velocity on finer grid
     ## 
-    velfinegrd = Array{Float64}(undef,nx,ny,nz)
+    velfinegrd = Array{Float64}(undef,n1,n2,n3)
     for k=1:n3
         for j=1:n2
             for i=1:n1
@@ -1094,7 +1029,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     status = Array{Int64}(undef,n1,n2,n3)
     status[:,:,:] .= 0   ## set all to far
     # derivative codes
-    idD = MVector(0,0)
+    idD = MVector(0,0,0)
   
     ##
     ## Reset coodinates to match the fine grid
@@ -1115,13 +1050,15 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         zinit = grdcoarse.z[k1coarse]
         dh = grdcoarse.hgrid/downscalefactor
         # fine grid
-        grdfine = Grid2D(hgrid=dh,xinit=xinit,yinit=yinit,nx=n1,ny=n2)
+        grdfine = Grid3D(hgrid=dh,xinit=xinit,yinit=yinit,zinit=zinit,nx=n1,ny=n2,nz=n3)
         ##
         ## Source location, etc. within fine grid
         ##  
         ## REGULAR grid (not staggered), use "grdfine","finegrd", source position in the fine grid!!
         onsrc = sourceboxloctt!(ttime,velfinegrd,srcfine,grdfine, staggeredgrid=false )
         
+
+
     elseif simtype==:spherical
         # set origin of the fine grid
         rinit = grdcoarse.r[i1coarse]
@@ -1131,7 +1068,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         dθ = grdcoarse.Δθ/downscalefactor
         dφ = grdcoarse.Δφ/downscalefactor
         # fine grid
-        grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=n1,nθ=n2,rinit=rinit,θinit=θinit)
+        grdfine = Grid3DSphere(Δr=dr,Δθ=dθ,Δφ=dφ,nr=n1,nθ=n2,nφ=n3,rinit=rinit,θinit=θinit,φinit=φinit)
         ##
         ## Source location, etc. within fine grid
         ##  
@@ -1167,6 +1104,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     for l=1:naccinit
         ia = is[l]
         ja = js[l]
+        ka = ks[l]
         # if the node coincides with the coarse grid, store values
         oncoa,ia_coarse,ja_coarse,ka_coarse = isacoarsegridnode(ia,ja,ka,downscalefactor,
                                                                 i1coarse,j1coarse,k1coarse)
@@ -1235,7 +1173,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
             k = ks[l] + neigh[ne,3]
             
             ## if the point is out of bounds skip this iteration
-            if (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1)
+            if (i>n1) || (i<1) || (j>n2) || (j<1) || (k>n3) || (k<1)
                 continue
             end
 
@@ -1305,7 +1243,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         ##
         ##########################################################
         #  if (ia==nx) || (ia==1) || (ja==ny) || (ja==1)
-        if (ia==1 && !outxmin) || (ia==nx && !outxmax) || (ja==1 && !outymin) || (ja==ny && !outymax) || (ka==1 && !outzmin) || (ka==nz && !outzmax)
+        if (ia==1 && !outxmin) || (ia==n1 && !outxmax) || (ja==1 && !outymin) || (ja==n2 && !outymax) || (ka==1 && !outzmin) || (ka==n3 && !outzmax)
  
             ## delete current narrow band to avoid problems when returned to coarse grid
             statuscoarse[statuscoarse.==1] .= 0
@@ -1332,7 +1270,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
             k = ka + neigh[ne,3]
             
             ## if the point is out of bounds skip this iteration
-            if (i>nx) || (i<1) || (j>ny) || (j<1) || (k>nz) || (k<1)
+            if (i>n1) || (i<1) || (j>n2) || (j<1) || (k>n3) || (k<1)
                 continue
             end
 
@@ -1363,6 +1301,103 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
 end
 
 #################################################################3
+
+
+###############################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+ Define the "box" of nodes around/including the source.
+"""
+function sourceboxloctt!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},grd::Grid3D; staggeredgrid::Bool=false )
+    ## staggeredgrid keyword required!
+
+    mindistsrc = 1e-5
+  
+    xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
+    
+    if staggeredgrid==false
+        ## regular grid
+        onsrc = zeros(Bool,grd.nx,grd.ny,grd.nz)
+        onsrc[:,:,:] .= false
+        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
+
+    elseif staggeredgrid==true
+        ## grd.xinit-hgr because TIME array on STAGGERED grid
+        onsrc = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
+        onsrc[:,:,:] .= false
+        hgr = grd.hgrid/2.0
+        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
+
+    end
+
+  
+    halfg = 0.0 #hgrid/2.0
+    dist = sqrt(rx^2+ry^2+rz^2)
+    #@show dist,src,rx,ry
+    if dist<=mindistsrc
+        onsrc[ix,iy,iz] = true
+        ttime[ix,iy,iz] = 0.0 
+    else
+        
+        if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
+            onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
+        elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
+            onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
+        elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
+            onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
+        elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
+            onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
+
+        elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
+            onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
+        elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
+            onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
+        elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
+            onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
+        elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
+            onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
+        end
+
+        ## set ttime around source ONLY FOUR points!!!
+        ijksrc = findall(onsrc)
+        for lcart in ijksrc
+            i = lcart[1]
+            j = lcart[2]
+            k = lcart[3]
+            if staggeredgrid==false
+                ## regular grid
+                xp = (i-1)*grd.hgrid+grd.xinit
+                yp = (j-1)*grd.hgrid+grd.yinit
+                zp = (k-1)*grd.hgrid+grd.zinit
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+                kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            elseif staggeredgrid==true
+                ## grd.xinit-hgr because TIME array on STAGGERED grid
+                xp = (i-1)*grd.hgrid+grd.xinit-hgr
+                yp = (j-1)*grd.hgrid+grd.yinit-hgr
+                zp = (k-1)*grd.hgrid+grd.zinit-hgr
+                ii = i-1 
+                jj = j-1 
+                kk = k-1 
+                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            end
+        end
+    end
+    return onsrc
+end
+
+#############################################################################
 
 #########################################################
 #end

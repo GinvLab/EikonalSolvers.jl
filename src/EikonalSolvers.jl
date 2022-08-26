@@ -55,20 +55,16 @@ include("EikSolv/utils.jl")
 
 ## 2D stuff
 include("EikSolv/eikonalforward2D.jl")
-include("EikSolv/eikonalforward2D_generic.jl")
 include("EikSolv/eikonalgradient2D.jl")
+include("EikSolv/eikonalforward2D_generic.jl")
 include("EikSolv/eikonalgradient2D_generic.jl")
-
 
 ## 3D stuff
 include("EikSolv/eikonalforward3D.jl")
-#include("EikSolv/eikonalforward3D_generic.jl")
-include("EikSolv/discradj3D.jl")
 include("EikSolv/eikonalgradient3D.jl")
-#include("EikSolv/eikonalgradient3D_generic.jl")
-# spherical/polar coodinates
-include("EikSolv/eikonalforward3D_spherical.jl")
-include("EikSolv/eikonalgradient3D_spherical.jl")
+include("EikSolv/eikonalforward3D_generic.jl")
+include("EikSolv/eikonalgradient3D_generic.jl")
+
 
 ## Hamiltonian Monte Carlo setup
 include("HMCtraveltimes.jl")

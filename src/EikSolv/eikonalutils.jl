@@ -156,7 +156,7 @@ Trinilear interpolation.
 function trilinear_interp(ttime::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere},
                           xin::Float64,yin::Float64,zin::Float64; return_coeffonly::Bool=false)
  
-    if typeof(grd)==Grid2D
+    if typeof(grd)==Grid3D
         dx = grd.hgrid
         dy = grd.hgrid
         dz = grd.hgrid
@@ -164,7 +164,7 @@ function trilinear_interp(ttime::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere
         yinit = grd.yinit
         zinit = grd.zinit
 
-    elseif typeof(grd)==Grid2DSphere
+    elseif typeof(grd)==Grid3DSphere
         dx = grdsph.Δr
         dy = grdsph.Δθ
         dz = grdsph.Δφ
@@ -210,12 +210,12 @@ function trilinear_interp(ttime::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere
     # @show i,j,k
     # @show x,y,z
 
-    x0=i*ttgrdspacing
-    y0=j*ttgrdspacing
-    z0=k*ttgrdspacing
-    x1=(i+1)*ttgrdspacing
-    y1=(j+1)*ttgrdspacing
-    z1=(k+1)*ttgrdspacing
+    x0=i*dx
+    y0=j*dy
+    z0=k*dz
+    x1=(i+1)*dx
+    y1=(j+1)*dy
+    z1=(k+1)*dz
 
     ## Fortran indices start from 1 while i,j,k from 0
     ii=i+1
@@ -236,36 +236,25 @@ function trilinear_interp(ttime::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere
     yd = (y - y0)/(y1 - y0)
     zd = (z - z0)/(z1 - z0)
     
-    ## where x_0 indicates the lattice point below x , and x_1 indicates the lattice point above x and similarly for y_0, y_1, z_0 and z_1.
-    ## First we interpolate along x (imagine we are pushing the front face of the cube to the back), giving:
-    c00 = f000 * (1 - xd) + f100 * xd 
-    c10 = f010 * (1 - xd) + f110 * xd 
-    c01 = f001 * (1 - xd) + f101 * xd 
-    c11 = f011 * (1 - xd) + f111 * xd 
+    # ## where x_0 indicates the lattice point below x , and x_1 indicates the lattice point above x and similarly for y_0, y_1, z_0 and z_1.
+    # ## First we interpolate along x (imagine we are pushing the front face of the cube to the back), giving:
+    # c00 = f000 * (1 - xd) + f100 * xd 
+    # c10 = f010 * (1 - xd) + f110 * xd 
+    # c01 = f001 * (1 - xd) + f101 * xd 
+    # c11 = f011 * (1 - xd) + f111 * xd 
 
-    ## Where V[x_0,y_0, z_0] means the function value of (x_0,y_0,z_0). Then we interpolate these values (along y, as we were pushing the top edge to the bottom), giving:
-    c0 = c00 * (1 - yd) + c10 *yd
-    c1 = c01 * (1 - yd) + c11 *yd
+    # ## Where V[x_0,y_0, z_0] means the function value of (x_0,y_0,z_0). Then we interpolate these values (along y, as we were pushing the top edge to the bottom), giving:
+    # c0 = c00 * (1 - yd) + c10 *yd
+    # c1 = c01 * (1 - yd) + c11 *yd
 
-    ## Finally we interpolate these values along z(walking through a line):
-    interpval = c0 * (1 - zd) + c1 * zd
+    # ## Finally we interpolate these values along z(walking through a line):
+    # interpval = c0 * (1 - zd) + c1 * zd
+
+
+    # ## Finally we interpolate these values along z(walking through a line):
+    # interpval = c0 * (1 - zd) + c1 * zd 
 
     ##########################################################33
-    ##########################################################33
-    interpval2 = f000 * (1-xd)*(1-yd)*(1-zd) +
-        f100 * xd*(1-yd)*(1-zd) +
-        f010 * (1-xd)*yd*(1-zd) +
-        f001 * (1-xd)*(1-yd)*zd +
-        f101 * xd*(1-yd)*(1-zd) +
-        f011 * (1-xd)*yd*zd +
-        f110 * xd*yd*(1-zd) +
-        f111 * xd*yd*zd
-
-
-    @show interpval2,interpval1
-    @assert interpval2==interpval1
-
-
 
     if return_coeffonly
 
@@ -291,8 +280,14 @@ function trilinear_interp(ttime::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere
 
     else
 
-        ## Finally we interpolate these values along z(walking through a line):
-        interpval = c0 * (1 - zd) + c1 * zd 
+        interpval = f000 * (1-xd)*(1-yd)*(1-zd) +
+            f100 * xd*(1-yd)*(1-zd) +
+            f010 * (1-xd)*yd*(1-zd) +
+            f001 * (1-xd)*(1-yd)*zd +
+            f101 * xd*(1-yd)*(1-zd) +
+            f011 * (1-xd)*yd*zd +
+            f110 * xd*yd*(1-zd) +
+            f111 * xd*yd*zd
 
         return interpval
     end
@@ -404,7 +399,7 @@ function lin2cart2D!(l::Integer,ni::Integer,point::AbstractVector)
 end
 
 function lin2cart3D!(l::Integer,ni::Integer,nj::Integer,point::AbstractVector) 
-    point[3] = div(l-1,ni*n2) + 1
+    point[3] = div(l-1,ni*nj) + 1
     point[2] = div(l-1-(point[3]-1)*ni*nj, ni) + 1
     point[1] = l-(point[2]-1)*ni - (point[3]-1)*ni*nj  
     return 
@@ -436,7 +431,7 @@ function isacoarsegridnode(i::Int,j::Int,k::Int,downscalefactor::Int,i1coarse::I
         kcoa = div(k,downscalefactor)+k1coarse
         return true,icoa,jcoa,kcoa
     else
-        return false,nothing,nothing
+        return false,nothing,nothing,nothing
     end
     return
 end
