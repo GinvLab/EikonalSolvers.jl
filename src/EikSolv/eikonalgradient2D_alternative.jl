@@ -2,7 +2,6 @@
 #############################################################################
 
 
-
 """
 $(TYPEDSIGNATURES)
 
@@ -28,7 +27,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 2D array
 
 """
-function gradttime2Dgen(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float64,2},
+function gradttime2Dalt(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float64,2},
                         coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
                         stdobs::Vector{Vector{Float64}} ;    gradttalgo::String,
                         smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
@@ -38,7 +37,7 @@ function gradttime2Dgen(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Fl
     elseif typeof(grd)==Grid2DSphere
         simtype = :spherical
         if gradttalgo!="gradFMM_hiord"
-            error("gradttime2Dgen(): For spherical coordinates the only available algorithm is 'gradFMM_hiord'. ")
+            error("gradttime2Dalt(): For spherical coordinates the only available algorithm is 'gradFMM_hiord'. ")
         end
     end
     if simtype==:cartesian
@@ -72,7 +71,7 @@ function gradttime2Dgen(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Fl
     @sync begin 
         for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
-            @async tmpgrad[:,:,s] = remotecall_fetch(calcgradsomesrc2Dgen,wks[s],vel,
+            @async tmpgrad[:,:,s] = remotecall_fetch(calcgradsomesrc2Dalt,wks[s],vel,
                                                      coordsrc[igrs,:],coordrec[igrs],
                                                      grd,stdobs[igrs],pickobs[igrs],
                                                      gradttalgo,smoothgradsourceradius )
@@ -98,7 +97,7 @@ $(TYPEDSIGNATURES)
 
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc2Dgen(vel::Array{Float64,2},xysrc::Array{Float64,2},
+function calcgradsomesrc2Dalt(vel::Array{Float64,2},xysrc::Array{Float64,2},
                            coordrec::Vector{Array{Float64,2}},grd::GridEik2D,
                            stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
                            gradalgo::String,smoothgradsourceradius::Integer )

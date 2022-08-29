@@ -26,7 +26,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 3D array
 
     """
-function gradttime3Dgen(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
+function gradttime3Dalt(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                         pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord",smoothgradsourceradius::Integer=0,smoothgrad::Bool=true)
     
     if typeof(grd)==Grid3D
@@ -34,7 +34,7 @@ function gradttime3Dgen(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Flo
     elseif typeof(grd)==Grid3DSphere
         simtype = :spherical
         if gradttalgo!="gradFMM_hiord"
-            error("gradttime3Dgen(): For spherical coordinates the only available algorithm is 'gradFMM_hiord'. ")
+            error("gradttime3Dalt(): For spherical coordinates the only available algorithm is 'gradFMM_hiord'. ")
         end
     end
     if simtype==:cartesian
@@ -67,11 +67,11 @@ function gradttime3Dgen(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Flo
     ## array of workers' ids
     wks = workers()
     
-    tmpgrad = zeros(grd.nx,grd.ny,grd.nz,nchu)
+    tmpgrad = zeros(n1,n2,n3,nchu)
     ## do the calculations
     @sync for s=1:nchu
         igrs = grpsrc[s,1]:grpsrc[s,2]
-        @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3Dgen,wks[s],vel,
+        @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3Dalt,wks[s],vel,
                                                    coordsrc[igrs,:],coordrec[igrs],
                                                    grd,stdobs[igrs],pickobs[igrs],
                                                    gradttalgo,smoothgradsourceradius )
@@ -93,7 +93,7 @@ $(TYPEDSIGNATURES)
 
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc3Dgen(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
+function calcgradsomesrc3Dalt(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                               grd::GridEik3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
                               adjalgo::String,smoothgradsourceradius::Integer)
 
@@ -1939,7 +1939,7 @@ function calcLAMBDA_hiord!(tt::Array{Float64,3},status::Array{Int64},onsrc::Arra
     if denom==0.0
 
         # set ttime on central pixel as the mean of neighbors
-        ttmp = (tt[i+1,j,k]+tt[i-1,j,k]+tt[i,j+1,k]+tt[i,j-1,k]+tt[i,j,k+1]+tt[i,j,k-1])/6.0
+        tttmp = (tt[i+1,j,k]+tt[i-1,j,k]+tt[i,j+1,k]+tt[i,j-1,k]+tt[i,j,k+1]+tt[i,j,k-1])/6.0
 
         ## revert to smaller stencil
         aback = -(tttmp  -tt[i-1,j,k])/deltar

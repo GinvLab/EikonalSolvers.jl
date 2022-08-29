@@ -165,12 +165,12 @@ function trilinear_interp(ttime::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere
         zinit = grd.zinit
 
     elseif typeof(grd)==Grid3DSphere
-        dx = grdsph.Δr
-        dy = grdsph.Δθ
-        dz = grdsph.Δφ
-        xinit = grdsph.rinit
-        yinit = grdsph.θinit
-        zinit = grdsph.φinit
+        dx = grd.Δr
+        dy = grd.Δθ
+        dz = grd.Δφ
+        xinit = grd.rinit
+        yinit = grd.θinit
+        zinit = grd.φinit
 
     end
     

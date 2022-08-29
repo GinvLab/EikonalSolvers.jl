@@ -27,7 +27,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 
 """
-function traveltime2Dgen(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
+function traveltime2Dalt(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
                          coordrec::Vector{Array{Float64,2}} ; ttalgo::String, ##  ="ttFMM_hiord",
                          returntt::Bool=false) 
         
@@ -70,7 +70,7 @@ function traveltime2Dgen(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float
             # return traveltime picks at receivers and at all grid points 
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttime[:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2Dgen,wks[s],
+                @async ttime[:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2Dalt,wks[s],
                                                                         vel,coordsrc[igrs,:],
                                                                         coordrec[igrs],grd,ttalgo,
                                                                         returntt=returntt )
@@ -80,7 +80,7 @@ function traveltime2Dgen(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float
             # return ONLY traveltime picks at receivers 
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2Dgen,wks[s],
+                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2Dalt,wks[s],
                                                         vel,coordsrc[igrs,:],
                                                         coordrec[igrs],grd,ttalgo,
                                                         returntt=returntt )
@@ -103,7 +103,7 @@ $(TYPEDSIGNATURES)
 
   Compute the forward problem for a group of sources.
 """
-function ttforwsomesrc2Dgen(vel::Array{Float64,2},coordsrc::Array{Float64,2},
+function ttforwsomesrc2Dalt(vel::Array{Float64,2},coordsrc::Array{Float64,2},
                             coordrec::Vector{Array{Float64,2}},grd::Grid2D,
                             ttalgo::String ; returntt::Bool=false )
     

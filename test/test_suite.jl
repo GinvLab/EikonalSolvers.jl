@@ -6,6 +6,8 @@ using EikonalSolvers
 
 # using PyPlot
 
+setextraparams!(EikonalSolvers.extrapars,allowfixsqarg=false,refinearoundsrc=true)
+
 ###################################
 ######################################################
 ##         Cartesian coordinates                    ##
@@ -120,7 +122,47 @@ end
 ###################################
 ###################################
 
-function test_fwdtt_2D()
+function test_fwdtt_2D_FMM2ndord()
+    
+    #--------------------------------------
+    # Create a grid and a velocity model
+    grd,coordsrc,coordrec,velmod = creategridmod2D()
+
+    #--------------------------------------
+    ## Traveltime forward
+    println("Traveltime 2D using default algo -  FMM 2nd order")
+    ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
+    
+
+    #########################
+    # Analytical solution
+    #
+    # single source
+    ## source must be *on* the top surface for analytic solution
+    coordsrc=[31.0 0.0;]
+    # @show coordsrc
+    ansol2d,velanaly = analyticalsollingrad2D(grd,coordsrc[1,1],coordsrc[1,2])
+    ## contour(permutedims(ansol2d),colors="black")
+
+    ## Numerical traveltime
+    mae = Dict()
+    # colors = ["red","blue","green"]
+    println("Traveltime 2D using default algo versus analytic solution")
+    ttpicks,ttime = traveltime2D(velanaly,grd,coordsrc[1:1,:],coordrec[1:1],returntt=true)
+    # mean average error
+    mae = (sum(abs.(ttime[:,:,1]-ansol2d)))/length(ansol2d)
+
+    @show mae
+    if mae<=0.21
+        return true
+    else
+        return false
+    end
+end
+
+###################################
+
+function test_fwdtt_2D_alternative()
     
     #--------------------------------------
     # Create a grid and a velocity model
@@ -131,10 +173,9 @@ function test_fwdtt_2D()
     ttalgos = ["ttFS_podlec","ttFMM_podlec","ttFMM_hiord"]
     for ttalgo in ttalgos
         println("Traveltime 2D using $ttalgo")
-        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
+        ttpicks = traveltime2Dalt(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
     end
     
-
     #########################
     # Analytical solution
     # 
@@ -152,7 +193,7 @@ function test_fwdtt_2D()
     for ttalgo in ttalgos
         i+=1
         println("Traveltime 2D using $ttalgo versus analytic solution")
-        ttpicks,ttime = traveltime2D(velanaly,grd,coordsrc[1:1,:],coordrec[1:1],ttalgo=ttalgo,returntt=true)
+        ttpicks,ttime = traveltime2Dalt(velanaly,grd,coordsrc[1:1,:],coordrec[1:1],ttalgo=ttalgo,returntt=true)
         # mean average error
         if ttalgo in ["ttFS_podlec","ttFMM_podlec"]
             ttime = (ttime[1:end-1,1:end-1].+ttime[2:end,1:end-1] .+
@@ -160,11 +201,11 @@ function test_fwdtt_2D()
         end        
         mae[ttalgo] = (sum(abs.(ttime[:,:,1]-ansol2d)))/length(ansol2d)
         
-        ## contour(permutedims(ttime[:,:,1]),colors=colors[i])
     end
 
+    @show mae
     cerr = [er for er in values(mae)]
-    if all(cerr.<=[0.04,0.24,0.24])
+    if all(cerr.<=[0.21,0.24,0.24])
         return true
     else
         return false
@@ -173,7 +214,24 @@ end
 
 #############################################
 
-function test_fwdtt_3D()
+
+function test_fwdtt_3D_FMM2ndord()
+
+    #--------------------------------------
+    # Create a grid and a velocity model
+    grd,coordsrc,coordrec,velmod = creategridmod3D()
+    
+    #--------------------------------------
+    ## Traveltime forward
+    println("Traveltime 3D using default algo")
+    ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
+                           
+    return true
+end
+
+#############################################
+
+function test_fwdtt_3D_alternative()
 
     #--------------------------------------
     # Create a grid and a velocity model
@@ -184,7 +242,7 @@ function test_fwdtt_3D()
     ttalgos = ["ttFS_podlec","ttFMM_podlec","ttFMM_hiord"]
     for ttalgo in ttalgos
         println("Traveltime 3D using $ttalgo")
-        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
+        ttpicks = traveltime3Dalt(velmod,grd,coordsrc,coordrec,ttalgo=ttalgo)
     end
     
     return true
@@ -192,7 +250,33 @@ end
 
 #############################################
 
-function test_gradtt_2D()
+function test_gradtt_2D_FMM2ndord()
+
+    #--------------------------------------
+    # Create a grid and a velocity model
+    grd,coordsrc,coordrec,velmod = creategridmod2D()
+
+    #--------------------------------------
+    # Gradient of misfit
+    ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
+    stdobs = deepcopy(ttpicks)
+    dobs = deepcopy(ttpicks)
+    for i=1:length(ttpicks)
+        stdobs[i] .= 0.15
+        dobs[i] = ttpicks[i] .+ stdobs[i].^2 .* randn(size(ttpicks[i]))
+    end
+    flatmod = 2.8 .+ zeros(grd.nx,grd.ny) 
+    
+    println("Gradient 2D using default algo")
+    grad = gradttime2D(flatmod,grd,coordsrc,coordrec,dobs,stdobs)
+
+    return true
+end
+
+
+#############################################
+
+function test_gradtt_2D_alternative()
 
     #--------------------------------------
     # Create a grid and a velocity model
@@ -212,7 +296,7 @@ function test_gradtt_2D()
     gradalgos = ["gradFS_podlec","gradFMM_podlec","gradFMM_hiord"]
     for gradalgo in gradalgos
         println("Gradient 2D using $gradalgo")
-        grad = gradttime2D(flatmod,grd,coordsrc,coordrec,dobs,stdobs,gradttalgo=gradalgo)
+        grad = gradttime2Dalt(flatmod,grd,coordsrc,coordrec,dobs,stdobs,gradttalgo=gradalgo)
     end
 
     return true
@@ -220,7 +304,32 @@ end
 
 #############################################
     
-function test_gradtt_3D()
+function test_gradtt_3D_FMM2ndord()
+
+    #--------------------------------------
+    # Create a grid and a velocity model
+    grd,coordsrc,coordrec,velmod = creategridmod3D()
+
+    #--------------------------------------
+    # Gradient of misfit
+    ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
+
+    nsrc = 3
+    stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
+    noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
+    dobs = ttpicks .+ noise
+    
+    flatmod = 2.8 .+ zeros(grd.nx,grd.ny,grd.nz) 
+    
+    println("Gradient 3D using default algo")
+    grad = gradttime3D(flatmod,grd,coordsrc,coordrec,dobs,stdobs)
+    
+    return true
+end 
+
+#############################################
+    
+function test_gradtt_3D_alternative()
 
     #--------------------------------------
     # Create a grid and a velocity model
@@ -240,11 +349,11 @@ function test_gradtt_3D()
     gradalgos = ["gradFS_podlec","gradFMM_podlec","gradFMM_hiord"]
     for gradalgo in gradalgos
         println("Gradient 3D using $gradalgo")
-        grad = gradttime3D(flatmod,grd,coordsrc,coordrec,dobs,stdobs,gradttalgo=gradalgo)
+        grad = gradttime3Dalt(flatmod,grd,coordsrc,coordrec,dobs,stdobs,gradttalgo=gradalgo)
     end
 
     return true
-end 
+end
 
 ######################################################
 ######################################################
@@ -336,7 +445,7 @@ end
 
 #############################################
 
-function test_fwdtt_2Dsphere()
+function test_fwdtt_2Dspher_FMM2ndord()
     
     #--------------------------------------
     # Create a grid and a velocity model
@@ -345,30 +454,30 @@ function test_fwdtt_2Dsphere()
     #--------------------------------------
     ## Traveltime forward
     println("Traveltime 2D in spherical coordinates")
-    ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
+    ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
 
     return true
 end 
 
 #############################################
 
-function test_fwdtt_3Dsphere()
-
+function test_fwdtt_3Dspher_FMM2ndord()
+    
     #--------------------------------------
     # Create a grid and a velocity model
     grd,coordsrc,coordrec,velmod = creategridmod3Dsphere()
-    
+
     #--------------------------------------
     ## Traveltime forward
-    println("Traveltime 3D in spherical coordinates")
-    ttpicks = traveltime3Dsphere(velmod,grd,coordsrc,coordrec)
-    
+    println("Traveltime 2D in spherical coordinates")
+    ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
+
     return true
-end 
+end
 
 #############################################
 
-function test_gradtt_2Dsphere()
+function test_gradtt_2Dspher_FMM2ndord()
 
     #--------------------------------------
     # Create a grid and a velocity model
@@ -376,7 +485,7 @@ function test_gradtt_2Dsphere()
 
     #--------------------------------------
     # Gradient of misfit
-    ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
+    ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
 
     nsrc = 3
     stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
@@ -386,14 +495,39 @@ function test_gradtt_2Dsphere()
     flatmod = 2.8 .+ zeros(grd.nr,grd.nθ) 
     
     println("Gradient 2D in spherical coordinates")
-    grad = gradttime2Dsphere(flatmod,grd,coordsrc,coordrec,dobs,stdobs)
+    grad = gradttime2D(flatmod,grd,coordsrc,coordrec,dobs,stdobs)
+
+    return true
+end
+
+#############################################
+
+function test_gradtt_2Dspher_alternative()
+
+    #--------------------------------------
+    # Create a grid and a velocity model
+    grd,coordsrc,coordrec,velmod = creategridmod2Dsphere()
+
+    #--------------------------------------
+    # Gradient of misfit
+    ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
+
+    nsrc = 3
+    stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
+    noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
+    dobs = ttpicks .+ noise
+
+    flatmod = 2.8 .+ zeros(grd.nr,grd.nθ) 
+    
+    println("Gradient 2D in spherical coordinates")
+    grad = gradttime2Dalt(flatmod,grd,coordsrc,coordrec,dobs,stdobs,gradttalgo="gradFMM_hiord")
 
     return true
 end 
 
 #############################################
     
-function test_gradtt_3Dsphere()
+function test_gradtt_3Dspher_FMM2ndord()
 
     #--------------------------------------
     # Create a grid and a velocity model
@@ -401,7 +535,7 @@ function test_gradtt_3Dsphere()
 
     #--------------------------------------
     # Gradient of misfit
-    ttpicks = traveltime3Dsphere(velmod,grd,coordsrc,coordrec)
+    ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
 
     nsrc = 3
     stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
@@ -411,7 +545,32 @@ function test_gradtt_3Dsphere()
     flatmod = 2.8 .+ zeros(grd.nr,grd.nθ,grd.nφ) 
     
     println("Gradient 3D using in spherical coordinates")
-    grad = gradttime3Dsphere(flatmod,grd,coordsrc,coordrec,dobs,stdobs)
+    grad = gradttime3D(flatmod,grd,coordsrc,coordrec,dobs,stdobs)
+    
+    return true
+end
+
+#############################################
+    
+function test_gradtt_3Dspher_alternative()
+
+    #--------------------------------------
+    # Create a grid and a velocity model
+    grd,coordsrc,coordrec,velmod = creategridmod3Dsphere()
+
+    #--------------------------------------
+    # Gradient of misfit
+    ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
+
+    nsrc = 3
+    stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
+    noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
+    dobs = ttpicks .+ noise
+
+    flatmod = 2.8 .+ zeros(grd.nr,grd.nθ,grd.nφ) 
+    
+    println("Gradient 3D using in spherical coordinates")
+    grad = gradttime3Dalt(flatmod,grd,coordsrc,coordrec,dobs,stdobs,gradttalgo="FMM_hiord")
     
     return true
 end 

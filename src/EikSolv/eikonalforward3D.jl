@@ -509,10 +509,10 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
             # coefficients
             coe_r_1st = [-1.0/Δr  1.0/Δr]
             coe_r_2nd = [-3.0/(2.0*Δr)  4.0/(2.0*Δr) -1.0/(2.0*Δr) ]
-            coe_θ_1st = [-1.0 ./ Δarcθ;  1.0 ./ Δarcθ ]
-            coe_θ_2nd = [-3.0./(2.0*Δarcθ); 4.0./(2.0*Δarcθ); -1.0./(2.0*Δarcθ) ]
-            coe_φ_1st = [-1.0 ./ Δarcφ;  1.0 ./ Δarcφ ]
-            coe_φ_2nd = [-3.0./(2.0*Δarcφ); 4.0./(2.0*Δarcφ); -1.0./(2.0*Δarcφ) ]
+            coe_θ_1st = [-1.0 ./ Δarcθ  1.0 ./ Δarcθ ]
+            coe_θ_2nd = [-3.0./(2.0*Δarcθ) 4.0./(2.0*Δarcθ) -1.0./(2.0*Δarcθ) ]
+            coe_φ_1st = [-1.0 ./ Δarcφ  1.0 ./ Δarcφ ]
+            coe_φ_2nd = [-3.0./(2.0*Δarcφ) 4.0./(2.0*Δarcφ) -1.0./(2.0*Δarcφ) ]
 
             allcoeffx = CoeffDerivSpherical2D( coe_r_1st, coe_r_2nd )
             allcoeffy = CoeffDerivSpherical2D( coe_θ_1st, coe_θ_2nd )
@@ -1063,7 +1063,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         # set origin of the fine grid
         rinit = grdcoarse.r[i1coarse]
         θinit = grdcoarse.θ[j1coarse]
-        φinit = grdcoarse.φ[j1coarse]
+        φinit = grdcoarse.φ[k1coarse]
         dr = grdcoarse.Δr/downscalefactor
         dθ = grdcoarse.Δθ/downscalefactor
         dφ = grdcoarse.Δφ/downscalefactor
@@ -1414,9 +1414,6 @@ function sourceboxloctt_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpo
     onsrc = zeros(Bool,grd.nr,grd.nθ,grd.nφ)
     onsrc[:,:,:] .= false
     ir,iθ,iφ = findclosestnode_sph(rsrc,θsrc,φsrc,grd.rinit,grd.θinit,grd.φinit,grd.Δr,grd.Δθ,grd.Δφ)
-    @show ir,iθ,iφ
-    @show φsrc
-    @show grd.φ
 
     rr = rsrc-grd.r[ir] #((ir-1)*grd.Δr+grd.rinit)
     rθ = θsrc-grd.θ[iθ] #((iθ-1)*grd.Δθ+grd.θinit)

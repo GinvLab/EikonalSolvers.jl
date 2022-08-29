@@ -40,7 +40,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 
 """
-function traveltime3Dgen(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},
+function traveltime3Dalt(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},
                       coordrec::Vector{Array{Float64,2}}; ttalgo::String,
                       returntt::Bool=false) 
     
@@ -87,7 +87,7 @@ function traveltime3Dgen(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float
             # return ONLY traveltime picks at receivers
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3Dgen,wks[s],
+                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3Dalt,wks[s],
                                                         vel,coordsrc[igrs,:],
                                                         coordrec[igrs],grd,ttalgo,
                                                         returntt=returntt )
@@ -96,7 +96,7 @@ function traveltime3Dgen(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float
             # return both traveltime picks at receivers and at all grid points
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttime[:,:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3Dgen,wks[s],
+                @async ttime[:,:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3Dalt,wks[s],
                                                                           vel,coordsrc[igrs,:],
                                                                           coordrec[igrs],grd,ttalgo,
                                                                           returntt=returntt )
@@ -120,9 +120,9 @@ $(TYPEDSIGNATURES)
 
   Compute the forward problem for a group of sources.
 """
-function ttforwsomesrc3Dgen(vel::Array{Float64,3},coordsrc::Array{Float64,2},
-                      coordrec::Vector{Array{Float64,2}},grd::Grid3D,
-                      ttalgo::String ; returntt::Bool=false )
+function ttforwsomesrc3Dalt(vel::Array{Float64,3},coordsrc::Array{Float64,2},
+                            coordrec::Vector{Array{Float64,2}},grd::Grid3D,
+                            ttalgo::String ; returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
     # nrec = size(coordrec,1)                
@@ -165,8 +165,7 @@ function ttforwsomesrc3Dgen(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         
         ## Interpolate at receivers positions
         for i=1:size(coordrec[s],1)
-            ttpicksGRPSRC[s][i] = trilinear_interp( ttimeGRPSRC[:,:,:,s], grd.hgrid,
-                                                    grd.xinit,grd.yinit,grd.zinit,
+            ttpicksGRPSRC[s][i] = trilinear_interp( ttimeGRPSRC[:,:,:,s], grd,
                                                     coordrec[s][i,1],coordrec[s][i,2],coordrec[s][i,3])
         end
     end

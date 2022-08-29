@@ -225,7 +225,7 @@ function setcoeffderiv3D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
             k = kgrid + whZ*signcod*(p-1)  # start from 0  (e.g., 0,-1)
             if axis==:X
                 mycoeff = signcod * coeff[p]
-            elseif axis==:Y
+            else
                 # in this case coeff depends on radius (index i)
                 mycoeff = signcod * coeff[i,p]
             end

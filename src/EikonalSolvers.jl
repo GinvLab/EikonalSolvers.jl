@@ -22,11 +22,11 @@ module EikonalSolvers
 
 export Grid2D,Grid2DSphere
 export traveltime2D,gradttime2D
-export traveltime2Dgen,gradttime2Dgen
+export traveltime2Dalt,gradttime2Dalt
 
 export Grid3D,Grid3DSphere
 export traveltime3D,gradttime3D
-export traveltime3Dgen,gradttime3Dgen
+export traveltime3Dalt,gradttime3Dalt
 
 export ttmisfitfunc
 export EikonalProb
@@ -57,14 +57,14 @@ include("EikSolv/utils.jl")
 ## 2D stuff
 include("EikSolv/eikonalforward2D.jl")
 include("EikSolv/eikonalgradient2D.jl")
-include("EikSolv/eikonalforward2D_generic.jl")
-include("EikSolv/eikonalgradient2D_generic.jl")
+include("EikSolv/eikonalforward2D_alternative.jl")
+include("EikSolv/eikonalgradient2D_alternative.jl")
 
 ## 3D stuff
 include("EikSolv/eikonalforward3D.jl")
 include("EikSolv/eikonalgradient3D.jl")
-include("EikSolv/eikonalforward3D_generic.jl")
-include("EikSolv/eikonalgradient3D_generic.jl")
+include("EikSolv/eikonalforward3D_alternative.jl")
+include("EikSolv/eikonalgradient3D_alternative.jl")
 
 
 ## Hamiltonian Monte Carlo setup
