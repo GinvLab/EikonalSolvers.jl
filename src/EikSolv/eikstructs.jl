@@ -1,4 +1,9 @@
 
+######################################################
+
+abstract type GridEik end
+abstract type GridEik2D <: GridEik end
+abstract type GridEik3D <: GridEik end
 
 ######################################################
 """
@@ -18,7 +23,7 @@ The fields are:
 julia> Grid2D(hgrid=5.0,xinit=0.0,yinit=0.0,nx=300,ny=250)
 ```
 """
-struct Grid2D #Base.@kwdef 
+struct Grid2D <: GridEik2D
     hgrid::Float64
     xinit::Float64
     yinit::Float64
@@ -61,7 +66,7 @@ The fields are:
 julia> Grid3D(hgrid=5.0,xinit=0.0,yinit=0.0,zinit=0.0,nx=60,ny=60,nz=40)
 ```
 """
-struct Grid3D #Base.@kwdef
+struct Grid3D <: GridEik3D
     hgrid::Float64
     xinit::Float64
     yinit::Float64
@@ -108,7 +113,7 @@ The fields are:
 julia> Grid2DSphere(Δr=15.0,Δθ=2.0,nr=10,nθ=15,rinit=500.0,θinit=0.0)
 ```
 """
-struct Grid2DSphere
+struct Grid2DSphere <: GridEik2D
     Δr::Float64
     Δθ::Float64
     rinit::Float64
@@ -151,7 +156,7 @@ The fields are:
     julia> Grid3DSphere(Δr=15.0,Δθ=2.0,Δφ=1.5,nr=10,nθ=15,nφ=12,rinit=500.0,θinit=20.0,φinit=0.0)
 ```
 """
-struct Grid3DSphere
+struct Grid3DSphere <: GridEik3D
     Δr::Float64
     Δθ::Float64
     Δφ::Float64

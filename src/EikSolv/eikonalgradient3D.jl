@@ -28,7 +28,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 3D array
 
 """
-function gradttime3D(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
+function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                      pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
                      smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
    
@@ -92,7 +92,7 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
-                         grd::Grid3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
+                         grd::GridEik3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
                          smoothgradsourceradius::Integer )
 
     nx,ny,nz=size(vel)

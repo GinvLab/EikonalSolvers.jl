@@ -25,7 +25,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 
 """
-function traveltime2D(vel::Array{Float64,2},grd::Union{Grid2D,Grid2DSphere},coordsrc::Array{Float64,2},
+function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float64,2},
                       coordrec::Vector{Array{Float64,2}} ; returntt::Bool=false) 
         
     if typeof(grd)==Grid2D
@@ -107,7 +107,7 @@ $(TYPEDSIGNATURES)
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
-                         coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid2DSphere} ;
+                         coordrec::Vector{Array{Float64,2}},grd::GridEik2D ;
                          returntt::Bool=false )
     
     if typeof(grd)==Grid2D
@@ -157,7 +157,7 @@ $(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid. 
 """
-function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::Union{Grid2D,Grid2DSphere} ;
+function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
                      dodiscradj::Bool=false)
                      
     ## Sizes
@@ -572,7 +572,7 @@ $(TYPEDSIGNATURES)
    Two-dimensional Cartesian or  spherical grid depending on the type of 'grd'.
 """
 function calcttpt_2ndord!(ttime::Array{Float64,2},vel::Array{Float64,2},
-                         grd::Union{Grid2D,Grid2DSphere},status::Array{Int64,2},
+                         grd::GridEik2D,status::Array{Int64,2},
                          i::Int64,j::Int64,codeD::MVector{2,Int64})
     
     #######################################################
@@ -833,7 +833,7 @@ $(TYPEDSIGNATURES)
     and then passed on to coarser grid
 """
 function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2},
-                      vel::Array{Float64,2},src::Vector{Float64},grdcoarse::Union{Grid2D,Grid2DSphere},
+                      vel::Array{Float64,2},src::Vector{Float64},grdcoarse::GridEik2D,
                       inittt::Float64 ;                      
                       dodiscradj::Bool=false,idxconv::Union{MapOrderGridFMM2D,Nothing}=nothing,
                       fmmord::Union{VarsFMMOrder2D,Nothing}=nothing )

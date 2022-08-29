@@ -20,12 +20,13 @@ $(EXPORTS)
 module EikonalSolvers
 
 
-export Grid2D,traveltime2D,gradttime2D
+export Grid2D,Grid2DSphere
+export traveltime2D,gradttime2D
 export traveltime2Dgen,gradttime2Dgen
-export Grid2DSphere,traveltime2Dsphere,gradttime2Dsphere
 
-export Grid3D,traveltime3D,gradttime3D
-export Grid3DSphere,traveltime3Dsphere,gradttime3Dsphere
+export Grid3D,Grid3DSphere
+export traveltime3D,gradttime3D
+export traveltime3Dgen,gradttime3Dgen
 
 export ttmisfitfunc
 export EikonalProb

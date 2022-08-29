@@ -26,16 +26,37 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 3D array
 
     """
-function gradttime3Dgen(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
-                        pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord",smoothgrad::Bool=true)
+function gradttime3Dgen(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
+                        pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord",smoothgradsourceradius::Integer=0,smoothgrad::Bool=true)
     
+    if typeof(grd)==Grid3D
+        simtype = :cartesian
+    elseif typeof(grd)==Grid3DSphere
+        simtype = :spherical
+        if gradttalgo!="gradFMM_hiord"
+            error("gradttime3Dgen(): For spherical coordinates the only available algorithm is 'gradFMM_hiord'. ")
+        end
+    end
+    if simtype==:cartesian
+        n1,n2,n3 = grd.nx,grd.ny,grd.nz 
+        ax1min,ax1max = grd.x[1],grd.x[end]
+        ax2min,ax2max = grd.y[1],grd.y[end]
+        ax3min,ax3max = grd.z[1],grd.z[end]
+    elseif simtype==:spherical
+        n1,n2,n3 = grd.nr,grd.nθ,grd.nφ
+        ax1min,ax1max = grd.r[1],grd.r[end]
+        ax2min,ax2max = grd.θ[1],grd.θ[end]
+        ax3min,ax3max = grd.φ[1],grd.φ[end]
+    end
+
+    # some checks
     @assert size(coordsrc,2)==3
-    #@assert size(coordrec,2)==3
     @assert all(vel.>0.0)
-    @assert all(grd.xinit.<=coordsrc[:,1].<=((grd.nx-1)*grd.hgrid+grd.xinit))
-    @assert all(grd.yinit.<=coordsrc[:,2].<=((grd.ny-1)*grd.hgrid+grd.yinit))
-    @assert all(grd.zinit.<=coordsrc[:,3].<=((grd.nz-1)*grd.hgrid+grd.zinit))
     @assert size(coordsrc,1)==length(coordrec)
+    @assert all(ax1min.<=coordsrc[:,1].<=ax1max)
+    @assert all(ax2min.<=coordsrc[:,2].<=ax2max)
+    @assert all(ax3min.<=coordsrc[:,3].<=ax3max)
+
 
     nsrc=size(coordsrc,1)
     nw = nworkers()
@@ -50,10 +71,10 @@ function gradttime3Dgen(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float6
     ## do the calculations
     @sync for s=1:nchu
         igrs = grpsrc[s,1]:grpsrc[s,2]
-        @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
+        @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3Dgen,wks[s],vel,
                                                    coordsrc[igrs,:],coordrec[igrs],
                                                    grd,stdobs[igrs],pickobs[igrs],
-                                                   gradttalgo )
+                                                   gradttalgo,smoothgradsourceradius )
     end
     grad = dropdims(sum(tmpgrad,dims=4),dims=4)
 
@@ -73,8 +94,8 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc3Dgen(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
-                              grd::Grid3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
-                              adjalgo::String)
+                              grd::GridEik3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
+                              adjalgo::String,smoothgradsourceradius::Integer)
 
     nx,ny,nz=size(vel)
     nsrc = size(xyzsrc,1)
@@ -106,8 +127,7 @@ function calcgradsomesrc3Dgen(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coo
             
         ## ttime at receivers
         for i=1:curnrec
-            ttpicks1[i] = trilinear_interp( ttonesrc,grd.hgrid,grd.xinit,
-                                            grd.yinit,grd.zinit,coordrec[s][i,1],
+            ttpicks1[i] = trilinear_interp( ttonesrc,grd,coordrec[s][i,1],
                                             coordrec[s][i,2],coordrec[s][i,3] )
         end
 
@@ -133,7 +153,11 @@ function calcgradsomesrc3Dgen(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coo
             println("Wrong adjalgo algo name: $(adjalgo)... ")
             return
         end
-        
+
+        #############################################
+        ## smooth gradient around the source
+        smoothgradaroundsrc3D!(grad1,xyzsrc[s,:],grd,radiuspx=smoothgradsourceradius)
+
     end
     
     return grad1

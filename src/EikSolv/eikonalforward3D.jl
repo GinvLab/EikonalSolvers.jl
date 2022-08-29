@@ -28,7 +28,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 
 """
-function traveltime3D(vel::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere},coordsrc::Array{Float64,2},
+function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},
                       coordrec::Vector{Array{Float64,2}}; returntt::Bool=false) 
     
     if typeof(grd)==Grid3D
@@ -115,7 +115,7 @@ $(TYPEDSIGNATURES)
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
-                      coordrec::Vector{Array{Float64,2}},grd::Union{Grid3D,Grid3DSphere} ;
+                      coordrec::Vector{Array{Float64,2}},grd::GridEik3D ;
                       returntt::Bool=false )
     
     if typeof(grd)==Grid3D
@@ -161,7 +161,7 @@ $(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 3D using traditional stencils on regular grid. 
 """
-function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::Union{Grid3D,Grid3DSphere} ;
+function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
                     dodiscradj::Bool=false ) 
 
     ## Sizes
@@ -598,7 +598,7 @@ $(TYPEDSIGNATURES)
    Compute the traveltime at a given node using 2nd order stencil 
     where possible, otherwise revert to 1st order.
 """
-function calcttpt_2ndord!(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Union{Grid3D,Grid3DSphere},
+function calcttpt_2ndord!(ttime::Array{Float64,3},vel::Array{Float64,3},grd::GridEik3D,
                          status::Array{Int64,3},i::Int64,j::Int64,k::Int64,codeD::MVector{3,Int64})
 
     
@@ -916,7 +916,7 @@ $(TYPEDSIGNATURES)
     and then passed on to coarser grid
 """
 function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3},
-                      vel::Array{Float64,3},src::Vector{Float64},grdcoarse::Union{Grid3D,Grid3DSphere},
+                      vel::Array{Float64,3},src::Vector{Float64},grdcoarse::GridEik3D,
                       inittt::Float64 ;
                       dodiscradj::Bool=false,idxconv::Union{MapOrderGridFMM3D,Nothing}=nothing,
                       fmmord::Union{VarsFMMOrder3D,Nothing}=nothing )
@@ -960,18 +960,18 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
 
     # if hitting borders
     outxmin = i1coarsevirtual<1
-    outxmax = i2coarsevirtual>grdcoarse.nx
+    outxmax = i2coarsevirtual>n1_coarse
     outymin = j1coarsevirtual<1 
-    outymax = j2coarsevirtual>grdcoarse.ny
+    outymax = j2coarsevirtual>n2_coarse
     outzmin = k1coarsevirtual<1 
-    outzmax = k2coarsevirtual>grdcoarse.nz
+    outzmax = k2coarsevirtual>n3_coarse
 
     outxmin ? i1coarse=1            : i1coarse=i1coarsevirtual
-    outxmax ? i2coarse=grdcoarse.nx : i2coarse=i2coarsevirtual
+    outxmax ? i2coarse=n1_coarse    : i2coarse=i2coarsevirtual
     outymin ? j1coarse=1            : j1coarse=j1coarsevirtual
-    outymax ? j2coarse=grdcoarse.ny : j2coarse=j2coarsevirtual
+    outymax ? j2coarse=n2_coarse    : j2coarse=j2coarsevirtual
     outzmin ? k1coarse=1            : k1coarse=k1coarsevirtual
-    outzmax ? k2coarse=grdcoarse.nz : k2coarse=k2coarsevirtual
+    outzmax ? k2coarse=n3_coarse    : k2coarse=k2coarsevirtual
 
     ##
     ## Refined grid parameters
@@ -1398,6 +1398,94 @@ function sourceboxloctt!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::V
 end
 
 #############################################################################
+
+
+"""
+$(TYPEDSIGNATURES)
+"""
+function sourceboxloctt_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},grd::Grid3DSphere )
+    ## staggeredgrid keyword required!
+
+    mindistsrc = 1e-5
+  
+    rsrc,θsrc,φsrc=srcpos[1],srcpos[2],srcpos[3]
+
+    ## regular grid
+    onsrc = zeros(Bool,grd.nr,grd.nθ,grd.nφ)
+    onsrc[:,:,:] .= false
+    ir,iθ,iφ = findclosestnode_sph(rsrc,θsrc,φsrc,grd.rinit,grd.θinit,grd.φinit,grd.Δr,grd.Δθ,grd.Δφ)
+    @show ir,iθ,iφ
+    @show φsrc
+    @show grd.φ
+
+    rr = rsrc-grd.r[ir] #((ir-1)*grd.Δr+grd.rinit)
+    rθ = θsrc-grd.θ[iθ] #((iθ-1)*grd.Δθ+grd.θinit)
+    rφ = φsrc-grd.φ[iφ] #((iφ-1)*grd.Δφ+grd.φinit)
+
+    halfg = 0.0 #hgrid/2.0
+    ## distance in POLAR coordinates
+    ## sqrt(r1^2 +r2^2 -2*r1*r2*(sin(θ1)*sin(θ2)*cos(φ1-φ2)+cos(θ1)*cos(θ2)))
+    r1 = rsrc
+    r2 = grd.r[ir]
+    θ1 = θsrc
+    θ2 = grd.θ[iθ]
+    φ1 = φsrc
+    φ2 = grd.φ[iφ]
+    dist = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
+    #@show dist,src,rr,rθ
+    if dist<=mindistsrc
+        onsrc[ir,iθ,iφ] = true
+        ttime[ir,iθ,iφ] = 0.0 
+    else
+
+        if (rr>=halfg) & (rθ>=halfg) & (rφ>=halfg)
+            onsrc[ir:ir+1,iθ:iθ+1,iφ:iφ+1] .= true
+        elseif (rr<halfg) & (rθ>=halfg) & (rφ>=halfg)
+            onsrc[ir-1:ir,iθ:iθ+1,iφ:iφ+1] .= true
+        elseif (rr<halfg) & (rθ<halfg) & (rφ>=halfg)
+            onsrc[ir-1:ir,iθ-1:iθ,iφ:iφ+1] .= true
+        elseif (rr>=halfg) & (rθ<halfg) & (rφ>=halfg)
+            onsrc[ir:ir+1,iθ-1:iθ,iφ:iφ+1] .= true
+
+        elseif (rr>=halfg) & (rθ>=halfg) & (rφ<halfg)
+            onsrc[ir:ir+1,iθ:iθ+1,iφ-1:iφ] .= true
+        elseif (rr<halfg) & (rθ>=halfg) & (rφ<halfg)
+            onsrc[ir-1:ir,iθ:iθ+1,iφ-1:iφ] .= true
+        elseif (rr<halfg) & (rθ<halfg) & (rφ<halfg)
+            onsrc[ir-1:ir,iθ-1:iθ,iφ-1:iφ] .= true
+        elseif (rr>=halfg) & (rθ<halfg) & (rφ<halfg)
+            onsrc[ir:ir+1,iθ-1:iθ,iφ-1:iφ] .= true
+        end
+
+        ## set ttime around source ONLY FOUR points!!!
+        ijksrc = findall(onsrc)
+        for lcart in ijksrc
+            i = lcart[1]
+            j = lcart[2]
+            k = lcart[3]
+            ## regular grid
+            # rp = (i-1)*grd.hgrid+grd.rinit
+            # θp = (j-1)*grd.hgrid+grd.θinit
+            # φp = (k-1)*grd.hgrid+grd.φinit
+            # ii = Int(floor((rsrc-grd.rinit)/grd.rgrid) +1)
+            # jj = Int(floor((θsrc-grd.θinit)/grd.θgrid) +1)
+            # kk = Int(floor((φsrc-grd.φinit)/grd.φgrid) +1) 
+       
+            r1 = rsrc
+            r2 = grd.r[i]
+            θ1 = θsrc
+            θ2 = grd.θ[j]
+            φ1 = φsrc
+            φ2 = grd.φ[k]
+            distp = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
+            ttime[i,j,k] = distp / vel[i,j,k]
+        end
+    end
+    return onsrc
+end
+
+################################################################################
+
 
 #########################################################
 #end

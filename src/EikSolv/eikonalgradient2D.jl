@@ -27,7 +27,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 2D array
 
 """
-function gradttime2D(vel::Array{Float64,2}, grd::Union{Grid2D,Grid2DSphere},coordsrc::Array{Float64,2},
+function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float64,2},
                      coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
                      stdobs::Vector{Vector{Float64}} ;
                      smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
@@ -95,7 +95,7 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
-                           coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid2DSphere},
+                           coordrec::Vector{Array{Float64,2}},grd::GridEik2D,
                            stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
                            smoothgradsourceradius::Integer )
                            
