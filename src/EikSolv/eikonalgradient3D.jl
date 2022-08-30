@@ -30,7 +30,7 @@ The computations are run in parallel depending on the number of workers (nworker
 """
 function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                      pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
-                     smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
+                     smoothgradsourceradius::Integer=3,smoothgrad::Bool=false )
    
     if typeof(grd)==Grid3D
         simtype = :cartesian

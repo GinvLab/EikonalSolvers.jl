@@ -30,7 +30,7 @@ The computations are run in parallel depending on the number of workers (nworker
 function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float64,2},
                      coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
                      stdobs::Vector{Vector{Float64}} ;
-                     smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
+                     smoothgradsourceradius::Integer=3,smoothgrad::Bool=false )
 
     if typeof(grd)==Grid2D
         simtype = :cartesian
@@ -109,7 +109,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
         ###########################################
         ## calc ttime, etc.
-        ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord(vel,xysrc[s,:],
+        @time ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord(vel,xysrc[s,:],
                                                                            grd,dodiscradj=true)
 
         # projection operator P ordered according to FMM order
@@ -307,13 +307,10 @@ function discradjoint2D_FMM_SINGLESRC(idxconv,tt,Dx,Dy,P,pickobs,stdobs,vel2d)
     rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
     ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
     ##   the solver (\) does not use the correct sparse algo for matrix division
-    tmplhs = copy(transpose( (2.0 .* Diagonal(Dx*tt) * Dx) .+ (2.0 .* Diagonal(Dy*tt) * Dy) ))
+    tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) ))
     lhs = UpperTriangular(tmplhs)
     # solve the linear system
     lambda_fmmord = lhs\rhs
-
-    # println("reorder lambda, calc grad")
-    # @time begin
 
     ##--------------------------------------
     # reorder lambda from fmmord to original grid!!

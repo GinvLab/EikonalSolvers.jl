@@ -1,4 +1,5 @@
 
+
 #############################################
 using OffsetArrays
 
@@ -127,48 +128,86 @@ function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::Vector{<:Real},grd::U
     elseif radiuspx<0
         error("smoothgradaroundsrc!(): 'radius'<0 ")
     end
+    
+    if typeof(grd)==Grid2D
+        # Cartesian
 
-    if typeof(grd)==Grid2DSphere
-        @warn("smoothgradaroundsrc!() not yet implemented for spherical coordinates.")
-        return
-    end  
-
-    xsrc,ysrc = xysrc[1],xysrc[2]
-    isr,jsr = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid)
-    nx,ny = grd.nx,grd.ny
+        xsrc,ysrc = xysrc[1],xysrc[2]
+        isr,jsr = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid)
+        nx,ny = grd.nx,grd.ny
 
 
-    rmax = (radiuspx-1)*grd.hgrid
-    imin = isr-radiuspx
-    imax = isr+radiuspx
-    jmin = jsr-radiuspx
-    jmax = jsr+radiuspx
+        rmax = radiuspx*grd.hgrid
+        imin = isr-radiuspx
+        imax = isr+radiuspx
+        jmin = jsr-radiuspx
+        jmax = jsr+radiuspx
 
-    for j=jmin:jmax
-        for i=imin:imax
-            # deal with the borders
-            if i<1 || i>nx || j<1 || j>ny
-                continue
+        for j=jmin:jmax
+            for i=imin:imax
+                # deal with the borders
+                if i<1 || i>nx || j<1 || j>ny
+                    continue
 
-            else
-                xcur = grd.x[i]
-                ycur = grd.y[j]
-                # inverse of geometrical spreading
-                r = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2)
-                if r<=rmax
-                    # normalized inverse of geometrical spreading
-                    att = r/rmax
-                    grad[i,j] *= att
+                else
+                    xcur = grd.x[i]
+                    ycur = grd.y[j]
+                    # inverse of geometrical spreading
+                    r = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2)
+                    if r<=rmax
+                        # normalized inverse of geometrical spreading
+                        att = r/rmax
+                        grad[i,j] *= att
+                    end
                 end
             end
         end
-    end
 
+    elseif typeof(grd)==Grid2DSphere
+        # Spherical
+
+        rsrc,θsrc = xysrc[1],xysrc[2]
+        isr,jsr = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,
+                                      grd.Δr,grd.Δθ)
+        nr,nθ = grd.nr,grd.nθ
+        xsrc,ysrc = sphericaldeg2cartesian(rsrc,θsrc)
+
+
+        ## for simplicity rmax is defined in terms of the radius only
+        rmax = radiuspx*grd.Δr
+        imin = isr-radiuspx
+        imax = isr+radiuspx
+        jmin = jsr-radiuspx
+        jmax = jsr+radiuspx
+
+        for j=jmin:jmax
+            for i=imin:imax
+                # deal with the borders
+                if i<1 || i>nr || j<1 || j>nθ
+                    continue
+
+                else
+                    xcur,ycur = sphericaldeg2cartesian(grd.r[i],grd.θ[j])                    
+                    # inverse of geometrical spreading
+                    ra = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2)
+                    if ra<=rmax
+                        # normalized inverse of geometrical spreading
+                        att = ra/rmax
+                        grad[i,j] *= att
+                    end
+                end
+            end
+        end
+
+    else
+        error("smoothgradaroundsrc2D!(): Wrong grid type.")
+
+    end # if
+    
     return 
 end
 
-
-########################################################################
+################################################################3
 
 function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::Vector{<:Real},grd::Union{Grid3D,Grid3DSphere} ;
                                 radiuspx::Integer)
@@ -180,48 +219,107 @@ function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::Vector{<:Real},grd::
         error("smoothgradaroundsrc!(): 'radius'<0 ")
     end
 
-    if typeof(grd)==Grid2DSphere
-        @warn("smoothgradaroundsrc!() not yet implemented for spherical coordinates.")
-        return
-    end  
+    if typeof(grd)==Grid3D
+        # Cartesian
 
-    xsrc,ysrc,zsrc = xyzsrc[1],xyzsrc[2],xyzsrc[2]
-    isr,jsr,ksr = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
-    nx,ny,nz = grd.nx,grd.ny,grd.nz
+        xsrc,ysrc,zsrc = xyzsrc[1],xyzsrc[2],xyzsrc[3]
+        isr,jsr,ksr = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
+        nx,ny,nz = grd.nx,grd.ny,grd.nz
 
+        rmax = radiuspx*grd.hgrid
+        imin = isr-radiuspx
+        imax = isr+radiuspx
+        jmin = jsr-radiuspx
+        jmax = jsr+radiuspx
+        kmin = ksr-radiuspx
+        kmax = ksr+radiuspx
 
-    rmax = (radiuspx-1)*grd.hgrid
-    imin = isr-radiuspx
-    imax = isr+radiuspx
-    jmin = jsr-radiuspx
-    jmax = jsr+radiuspx
-    kmin = ksr-radiuspx
-    kmax = ksr+radiuspx
+        for k=kmin:kmax
+            for j=jmin:jmax
+                for i=imin:imax
+                    # deal with the borders
+                    if i<1 || i>nx || j<1 || j>ny || k<1 || k>nz
+                        continue
 
-    for k=kmin:kmax
-        for j=jmin:jmax
-            for i=imin:imax
-                # deal with the borders
-                if i<1 || i>nx || j<1 || j>ny || k<1 || k>nz
-                    continue
-
-                else
-                    xcur = grd.x[i]
-                    ycur = grd.y[j]
-                    zcur = grd.z[k]
-                    # inverse of geometrical spreading
-                    r = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2+(zsrc-zcur)^2)
-                    if r<=rmax
-                        # normalized inverse of geometrical spreading
-                        att = r/rmax
-                        grad[i,j,k] *= att
+                    else
+                        xcur = grd.x[i]
+                        ycur = grd.y[j]
+                        zcur = grd.z[k]
+                        # inverse of geometrical spreading
+                        r = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2+(zsrc-zcur)^2)
+                        if r<=rmax
+                            # normalized inverse of geometrical spreading
+                            att = r/rmax
+                            grad[i,j,k] *= att
+                        end
                     end
                 end
             end
         end
-    end
+
+        
+    elseif typeof(grd)==Grid3DSphere
+        # Spherical
+        rsrc,θsrc,φsrc = xyzsrc[1],xyzsrc[2],xyzsrc[3]
+        isr,jsr,ksr = findclosestnode_sph(rsrc,θsrc,φsrc,grd.rinit,grd.θinit,grd.φinit,
+                                          grd.Δr,grd.Δθ,grd.Δφ)
+        nr,nθ,nφ = grd.nr,grd.nθ,grd.nφ
+        xsrc,ysrc,zsrc = sphericaldeg2cartesian(rsrc,θsrc,φsrc)
+
+
+        ## for simplicity rmax is defined in terms of the radius only
+        rmax = radiuspx*grd.Δr
+        imin = isr-radiuspx
+        imax = isr+radiuspx
+        jmin = jsr-radiuspx
+        jmax = jsr+radiuspx
+        kmin = ksr-radiuspx
+        kmax = ksr+radiuspx
+
+        for k=kmin:kmax
+            for j=jmin:jmax
+                for i=imin:imax
+                    # deal with the borders
+                    if i<1 || i>nr || j<1 || j>nθ || k<1 || k>nφ
+                        continue
+
+                    else
+                        xcur,ycur,zcur = sphericaldeg2cartesian(grd.r[i],grd.θ[j],grd.φ[k])
+                        # inverse of geometrical spreading
+                        ra = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2+(zsrc-zcur)^2)
+                        if ra<=rmax
+                            # normalized inverse of geometrical spreading
+                            att = ra/rmax
+                            grad[i,j,k] *= att
+                        end
+                    end
+                end
+            end
+        end
+
+    else
+        error("smoothgradaroundsrc3D!(): Wrong grid type.")
+
+    end # if
 
     return 
+end
+
+
+
+########################################################################
+
+@inline function sphericaldeg2cartesian(r,θ,φ)
+    x = r * sind(θ) * cosd(φ) 
+    y = r * sind(θ) * sind(φ)
+    z = r * cosd(θ)
+    return x,y,z
+end
+
+@inline function sphericaldeg2cartesian(r,θ)
+    x = r * cosd(θ) 
+    y = r * sind(θ) 
+    return x,y
 end
 
 ########################################################################

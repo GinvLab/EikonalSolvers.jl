@@ -320,7 +320,8 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
                 ## The following to avoid a singular upper triangular matrix in the
                 ##  adjoint equation. Otherwise there will be a row of only zeros in the LHS.
                 if ttgrid==0.0
-                    fmmord.ttime[l] = eps()
+                    fmmord.ttime[l] = 10.0*eps()
+                    @warn("Source is exactly on a node, spurious results may appear. Work is in progress to fix the problem.\n Set smoothgradsourceradius>0 to mitigate the issue")
                 else
                     fmmord.ttime[l] = ttgrid
                 end
