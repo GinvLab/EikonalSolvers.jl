@@ -63,19 +63,17 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
     ## array of workers' ids
     wks = workers()
     
-    tmpgrad = zeros(n1,n2,nchu)
+    grad = zeros(n1,n2)
     ## do the calculations
     @sync begin 
         for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
-            @async tmpgrad[:,:,s] = remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
-                                                     coordsrc[igrs,:],coordrec[igrs],
-                                                     grd,stdobs[igrs],pickobs[igrs],
-                                                     smoothgradsourceradius )
+            @async grad .+= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
+                                                 coordsrc[igrs,:],coordrec[igrs],
+                                                 grd,stdobs[igrs],pickobs[igrs],
+                                                 smoothgradsourceradius )
         end
     end
-    grad = dropdims(sum(tmpgrad,dims=3),dims=3)
-    #@assert !any(isnan.(grad))
 
     ## smooth gradient
     if smoothgrad

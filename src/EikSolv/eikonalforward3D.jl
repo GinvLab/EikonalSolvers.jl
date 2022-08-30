@@ -58,7 +58,7 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
     ##------------------
     ## parallel version
     nsrc = size(coordsrc,1)
-        ttpicks = Vector{Vector{Float64}}(undef,nsrc)
+    ttpicks = Vector{Vector{Float64}}(undef,nsrc)
     for i=1:nsrc
         curnrec = size(coordrec[i],1) 
         ttpicks[i] = zeros(curnrec)
@@ -115,8 +115,8 @@ $(TYPEDSIGNATURES)
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
-                      coordrec::Vector{Array{Float64,2}},grd::GridEik3D ;
-                      returntt::Bool=false )
+                         coordrec::Vector{Array{Float64,2}},grd::GridEik3D ;
+                         returntt::Bool=false )
     
     if typeof(grd)==Grid3D
         #simtype = :cartesian
@@ -141,8 +141,9 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         ttimeGRPSRC[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
         
         ## Interpolate at receivers positions
-        for i=1:size(coordrec[s],1)            
-            ttpicksGRPSRC[s][i] = trilinear_interp( ttimeGRPSRC[:,:,:,s], grd,
+        for i=1:size(coordrec[s],1)
+            # view !!!
+            ttpicksGRPSRC[s][i] = trilinear_interp( view(ttimeGRPSRC,:,:,:,s), grd,
                                                     coordrec[s][i,1],coordrec[s][i,2],
                                                     coordrec[s][i,3])
         end
@@ -1145,7 +1146,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
             if oncoa
                 # go from cartesian (i,j) to linear
                 idxconv.lfmm2grid[node_coarse] = cart2lin3D(ia_coarse,ja_coarse,ka_coarse,
-                                                            idxconv.nx,idx.conv.ny)
+                                                            idxconv.nx,idxconv.ny)
 
                 # store arrival time for first points in FMM order
                 fmmord.ttime[node_coarse] = ttime[is[p],js[p],ks[p]]

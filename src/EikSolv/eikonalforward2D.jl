@@ -136,8 +136,9 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
 
         ## interpolate at receivers positions
         for i=1:size(coordrec[s],1)
-            ttpicksGRPSRC[s][i] = bilinear_interp(ttGRPSRC[:,:,s],grd,coordrec[s][i,1],
-                                                  coordrec[s][i,2])
+            #  view !!
+            ttpicksGRPSRC[s][i] = bilinear_interp( view(ttGRPSRC,:,:,s),grd,coordrec[s][i,1],
+                                                   coordrec[s][i,2])
         end
     end
 

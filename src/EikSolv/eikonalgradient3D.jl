@@ -62,19 +62,19 @@ function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float6
     ## calculate how to subdivide the srcs among the workers
     grpsrc = distribsrcs(nsrc,nw)
     nchu = size(grpsrc,1)
+
     ## array of workers' ids
     wks = workers()
     
-    tmpgrad = zeros(n1,n2,n3,nchu)
+    grad = zeros(n1,n2,n3)
     ## do the calculations
     @sync for s=1:nchu
         igrs = grpsrc[s,1]:grpsrc[s,2]
-        @async tmpgrad[:,:,:,s] = remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
-                                                   coordsrc[igrs,:],coordrec[igrs],
-                                                   grd,stdobs[igrs],pickobs[igrs],
-                                                   smoothgradsourceradius )
-    end
-    grad = dropdims(sum(tmpgrad,dims=4),dims=4)
+        @async grad .+= remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
+                                            coordsrc[igrs,:],coordrec[igrs],
+                                            grd,stdobs[igrs],pickobs[igrs],
+                                            smoothgradsourceradius )
+    end    
 
     ## smooth gradient
     if smoothgrad
@@ -92,37 +92,48 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
-                         grd::GridEik3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
-                         smoothgradsourceradius::Integer )
+                           grd::GridEik3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
+                           smoothgradsourceradius::Integer )
 
     nx,ny,nz=size(vel)
     nsrc = size(xyzsrc,1)
     grad1 = zeros(nx,ny,nz)
 
+
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
-
+      
         ###########################################
         ## calc ttime, etc.
+       # al = @allocated
         ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,Dz_fmmord1 = ttFMM_hiord(vel,xyzsrc[s,:],
                                                                                       grd,dodiscradj=true)
 
+        # println("$s after ttFMM allocated: $(al/1e6)")
+
         # projection operator P ordered according to FMM order
+        # al = @allocated
         P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idxconv,coordrec[s])
+
+        # println("$s after P allocated: $(al/1e6)")
 
         ###########################################
         # discrete adjoint formulation
+        # al = @allocated
         grad1 .+= discradjoint3D_FMM_SINGLESRC(idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,Dz_fmmord1,
                                                P_fmmord1,pickobs1[s],stdobs[s],vel)
 
+        #println("$s after discr. adj. allocated: $(al/1e6)")
+
         ###########################################
         ## smooth gradient around the source
+        # al = @allocated
         smoothgradaroundsrc3D!(grad1,xyzsrc[s,:],grd,radiuspx=smoothgradsourceradius)
-
+        # println("$s after smoothing allocated: $(al/1e6)")
+        
     end
 
-    
     return grad1
 end
 
