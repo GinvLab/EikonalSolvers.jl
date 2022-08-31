@@ -103,35 +103,61 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordr
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
-      
+
         ###########################################
         ## calc ttime, etc.
-       # al = @allocated
+        # al = @allocated begin
+        #     println("> start ttFMM_hiord()")
         ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,Dz_fmmord1 = ttFMM_hiord(vel,xyzsrc[s,:],
                                                                                       grd,dodiscradj=true)
-
-        # println("$s after ttFMM allocated: $(al/1e6)")
-
-        # projection operator P ordered according to FMM order
-        # al = @allocated
-        P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idxconv,coordrec[s])
-
-        # println("$s after P allocated: $(al/1e6)")
+        # end
+        # println("s $s after ttFMM allocated: $(al/1e6)")
+        # sleep(5)
+        # if extrapars.manualGCtrigger
+        # # trigger garbage collector
+        # GC.gc()
+        # end
 
         ###########################################
-        # discrete adjoint formulation
-        # al = @allocated
+        ## projection operator P ordered according to FMM order
+        # al = @allocated begin
+        # println("> start calcprojttfmmord()")
+        P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idxconv,coordrec[s])
+        # end
+        # println("s $s after P allocated: $(al/1e6)")
+        # sleep(5)
+        # if extrapars.manualGCtrigger
+        #     # trigger garbage collector
+        #     GC.gc()
+        # end
+
+
+        ###########################################
+        ## discrete adjoint formulation
+        # al = @allocated begin
+        #    println("> start calcprojttfmmord()")
         grad1 .+= discradjoint3D_FMM_SINGLESRC(idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,Dz_fmmord1,
                                                P_fmmord1,pickobs1[s],stdobs[s],vel)
-
-        #println("$s after discr. adj. allocated: $(al/1e6)")
+        # end
+        # println("s $s after discr. adj. allocated: $(al/1e6)")
+        # sleep(5)
+        # if extrapars.manualGCtrigger
+        #     # trigger garbage collector
+        #     GC.gc()
+        # end
 
         ###########################################
         ## smooth gradient around the source
-        # al = @allocated
+        #al = @allocated begin
         smoothgradaroundsrc3D!(grad1,xyzsrc[s,:],grd,radiuspx=smoothgradsourceradius)
+        # end
         # println("$s after smoothing allocated: $(al/1e6)")
         
+    end
+
+    if extrapars.manualGCtrigger
+        # trigger garbage collector
+        GC.gc()
     end
 
     return grad1

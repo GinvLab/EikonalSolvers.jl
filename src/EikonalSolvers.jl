@@ -75,7 +75,8 @@ using .HMCtraveltimes
 include("extraparams.jl")
 
 const extrapars = ExtraParams(allowfixsqarg=false,
-                              refinearoundsrc=true)
+                              refinearoundsrc=true,
+                              manualGCtrigger=true)
 warningextrapar(extrapars)
 
 

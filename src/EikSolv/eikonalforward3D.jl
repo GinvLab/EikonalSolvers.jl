@@ -138,8 +138,11 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
     
     ## group of pre-selected sources
     for s=1:nsrc
+        # al = @allocated begin
         ttimeGRPSRC[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
-        
+        # end
+        # println("$s after ttFMM allocated: $(al/1e6)")
+
         ## Interpolate at receivers positions
         for i=1:size(coordrec[s],1)
             # view !!!
