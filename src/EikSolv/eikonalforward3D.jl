@@ -82,8 +82,8 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttime[:,:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
-                                                                          vel,coordsrc[igrs,:],
-                                                                          coordrec[igrs],grd,
+                                                                          vel,view(coordsrc,igrs,:),
+                                                                          view(coordrec,igrs),grd,
                                                                           returntt=returntt )
             end
 
@@ -92,8 +92,8 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
-                                                        vel,coordsrc[igrs,:],
-                                                        coordrec[igrs],grd,
+                                                        vel,view(coordsrc,igrs,:),
+                                                        view(coordrec,igrs),grd,
                                                         returntt=returntt )
             end
         end
@@ -114,8 +114,8 @@ $(TYPEDSIGNATURES)
 
   Compute the forward problem for a group of sources.
 """
-function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
-                         coordrec::Vector{Array{Float64,2}},grd::GridEik3D ;
+function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::AbstractArray{Float64,2},
+                         coordrec::AbstractVector{Array{Float64,2}},grd::GridEik3D ;
                          returntt::Bool=false )
     
     if typeof(grd)==Grid3D
@@ -134,21 +134,32 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         ttpicksGRPSRC[i] = zeros(curnrec)
     end
 
-    ttimeGRPSRC = zeros(n1,n2,n3,nsrc)
-    
+    ## pre-allocate ttime and status arrays
+    fmmvars = FMMvars3D(n1,n2,n3)
+
+    #extrapars.refinearoundsrc = false
+    #@show extrapars.refinearoundsrc
+
+    if returntt
+        ttimeGRPSRC = zeros(n1,n2,n3,nsrc)
+    end
+
     ## group of pre-selected sources
     for s=1:nsrc
-        # al = @allocated begin
-        ttimeGRPSRC[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
-        # end
-        # println("$s after ttFMM allocated: $(al/1e6)")
-
+        #al = @allocated begin
+        @time  ttFMM_hiord!(fmmvars,vel,view(coordsrc,s,:),grd)
+        #end
+        #println("FWD $s after ttFMM allocated: $(al/1e6)")
+        
         ## Interpolate at receivers positions
         for i=1:size(coordrec[s],1)
             # view !!!
-            ttpicksGRPSRC[s][i] = trilinear_interp( view(ttimeGRPSRC,:,:,:,s), grd,
-                                                    coordrec[s][i,1],coordrec[s][i,2],
-                                                    coordrec[s][i,3])
+            ttpicksGRPSRC[s][i] = trilinear_interp( fmmvars.ttime, grd, view(coordrec[s],i,:))
+        end
+
+        if returntt
+            # store tt on grid if needed
+            ttimeGRPSRC[:,:,:,s] .= fmmvars.ttime
         end
     end
 
@@ -165,36 +176,33 @@ $(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 3D using traditional stencils on regular grid. 
 """
-function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
-                    dodiscradj::Bool=false ) 
+function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVector{Float64},grd::GridEik3D ;
+                      dodiscradj::Bool=false ) 
 
-    ## Sizes
-    ## Sizes
     if typeof(grd)==Grid3D
         simtype = :cartesian
     elseif typeof(grd)==Grid3DSphere
         simtype = :spherical
     end
-     if simtype==:cartesian
+    ## Sizes
+    if simtype==:cartesian
         n1,n2,n3 = grd.nx,grd.ny,grd.nz #size(vel)  ## NOT A STAGGERED GRID!!!
     elseif simtype==:spherical
         n1,n2,n3 = grd.nr,grd.nθ,grd.nφ
     end
-
-    epsilon = 1e-6
     n123 = n1*n2*n3
     
     ## 
     ## Time array
     ##
     inittt = 1e30
-    ttime = Array{Float64}(undef,n1,n2,n3)
-    ttime[:,:,:] .= inittt
+    #ttime = Array{Float64}(undef,n1,n2,n3)
+    fmmvars.ttime[:,:,:] .= inittt
     ##
     ## Status of nodes
     ##
-    status = Array{Int64}(undef,n1,n2,n3)
-    status[:,:,:] .= 0   ## set all to far
+    #status = Array{Int64}(undef,n1,n2,n3)
+    fmmvars.status[:,:,:] .= 0   ## set all to far
     
     ptijk = MVector(0,0,0)
     # derivative codes
@@ -215,23 +223,21 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
     ## refinearoundsrc=true
 
     if extrapars.refinearoundsrc
+
         ##---------------------------------
         ## 
         ## Refinement around the source      
         ##
         if dodiscradj
-            ttaroundsrc!(status,ttime,vel,src,grd,inittt,
+            ttaroundsrc!(fmmvars,vel,src,grd,inittt,
                          dodiscradj=dodiscradj,idxconv=idxconv,fmmord=fmmord)
         else
-            ttaroundsrc!(status,ttime,vel,src,grd,inittt)
+            ttaroundsrc!(fmmvars,vel,src,grd,inittt)
         end
 
-        ## get all i,j accepted
-        ijss = findall(status.==2) 
-        is = [l[1] for l in ijss]
-        js = [l[2] for l in ijss]
-        ks = [l[3] for l in ijss]
-        naccinit = length(ijss)
+        ## number of accepted points       
+        naccinit = size(ijksrc,2)
+
 
         ##======================================================
         if dodiscradj
@@ -291,22 +297,13 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
         ## source location, etc.      
         ## REGULAR grid
         if simtype==:cartesian
-            onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=false )
+            ijksrc = sourceboxloctt!(fmmvars,vel,src,grd, staggeredgrid=false )
         elseif simtype==:spherical
-            onsrc = sourceboxloctt_sph!(ttime,vel,src,grd )
+            ijksrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
         end
+        ## number of accepted points       
+        naccinit = size(ijksrc,2)
 
-        ##
-        ## Status of nodes
-        status[onsrc] .= 2 ## set to accepted on src
-
-        ## get all i,j accepted
-        ijss = findall(status.==2) 
-        is = [l[1] for l in ijss]
-        js = [l[2] for l in ijss]
-        ks = [l[3] for l in ijss]
-        naccinit = length(ijss)
-        
 
         ##======================================================
         if dodiscradj
@@ -314,8 +311,8 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
             # discrete adjoint: first visited points in FMM order
             ttfirstpts = Vector{Float64}(undef,naccinit)
             for l=1:naccinit
-                i,j,k = is[l],js[l],ks[l]
-                ttij = ttime[i,j,k]
+                i,j,k = ijksrc[1,l],ijksrc[2,l],ijksrc[3,l]
+                ttij = fmmvars.ttime[i,j,k]
                 # store initial points' FMM order
                 ttfirstpts[l] = ttij
             end
@@ -326,11 +323,12 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
                 # ordered index
                 p = spidx[l]
                 # go from cartesian (i,j) to linear
-                idxconv.lfmm2grid[l] = cart2lin3D(is[p],js[p],ks[p],n1,n2)
+                i,j,k = ijksrc[1,l],ijksrc[2,l],ijksrc[3,l]
+                idxconv.lfmm2grid[l] = cart2lin3D(i,j,k,n1,n2)
 
                 ######################################
                 # store arrival time for first points in FMM order
-                ttgrid = ttime[is[p],js[p],ks[p]]
+                ttgrid = fmmvars.ttime[i,j,k]
                 ## The following to avoid a singular upper triangular matrix in the
                 ##  adjoint equation. Otherwise there will be a row of only zeros in the LHS.
                 if ttgrid==0.0
@@ -370,8 +368,11 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
 
 
     ## Init the max binary heap with void arrays but max size
-    Nmax=n1*n2*n3
-    bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    Nmax = n1*n2*n3
+    # al = @allocated begin
+    bheap = init_minheap(Nmax)
+    # end
+    # println("FWD  after bheap allocated: $(al/1024^2)")
 
     ## pre-allocate
     tmptt::Float64 = 0.0 
@@ -380,25 +381,25 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
     for l=1:naccinit ##        
         for ne=1:6 ## six potential neighbors
             
-            i = is[l] + neigh[ne,1]
-            j = js[l] + neigh[ne,2]
-            k = ks[l] + neigh[ne,3]
+            i = ijksrc[1,l] + neigh[ne,1]
+            j = ijksrc[2,l] + neigh[ne,2]
+            k = ijksrc[3,l] + neigh[ne,3]
             
             ## if the point is out of bounds skip this iteration
             if ( (i>n1) || (i<1) || (j>n2) || (j<1) || (k>n3) || (k<1) )
                 continue
             end
 
-            if status[i,j,k]==0 ## far
+            if fmmvars.status[i,j,k]==0 ## far
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(ttime,vel,grd,status,i,j,k,idD)
+                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,i,j,k,idD)
                 # get handle
                 han = cart2lin3D(i,j,k,n1,n2)
                 # insert into heap
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
-                status[i,j,k]=1
+                fmmvars.status[i,j,k]=1
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
@@ -415,7 +416,7 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if bheap.Nh[]<1
             break
         end
 
@@ -424,9 +425,9 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
         lin2cart3D!(han,n1,n2,ptijk)
         ia,ja,ka = ptijk[1],ptijk[2],ptijk[3]
         # set status to accepted
-        status[ia,ja,ka] = 2 # 2=accepted
+        fmmvars.status[ia,ja,ka] = 2 # 2=accepted
         # set traveltime of the new accepted point
-        ttime[ia,ja,ka] = tmptt
+        fmmvars.ttime[ia,ja,ka] = tmptt
 
         if dodiscradj
             # store the linear index of FMM order
@@ -447,24 +448,24 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
                 continue
             end
 
-            if status[i,j,k]==0 ## far, active
+            if fmmvars.status[i,j,k]==0 ## far, active
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(ttime,vel,grd,status,i,j,k,idD)
+                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,i,j,k,idD)
                 han = cart2lin3D(i,j,k,n1,n2)
                 insert_minheap!(bheap,tmptt,han)
                 # change status, add to narrow band
-                status[i,j,k]=1                
+                fmmvars.status[i,j,k]=1                
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
                     codeDxyz[han,:] .= idD
                 end
 
-            elseif status[i,j,k]==1 ## narrow band
+            elseif fmmvars.status[i,j,k]==1 ## narrow band
 
                 # update the traveltime for this point
-                tmptt = calcttpt_2ndord!(ttime,vel,grd,status,i,j,k,idD)
+                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,i,j,k,idD)
                 # get handle
                 han = cart2lin3D(i,j,k,n1,n2)
                 # update the traveltime for this point in the heap
@@ -566,11 +567,11 @@ function ttFMM_hiord(vel::Array{Float64,3},src::Vector{Float64},grd::GridEik3D ;
                            fmmord.vecDz.Nsize[1], fmmord.vecDz.Nsize[2]) 
 
         ## return all the stuff for discrete adjoint computations
-        return ttime,idxconv,fmmord.ttime,Dx_fmmord,Dy_fmmord,Dz_fmmord
+        return idxconv,fmmord.ttime,Dx_fmmord,Dy_fmmord,Dz_fmmord
     end # if dodiscradj
     ##======================================================
         
-    return ttime
+    return 
 end  # ttFMM_hiord
 
 
@@ -603,8 +604,8 @@ $(TYPEDSIGNATURES)
    Compute the traveltime at a given node using 2nd order stencil 
     where possible, otherwise revert to 1st order.
 """
-function calcttpt_2ndord!(ttime::Array{Float64,3},vel::Array{Float64,3},grd::GridEik3D,
-                         status::Array{Int64,3},i::Int64,j::Int64,k::Int64,codeD::MVector{3,Int64})
+function calcttpt_2ndord!(fmmvars::FMMvars3D,vel::Array{Float64,3},grd::GridEik3D,
+                          i::Int64,j::Int64,k::Int64,codeD::MVector{3,Int64})
 
     
     #######################################################
@@ -703,8 +704,8 @@ function calcttpt_2ndord!(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Gri
             isonb1,isonb2 = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
                                     
             ## 1st order
-            if !isonb1 && status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
-                testval1 = ttime[i+ish,j+jsh,k+ksh]
+            if !isonb1 && fmmvars.status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
+                testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
                 ## pick the lowest value of the two
                 if testval1<chosenval1 ## < only
                     chosenval1 = testval1
@@ -723,8 +724,8 @@ function calcttpt_2ndord!(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Gri
                     ish2::Int64 = 2*ish
                     jsh2::Int64 = 2*jsh
                     ksh2::Int64 = 2*ksh                     
-                    if !isonb2 && status[i+ish2,j+jsh2,k+ksh2]==2 ## 2==accepted
-                        testval2 = ttime[i+ish2,j+jsh2,k+ksh2]
+                    if !isonb2 && fmmvars.status[i+ish2,j+jsh2,k+ksh2]==2 ## 2==accepted
+                        testval2 = fmmvars.ttime[i+ish2,j+jsh2,k+ksh2]
                         ## pick the lowest value of the two
                         ## <=, compare to chosenval 1, *not* 2!!
                         if testval2<=chosenval1 
@@ -812,6 +813,11 @@ function calcttpt_2ndord!(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Gri
                 ## two sides for each direction
                 for l=1:2
 
+                    # for dir in (-1,1)
+                    #     ind[:] .= 0
+                    #     ind[axis] = dir
+                    # end
+                    
                     ## map the 4 cases to an integer as in linear indexing...
                     lax = l + 2*(axis-1)
                     if lax==1 # axis==1
@@ -844,8 +850,8 @@ function calcttpt_2ndord!(ttime::Array{Float64,3},vel::Array{Float64,3},grd::Gri
                     isonb1,isonb2 = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
                     
                     ## 1st order
-                    if !isonb1 && status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
-                        testval1 = ttime[i+ish,j+jsh,k+ksh]
+                    if !isonb1 && fmmvars.status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
+                        testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
                         ## pick the lowest value of the two
                         if testval1<chosenval1 ## < only
                             chosenval1 = testval1
@@ -1163,7 +1169,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
 
     ## Init the min binary heap with void arrays but max size
     Nmax=n1*n2*n3
-    bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    bheap = init_minheap!(Nmax)
 
     ## pre-allocate
     tmptt::Float64 = 0.0 
@@ -1205,7 +1211,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if bheap.Nh[]<1
             break
         end
 
@@ -1315,91 +1321,121 @@ $(TYPEDSIGNATURES)
 
  Define the "box" of nodes around/including the source.
 """
-function sourceboxloctt!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},grd::Grid3D; staggeredgrid::Bool=false )
-    ## staggeredgrid keyword required!
+function sourceboxloctt!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::AbstractVector{Float64},
+                         grd::Grid3D; staggeredgrid::Bool=false )
 
-    mindistsrc = 1e-5
+    # minimum distance between node and source position
+    mindistsrc = 10.0*eps()
   
     xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
     
     if staggeredgrid==false
         ## regular grid
-        onsrc = zeros(Bool,grd.nx,grd.ny,grd.nz)
-        onsrc[:,:,:] .= false
         ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
-        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
+        rx = xsrc-grd.x[ix] 
+        ry = ysrc-grd.y[iy] 
+        rz = zsrc-grd.z[iz] 
 
     elseif staggeredgrid==true
+        # staggered grid
         ## grd.xinit-hgr because TIME array on STAGGERED grid
-        onsrc = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
-        onsrc[:,:,:] .= false
         hgr = grd.hgrid/2.0
         ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
-        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
+        rx = xsrc-(grd.x[ix]-hgr)
+        ry = ysrc-(grd.y[iy]-hgr)
+        rz = zsrc-(grd.z[iz]-hgr)
 
     end
 
   
-    halfg = 0.0 #hgrid/2.0
+    halfg = 0.0 #
     dist = sqrt(rx^2+ry^2+rz^2)
-    #@show dist,src,rx,ry
-    if dist<=mindistsrc
-        onsrc[ix,iy,iz] = true
-        ttime[ix,iy,iz] = 0.0 
-    else
-        
-        if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-        elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-        elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-        elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
 
-        elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-        elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-        elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-        elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-            onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
+    if dist<=mindistsrc
+        ## single point
+        ijksrc = @MMatrix [ix iy iz]
+        ## set status = accepted == 2
+        fmmvars.status[i,j,k] = 2
+        
+    else
+        # pre-allocate array of indices for source
+        ijksrc = @MMatrix zeros(Int64,3,8)
+
+        ## eight points
+        if rx>=halfg
+            srci = (ix,ix+1)
+        else
+            srci = (ix-1,ix)
+        end
+        if ry>=halfg
+            srcj = (iy,iy+1)
+        else
+            srcj = (iy-1,iy)
+        end
+        if rz>=halfg
+            srck = (iz,iz+1)
+        else
+            srck = (iz-1,iz)
         end
 
+        l=1
+        for k=1:2, j=1:2, i=1:2
+            ijksrc[:,l] .= (srci[i],srcj[j],srck[k])
+            l+=1
+        end
+                        
+        # if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
+        #     onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
+        # elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
+        #     onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
+        # elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
+        #     onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
+        # elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
+        #     onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
+
+        # elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
+        #     onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
+        # elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
+        #     onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
+        # elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
+        #     onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
+        # elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
+        #     onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
+        # end
+
         ## set ttime around source ONLY FOUR points!!!
-        ijksrc = findall(onsrc)
-        for lcart in ijksrc
-            i = lcart[1]
-            j = lcart[2]
-            k = lcart[3]
+        for l=1:size(ijksrc,2)
+            i = ijksrc[1,l]
+            j = ijksrc[2,l]
+            k = ijksrc[3,l]
+
+            ## set status = accepted == 2
+            fmmvars.status[i,j,k] = 2            
+
             if staggeredgrid==false
                 ## regular grid
-                xp = (i-1)*grd.hgrid+grd.xinit
-                yp = (j-1)*grd.hgrid+grd.yinit
-                zp = (k-1)*grd.hgrid+grd.zinit
+                xp = grd.x[i] 
+                yp = grd.y[j]
+                zp = grd.z[k]
                 ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
                 jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
                 kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+                fmmvars.ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+
             elseif staggeredgrid==true
                 ## grd.xinit-hgr because TIME array on STAGGERED grid
-                xp = (i-1)*grd.hgrid+grd.xinit-hgr
-                yp = (j-1)*grd.hgrid+grd.yinit-hgr
-                zp = (k-1)*grd.hgrid+grd.zinit-hgr
+                xp = grd.x[i]-hgr
+                yp = grd.y[j]-hgr
+                zp = grd.z[k]-hgr
                 ii = i-1 
                 jj = j-1 
                 kk = k-1 
                 #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+                fmmvars.ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
             end
         end
     end
-    return onsrc
+    return ijksrc
 end
 
 #############################################################################
@@ -1408,16 +1444,15 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function sourceboxloctt_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},grd::Grid3DSphere )
+function sourceboxloctt_sph!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::AbstractVector{Float64},grd::Grid3DSphere )
     ## staggeredgrid keyword required!
 
-    mindistsrc = 1e-5
+    # minimum distance between node and source position
+    mindistsrc = 10.0*eps()
   
     rsrc,θsrc,φsrc=srcpos[1],srcpos[2],srcpos[3]
 
     ## regular grid
-    onsrc = zeros(Bool,grd.nr,grd.nθ,grd.nφ)
-    onsrc[:,:,:] .= false
     ir,iθ,iφ = findclosestnode_sph(rsrc,θsrc,φsrc,grd.rinit,grd.θinit,grd.φinit,grd.Δr,grd.Δθ,grd.Δφ)
 
     rr = rsrc-grd.r[ir] #((ir-1)*grd.Δr+grd.rinit)
@@ -1436,35 +1471,62 @@ function sourceboxloctt_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpo
     dist = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
     #@show dist,src,rr,rθ
     if dist<=mindistsrc
-        onsrc[ir,iθ,iφ] = true
-        ttime[ir,iθ,iφ] = 0.0 
+        ## single point
+        ijksrc = @MMatrix [ir iθ iφ]
+        ## set status = accepted == 2
+        fmmvars.status[i,j,k] = 2
+        
     else
+        # pre-allocate array of indices for source
+        ijksrc = @MMatrix zeros(Int64,3,8)
 
-        if (rr>=halfg) & (rθ>=halfg) & (rφ>=halfg)
-            onsrc[ir:ir+1,iθ:iθ+1,iφ:iφ+1] .= true
-        elseif (rr<halfg) & (rθ>=halfg) & (rφ>=halfg)
-            onsrc[ir-1:ir,iθ:iθ+1,iφ:iφ+1] .= true
-        elseif (rr<halfg) & (rθ<halfg) & (rφ>=halfg)
-            onsrc[ir-1:ir,iθ-1:iθ,iφ:iφ+1] .= true
-        elseif (rr>=halfg) & (rθ<halfg) & (rφ>=halfg)
-            onsrc[ir:ir+1,iθ-1:iθ,iφ:iφ+1] .= true
-
-        elseif (rr>=halfg) & (rθ>=halfg) & (rφ<halfg)
-            onsrc[ir:ir+1,iθ:iθ+1,iφ-1:iφ] .= true
-        elseif (rr<halfg) & (rθ>=halfg) & (rφ<halfg)
-            onsrc[ir-1:ir,iθ:iθ+1,iφ-1:iφ] .= true
-        elseif (rr<halfg) & (rθ<halfg) & (rφ<halfg)
-            onsrc[ir-1:ir,iθ-1:iθ,iφ-1:iφ] .= true
-        elseif (rr>=halfg) & (rθ<halfg) & (rφ<halfg)
-            onsrc[ir:ir+1,iθ-1:iθ,iφ-1:iφ] .= true
+        ## eight points
+        if rr>=halfg
+            srci = (ir,ir+1)
+        else
+            srci = (ir-1,ir)
+        end
+        if rθ>=halfg
+            srcj = (iθ,iθ+1)
+        else
+            srcj = (iθ-1,iθ)
+        end
+        if rφ>=halfg
+            srck = (iφ,iφ+1)
+        else
+            srck = (iφ-1,iφ)
         end
 
+        l=1
+        for k=1:2, j=1:2, i=1:2
+            ijksrc[:,l] .= (srci[i],srcj[j],srck[k])
+            l+=1
+        end
+
+        # if (rr>=halfg) & (rθ>=halfg) & (rφ>=halfg)
+        #     onsrc[ir:ir+1,iθ:iθ+1,iφ:iφ+1] .= true
+        # elseif (rr<halfg) & (rθ>=halfg) & (rφ>=halfg)
+        #     onsrc[ir-1:ir,iθ:iθ+1,iφ:iφ+1] .= true
+        # elseif (rr<halfg) & (rθ<halfg) & (rφ>=halfg)
+        #     onsrc[ir-1:ir,iθ-1:iθ,iφ:iφ+1] .= true
+        # elseif (rr>=halfg) & (rθ<halfg) & (rφ>=halfg)
+        #     onsrc[ir:ir+1,iθ-1:iθ,iφ:iφ+1] .= true
+
+        # elseif (rr>=halfg) & (rθ>=halfg) & (rφ<halfg)
+        #     onsrc[ir:ir+1,iθ:iθ+1,iφ-1:iφ] .= true
+        # elseif (rr<halfg) & (rθ>=halfg) & (rφ<halfg)
+        #     onsrc[ir-1:ir,iθ:iθ+1,iφ-1:iφ] .= true
+        # elseif (rr<halfg) & (rθ<halfg) & (rφ<halfg)
+        #     onsrc[ir-1:ir,iθ-1:iθ,iφ-1:iφ] .= true
+        # elseif (rr>=halfg) & (rθ<halfg) & (rφ<halfg)
+        #     onsrc[ir:ir+1,iθ-1:iθ,iφ-1:iφ] .= true
+        # end
+
         ## set ttime around source ONLY FOUR points!!!
-        ijksrc = findall(onsrc)
-        for lcart in ijksrc
-            i = lcart[1]
-            j = lcart[2]
-            k = lcart[3]
+        for l=1:size(ijksrc,2)
+            i = ijksrc[1,l]
+            j = ijksrc[2,l]
+            k = ijksrc[3,l]
             ## regular grid
             # rp = (i-1)*grd.hgrid+grd.rinit
             # θp = (j-1)*grd.hgrid+grd.θinit
@@ -1473,6 +1535,9 @@ function sourceboxloctt_sph!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpo
             # jj = Int(floor((θsrc-grd.θinit)/grd.θgrid) +1)
             # kk = Int(floor((φsrc-grd.φinit)/grd.φgrid) +1) 
        
+            ## set status = accepted == 2
+            fmmvars.status[i,j,k] = 2
+
             r1 = rsrc
             r2 = grd.r[i]
             θ1 = θsrc

@@ -1,6 +1,30 @@
 
 ######################################################
 
+struct FMMvars2D
+    ttime::Array{Float64,2}
+    status::Array{UInt8,2}
+
+    function FMMvars2D(n1,n2)
+        ttime = zeros(Float64,n1,n2)
+        status = zeros(UInt8,n1,n2)
+        new(ttime,status)
+    end
+end
+
+struct FMMvars3D
+    ttime::Array{Float64,3}
+    status::Array{UInt8,3}
+
+    function FMMvars3D(n1,n2,n3)
+        ttime = zeros(Float64,n1,n2,n3)
+        status = zeros(UInt8,n1,n2,n3)
+        new(ttime,status)
+    end
+end
+
+######################################################
+
 abstract type GridEik end
 abstract type GridEik2D <: GridEik end
 abstract type GridEik3D <: GridEik end

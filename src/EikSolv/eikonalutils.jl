@@ -154,8 +154,9 @@ $(TYPEDSIGNATURES)
 Trinilear interpolation.
 """
 function trilinear_interp(ttime::AbstractArray{Float64,3},grd::Union{Grid3D,Grid3DSphere},
-                          xin::Float64,yin::Float64,zin::Float64; return_coeffonly::Bool=false)
+                          xyzpt::AbstractVector{Float64}; return_coeffonly::Bool=false)
  
+    xin,yin,zin = xyzpt[1],xyzpt[2],xyzpt[3]
 
     if typeof(grd)==Grid3D
         dx = grd.hgrid
