@@ -15,11 +15,13 @@ end
 struct FMMvars3D
     ttime::Array{Float64,3}
     status::Array{UInt8,3}
+    bheap::BinHeapMin
 
     function FMMvars3D(n1,n2,n3)
         ttime = zeros(Float64,n1,n2,n3)
         status = zeros(UInt8,n1,n2,n3)
-        new(ttime,status)
+        bheap = init_minheap(n1*n2*n3)
+        new(ttime,status,bheap)
     end
 end
 

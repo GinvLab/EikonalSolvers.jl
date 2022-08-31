@@ -91,7 +91,7 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
             # return ONLY traveltime picks at receivers
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
+                @async @time  ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
                                                         vel,view(coordsrc,igrs,:),
                                                         view(coordrec,igrs),grd,
                                                         returntt=returntt )
@@ -117,7 +117,7 @@ $(TYPEDSIGNATURES)
 function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::AbstractArray{Float64,2},
                          coordrec::AbstractVector{Array{Float64,2}},grd::GridEik3D ;
                          returntt::Bool=false )
-    
+
     if typeof(grd)==Grid3D
         #simtype = :cartesian
         n1,n2,n3 = grd.nx,grd.ny,grd.nz #size(vel)  ## NOT A STAGGERED GRID!!!
@@ -134,11 +134,8 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::AbstractArray{Float64,2
         ttpicksGRPSRC[i] = zeros(curnrec)
     end
 
-    ## pre-allocate ttime and status arrays
+    ## pre-allocate ttime and status arrays plus the binary heap
     fmmvars = FMMvars3D(n1,n2,n3)
-
-    #extrapars.refinearoundsrc = false
-    #@show extrapars.refinearoundsrc
 
     if returntt
         ttimeGRPSRC = zeros(n1,n2,n3,nsrc)
@@ -146,10 +143,10 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::AbstractArray{Float64,2
 
     ## group of pre-selected sources
     for s=1:nsrc
-        #al = @allocated begin
-        @time  ttFMM_hiord!(fmmvars,vel,view(coordsrc,s,:),grd)
-        #end
-        #println("FWD $s after ttFMM allocated: $(al/1e6)")
+        # al = @allocated begin
+        ttFMM_hiord!(fmmvars,vel,view(coordsrc,s,:),grd)
+        # end
+        # println("FWD $s after ttFMM allocated: $(al/1e6)")
         
         ## Interpolate at receivers positions
         for i=1:size(coordrec[s],1)
@@ -229,15 +226,15 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
         ## Refinement around the source      
         ##
         if dodiscradj
-            ttaroundsrc!(fmmvars,vel,src,grd,inittt,
-                         dodiscradj=dodiscradj,idxconv=idxconv,fmmord=fmmord)
+            ijksrc = ttaroundsrc!(fmmvars,vel,src,grd,inittt,dodiscradj=dodiscradj,
+                                  idxconv=idxconv,fmmord=fmmord)
         else
-            ttaroundsrc!(fmmvars,vel,src,grd,inittt)
+            println("ttaroundsrc!()...")
+            @time  ijksrc = ttaroundsrc!(fmmvars,vel,src,grd,inittt)
         end
 
         ## number of accepted points       
         naccinit = size(ijksrc,2)
-
 
         ##======================================================
         if dodiscradj
@@ -368,9 +365,9 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
 
 
     ## Init the max binary heap with void arrays but max size
-    Nmax = n1*n2*n3
+    # Nmax = n1*n2*n3
     # al = @allocated begin
-    bheap = init_minheap(Nmax)
+    # bheap = init_minheap(Nmax)
     # end
     # println("FWD  after bheap allocated: $(al/1024^2)")
 
@@ -397,7 +394,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
                 # get handle
                 han = cart2lin3D(i,j,k,n1,n2)
                 # insert into heap
-                insert_minheap!(bheap,tmptt,han)
+                insert_minheap!(fmmvars.bheap,tmptt,han)
                 # change status, add to narrow band
                 fmmvars.status[i,j,k]=1
 
@@ -416,12 +413,12 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
-        if bheap.Nh[]<1
+        if fmmvars.bheap.Nh[]<1
             break
         end
 
         # pop top of heap
-        han,tmptt = pop_minheap!(bheap)
+        han,tmptt = pop_minheap!(fmmvars.bheap)
         lin2cart3D!(han,n1,n2,ptijk)
         ia,ja,ka = ptijk[1],ptijk[2],ptijk[3]
         # set status to accepted
@@ -453,7 +450,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
                 ## add tt of point to binary heap and give handle
                 tmptt = calcttpt_2ndord!(fmmvars,vel,grd,i,j,k,idD)
                 han = cart2lin3D(i,j,k,n1,n2)
-                insert_minheap!(bheap,tmptt,han)
+                insert_minheap!(fmmvars.bheap,tmptt,han)
                 # change status, add to narrow band
                 fmmvars.status[i,j,k]=1                
 
@@ -469,7 +466,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
                 # get handle
                 han = cart2lin3D(i,j,k,n1,n2)
                 # update the traveltime for this point in the heap
-                update_node_minheap!(bheap,tmptt,han)
+                update_node_minheap!(fmmvars.bheap,tmptt,han)
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
@@ -926,9 +923,8 @@ $(TYPEDSIGNATURES)
   Refinement of the grid around the source. Traveltime calculated (FMM) inside a finer grid 
     and then passed on to coarser grid
 """
-function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3},
-                      vel::Array{Float64,3},src::Vector{Float64},grdcoarse::GridEik3D,
-                      inittt::Float64 ;
+function ttaroundsrc!(fmmcoarse::FMMvars3D,vel::Array{Float64,3},src::AbstractVector{Float64},
+                      grdcoarse::GridEik3D,inittt::Float64 ;
                       dodiscradj::Bool=false,idxconv::Union{MapOrderGridFMM3D,Nothing}=nothing,
                       fmmord::Union{VarsFMMOrder3D,Nothing}=nothing )
 
@@ -1021,37 +1017,38 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         end
     end 
 
-
-   # # set the origin of fine grid
-    # xinit = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
-    # yinit = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
-    # zinit = ((k1coarse-1)*grdcoarse.hgrid+grdcoarse.zinit)
-    # grdfine = Grid3D(hgrid=dh,xinit=xinit,yinit=yinit,zinit=zinit,nx=nx,ny=ny,nz=nz)
+    ##
+    ## Init arrays
+    ##
+    fmmfine = FMMvars3D(n1,n2,n3)
 
     ## 
     ## Time array
     ##
     inittt = 1e30
-    ttime = Array{Float64}(undef,n1,n2,n3)
-    ttime[:,:,:] .= inittt
+    #ttime = Array{Float64}(undef,n1,n2,n3)
+    fmmfine.ttime[:,:,:] .= inittt
+    
     ##
     ## Status of nodes
     ##
-    status = Array{Int64}(undef,n1,n2,n3)
-    status[:,:,:] .= 0   ## set all to far
+    #status = Array{Int64}(undef,n1,n2,n3)
+    fmmfine.status[:,:,:] .= 0   ## set all to far
     # derivative codes
     idD = MVector(0,0,0)
-  
+    ##
+    ptijk = MVector(0,0,0)
+    ##
+    ijksrc_coarse = Matrix{Int64}(undef,3,n1*n2*n3)
+    counter_ijksrccoarse::Int64 = 1
+
     ##
     ## Reset coodinates to match the fine grid
     ##
-    # xorig = ((i1coarse-1)*grdcoarse.hgrid+grdcoarse.xinit)
-    # yorig = ((j1coarse-1)*grdcoarse.hgrid+grdcoarse.yinit)
-    # zorig = ((k1coarse-1)*grdcoarse.hgrid+grdcoarse.zinit)
     xsrc = src[1] #- xorig - grdcoarse.xinit
     ysrc = src[2] #- yorig - grdcoarse.yinit
     zsrc = src[3] #- zorig - grdcoarse.zinit
-    srcfine = Float64[xsrc,ysrc,zsrc]
+    srcfine = MVector(xsrc,ysrc,zsrc)
 
 
     if simtype==:cartesian
@@ -1066,7 +1063,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         ## Source location, etc. within fine grid
         ##  
         ## REGULAR grid (not staggered), use "grdfine","finegrd", source position in the fine grid!!
-        onsrc = sourceboxloctt!(ttime,velfinegrd,srcfine,grdfine, staggeredgrid=false )
+        ijksrc_fine = sourceboxloctt!(fmmfine,velfinegrd,srcfine,grdfine, staggeredgrid=false )
         
 
 
@@ -1084,46 +1081,42 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         ## Source location, etc. within fine grid
         ##  
         ## REGULAR grid (not staggered), use "grdfine","finegrd", source position in the fine grid!!
-        onsrc = sourceboxloctt_sph!(ttime,velfinegrd,srcfine,grdfine)
+        ijksrc_fine = sourceboxloctt_sph!(fmmfine,velfinegrd,srcfine,grdfine)
 
     end
 
 
     ######################################################
-    ptijk = MVector(0,0,0)
-
     neigh = SA[1  0  0;
-             0  1  0;
-            -1  0  0;
-             0 -1  0;
-             0  0  1;
-             0  0 -1]
+               0  1  0;
+              -1  0  0;
+               0 -1  0;
+               0  0  1;
+               0  0 -1]
 
     #-------------------------------
     ## init FMM
-    status[onsrc] .= 2 ## set to accepted on src
-    naccinit=count(status.==2)
+    
+    ## number of accepted points       
+    naccinit = size(ijksrc_fine,2)
 
-    ## get all i,j,k accepted
-    ijkss = findall(status.==2) 
-    is = [l[1] for l in ijkss]
-    js = [l[2] for l in ijkss]
-    ks = [l[3] for l in ijkss]
-    naccinit = length(ijkss)
-
+    
     ##===================================
     for l=1:naccinit
-        ia = is[l]
-        ja = js[l]
-        ka = ks[l]
+        ia = ijksrc_fine[1,l]
+        ja = ijksrc_fine[2,l]
+        ka = ijksrc_fine[3,l]
+
         # if the node coincides with the coarse grid, store values
         oncoa,ia_coarse,ja_coarse,ka_coarse = isacoarsegridnode(ia,ja,ka,downscalefactor,
                                                                 i1coarse,j1coarse,k1coarse)
         if oncoa
             ##===================================
             ## UPDATE the COARSE GRID
-            ttimecoarse[ia_coarse,ja_coarse,ka_coarse]  = ttime[ia,ja,ka]
-            statuscoarse[ia_coarse,ja_coarse,ka_coarse] = status[ia,ja,ka]
+            fmmcoarse.ttime[ia_coarse,ja_coarse,ka_coarse]  = ttime[ia,ja,ka]
+            fmmcoarse.status[ia_coarse,ja_coarse,ka_coarse] = status[ia,ja,ka]
+            ijksrc_coarse[:,counter_ijksrccoarse] .= (ia_coarse,ja_coarse,ka_coarse)
+            counter_ijksrccoarse +=1
             ##==================================
         end
     end
@@ -1135,7 +1128,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         # discrete adjoint: first visited points in FMM order
         ttfirstpts = Vector{Float64}(undef,naccinit)
         for l=1:naccinit
-            i,j,k = is[l],js[l],ks[l]
+            i,j,k = ijksrc_fine[1,l],ijksrc_fine[2,l],ijksrc_fine[3,l]
             ttij = ttime[i,j,k]
             # store initial points' FMM order
             ttfirstpts[l] = ttij
@@ -1150,7 +1143,8 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
             p = spidx[l]
 
             ## if the point belongs to the coarse grid, add it
-            oncoa,ia_coarse,ja_coarse,ka_coarse = isacoarsegridnode(is[p],js[p],ks[p],downscalefactor,
+            i,j,k = ijksrc_fine[1,l],ijksrc_fine[2,l],ijksrc_fine[3,l]
+            oncoa,ia_coarse,ja_coarse,ka_coarse = isacoarsegridnode(i,j,k,downscalefactor,
                                                                     i1coarse,j1coarse,k1coarse)
             if oncoa
                 # go from cartesian (i,j) to linear
@@ -1158,8 +1152,9 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
                                                             idxconv.nx,idxconv.ny)
 
                 # store arrival time for first points in FMM order
-                fmmord.ttime[node_coarse] = ttime[is[p],js[p],ks[p]]
-                
+                fmmord.ttime[node_coarse] = ttime[i,j,k]
+
+                ## update counter!
                 node_coarse +=1
             end
         end
@@ -1168,38 +1163,37 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
 
 
     ## Init the min binary heap with void arrays but max size
-    Nmax=n1*n2*n3
-    bheap = init_minheap!(Nmax)
+    #Nmax=n1*n2*n3
+    #bheap = init_minheap!(Nmax)
 
     ## pre-allocate
-    tmptt::Float64 = 0.0 
-    
+    tmptt::Float64 = 0.0     
     
     ## construct initial narrow band
     for l=1:naccinit ##
         for ne=1:6 ## six potential neighbors
 
-            i = is[l] + neigh[ne,1]
-            j = js[l] + neigh[ne,2]
-            k = ks[l] + neigh[ne,3]
+            i = ijksrc_fine[1,l] + neigh[ne,1]
+            j = ijksrc_fine[2,l] + neigh[ne,2]
+            k = ijksrc_fine[3,l] + neigh[ne,3]
             
             ## if the point is out of bounds skip this iteration
             if (i>n1) || (i<1) || (j>n2) || (j<1) || (k>n3) || (k<1)
                 continue
             end
 
-            if status[i,j,k]==0 ## far
+            if fmmfine.status[i,j,k]==0 ## far
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(ttime,velfinegrd,grdfine,status,i,j,k,idD)
+                tmptt = calcttpt_2ndord!(fmmfine,velfinegrd,grdfine,i,j,k,idD)
 
                 # get handle
                 # han = sub2ind((nx,ny),i,j)
                 han = cart2lin3D(i,j,k,n1,n2)
                 # insert into heap
-                insert_minheap!(bheap,tmptt,han)
+                insert_minheap!(fmmfine.bheap,tmptt,han)
                 # change status, add to narrow band
-                status[i,j,k]=1
+                fmmfine.status[i,j,k]=1
             end            
         end
     end
@@ -1211,18 +1205,18 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
-        if bheap.Nh[]<1
+        if fmmfine.bheap.Nh[]<1
             break
         end
 
-        han,tmptt = pop_minheap!(bheap)
+        han,tmptt = pop_minheap!(fmmfine.bheap)
         #ia,ja = ind2sub((nx,ny),han)
         lin2cart3D!(han,n1,n2,ptijk)
         ia,ja,ka = ptijk[1],ptijk[2],ptijk[3]
         # set status to accepted
-        status[ia,ja,ka] = 2 # 2=accepted
+        fmmfine.status[ia,ja,ka] = 2 # 2=accepted
         # set traveltime of the new accepted point
-        ttime[ia,ja,ka] = tmptt
+        fmmfine.ttime[ia,ja,ka] = tmptt
         
         ##===================================
         oncoa,ia_coarse,ja_coarse,ka_coarse = isacoarsegridnode(ia,ja,ka,downscalefactor,i1coarse,j1coarse,k1coarse)
@@ -1230,8 +1224,10 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
 
             ##===================================
             ## UPDATE the COARSE GRID
-            ttimecoarse[ia_coarse,ja_coarse,ka_coarse] = tmptt
-            statuscoarse[ia_coarse,ja_coarse,ka_coarse] = 2
+            fmmcoarse.ttime[ia_coarse,ja_coarse,ka_coarse] = tmptt
+            fmmcoarse.status[ia_coarse,ja_coarse,ka_coarse] = 2
+            ijksrc_coarse[:,counter_ijksrccoarse] .= (ia_coarse,ja_coarse,ka_coarse)
+            counter_ijksrccoarse +=1
             ##===================================
 
             ##===================================
@@ -1257,19 +1253,20 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
         if (ia==1 && !outxmin) || (ia==n1 && !outxmax) || (ja==1 && !outymin) || (ja==n2 && !outymax) || (ka==1 && !outzmin) || (ka==n3 && !outzmax)
  
             ## delete current narrow band to avoid problems when returned to coarse grid
-            statuscoarse[statuscoarse.==1] .= 0
+            fmmcoarse.status[fmmcoarse.status.==1] .= 0
 
             ## Prevent the difficult case of traveltime hitting the borders but
             ##   not the coarse grid, which would produce an empty "statuscoarse" and an empty "ttimecoarse".
             ## Probably needs a better fix..."
-            if count(statuscoarse.>0)<1
+            if count(fmmcoarse.status.>0)<1
                 if firstwarning 
                     @warn("Traveltime hitting the borders but not the coarse grid, continuing.")
                     firstwarning=false
                 end
                 continue
             end
-            return nothing
+
+            return ijksrc_coarse[:,counter_ijksrccoarse-1]
         end
         ##########################################################
 
@@ -1285,30 +1282,31 @@ function ttaroundsrc!(statuscoarse::Array{Int64,3},ttimecoarse::Array{Float64,3}
                 continue
             end
 
-            if status[i,j,k]==0 ## far, active
+            if fmmfine.status[i,j,k]==0 ## far, active
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(ttime,velfinegrd,grdfine,status,i,j,k,idD)
+                tmptt = calcttpt_2ndord!(fmmfine,velfinegrd,grdfine,i,j,k,idD)
                 han = cart2lin3D(i,j,k,n1,n2)
-                insert_minheap!(bheap,tmptt,han)
+                insert_minheap!(fmmfine.bheap,tmptt,han)
                 # change status, add to narrow band
-                status[i,j,k]=1                
+                fmmfine.status[i,j,k]=1                
 
-            elseif status[i,j,k]==1 ## narrow band                
+            elseif fmmfine.status[i,j,k]==1 ## narrow band                
 
                 # update the traveltime for this point
-                tmptt = calcttpt_2ndord!(ttime,velfinegrd,grdfine,status,i,j,k,idD)
+                tmptt = calcttpt_2ndord!(fmmfine,velfinegrd,grdfine,i,j,k,idD)
                 # get handle
                 han = cart2lin3D(i,j,k,n1,n2)
                 # update the traveltime for this point in the heap
-                update_node_minheap!(bheap,tmptt,han)
+                update_node_minheap!(fmmfine.bheap,tmptt,han)
 
             end
         end
         ##-------------------------------
 
     end
-    error("Ouch...")
+
+    return
 end
 
 #################################################################3
