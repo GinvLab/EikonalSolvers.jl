@@ -126,19 +126,32 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
         ttpicksGRPSRC[i] = zeros(curnrec)
     end
 
-    ttGRPSRC = zeros(n1,n2,nsrc)
+    ## pre-allocate ttime and status arrays plus the binary heap
+    fmmvars = FMMvars2D(n1,n2)
+
+    ## pre-allocate discrete adjoint variables
+    ##  No adjoint calculations
+    adjvars = nothing
+
+    if returntt
+        ttGRPSRC = zeros(n1,n2,nsrc)
+    end
 
     ## group of pre-selected sources
     for s=1:nsrc    
-
-        ## Compute traveltime and interpolation at receivers in one go for parallelization
-        ttGRPSRC[:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
+        ##
+        ttFMM_hiord!(fmmvars,vel,view(coordsrc,s,:),grd,adjvars)
 
         ## interpolate at receivers positions
         for i=1:size(coordrec[s],1)
             #  view !!
-            ttpicksGRPSRC[s][i] = bilinear_interp( view(ttGRPSRC,:,:,s),grd,coordrec[s][i,1],
-                                                   coordrec[s][i,2])
+            ttpicksGRPSRC[s][i] = bilinear_interp( fmmvars.ttime,grd,view(coordrec[s],i,:) )
+
+        end
+
+        if returntt
+            ## Compute traveltime and interpolation at receivers in one go for parallelization
+            ttGRPSRC[:,:,s] .= fmmvars.ttime
         end
     end
 
@@ -158,9 +171,15 @@ $(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid. 
 """
-function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
-                     dodiscradj::Bool=false)
+function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVector{Float64},grd::GridEik2D,
+                      adjvars::Union{AdjointVars2D,Nothing} )
                      
+    if adjvars==nothing
+        dodiscradj=false
+    else
+        dodiscradj=true
+    end
+
     ## Sizes
     if typeof(grd)==Grid2D
         simtype = :cartesian
@@ -172,21 +191,19 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
     elseif simtype==:spherical
         n1,n2 = grd.nr,grd.nθ
     end
-    ## 
-    epsilon = 1e-6
     n12 = n1*n2
     
     ## 
     ## Time array
     ##
     inittt = 1e30
-    ttime = Array{Float64}(undef,n1,n2)
-    ttime[:,:] .= inittt
+    #ttime = Array{Float64}(undef,n1,n2)
+    fmmvars.ttime[:,:] .= inittt
     ##
     ## Status of nodes
     ##
-    status = Array{Int64}(undef,n1,n2)
-    status[:,:] .= 0   ## set all to far
+    #status = Array{Int64}(undef,n1,n2)
+    fmmvars.status[:,:] .= 0   ## set all to far
     ##
     ptij = MVector(0,0)
     # derivative codes
@@ -197,9 +214,16 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
         ##
         ##  discrete adjoint: init stuff
         ## 
-        idxconv = MapOrderGridFMM2D(n1,n2)
-        fmmord = VarsFMMOrder2D(n1,n2)
-        codeDxy = zeros(Int64,n12,2)
+        # idxconv = MapOrderGridFMM2D(n1,n2)
+        # fmmord = VarsFMMOrder2D(n1,n2)
+        # codeDxy = zeros(Int64,n12,2)
+        adjvars.fmmord.vecDx.Nnnz[] = 0
+        adjvars.fmmord.vecDy.Nnnz[] = 0
+        # for safety, zeroes the traveltime
+        adjvars.fmmord.ttime[:] .= 0.0
+        # for safety, zeroes the codes for derivatives
+        adjvars.codeDxy[:,:] .= 0
+        
     end    
     ##======================================================
     
@@ -211,17 +235,14 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
         ## Refinement around the source      
         ##
         if dodiscradj
-            ttaroundsrc!(status,ttime,vel,src,grd,inittt,
-                         dodiscradj=dodiscradj,idxconv=idxconv,fmmord=fmmord)
+            ijsrc = ttaroundsrc!(fmmvars,vel,src,grd,inittt,dodiscradj=dodiscradj,
+                                 idxconv=adjvars.idxconv,fmmord=adjvars.fmmord)
         else
-            ttaroundsrc!(status,ttime,vel,src,grd,inittt)
+            ijsrc = ttaroundsrc!(fmmvars,vel,src,grd,inittt)
         end
 
-        ## get all i,j accepted
-        ijss = findall(status.==2) 
-        is = [l[1] for l in ijss]
-        js = [l[2] for l in ijss]
-        naccinit = length(ijss)
+        ## number of accepted points       
+        naccinit = size(ijsrc,2)
 
         ##======================================================
         if dodiscradj
@@ -234,8 +255,8 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
             
             ## pre-compute some of the mapping between fmm and orig order
             for i=1:naccinit
-                ifm = idxconv.lfmm2grid[i]
-                idxconv.lgrid2fmm[ifm] = i
+                ifm = adjvars.idxconv.lfmm2grid[i]
+                adjvars.idxconv.lgrid2fmm[ifm] = i
             end
 
             for l=1:naccinit
@@ -244,24 +265,24 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
                     #################################################################
                     # Here we store a 1 in the diagonal because we are on a source node...
                     #  store arrival time for first points in FMM order
-                    addentry!(fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
                     #################################################################
                 end
 
                 ## "reconstruct" derivative stencils from known FMM order and arrival times
-                derivaroundsrcfmm2D!(l,idxconv,idD)
+                derivaroundsrcfmm2D!(l,adjvars.idxconv,idD)
 
                 if idD==[0,0]
                     #################################################################
                     # Here we store a 1 in the diagonal because we are on a source node...
                     #  store arrival time for first points in FMM order
-                    addentry!(fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
                     #################################################################
                 else
-                    l_fmmord = idxconv.lfmm2grid[l]
-                    codeDxy[l_fmmord,:] .= idD
+                    l_fmmord = adjvars.idxconv.lfmm2grid[l]
+                    adjvars.codeDxy[l_fmmord,:] .= idD
                 end
             end
 
@@ -279,21 +300,12 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
         ## source location, etc.      
         ## REGULAR grid
         if simtype==:cartesian
-            onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=false )
+            ijsrc = sourceboxloctt!(fmmvars,vel,src,grd, staggeredgrid=false )
         elseif simtype==:spherical
-            onsrc = sourceboxloctt_sph!(ttime,vel,src,grd )
+            ijsrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
         end
-
-        ##
-        ## Status of nodes
-        status[onsrc] .= 2 ## set to accepted on src
-
-        ## get all i,j accepted
-        ijss = findall(status.==2) 
-        is = [l[1] for l in ijss]
-        js = [l[2] for l in ijss]
-        naccinit = length(ijss)
-        
+        ## number of accepted points       
+        naccinit = size(ijsrc,2)        
 
         ##======================================================
         if dodiscradj
@@ -301,8 +313,8 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
             # discrete adjoint: first visited points in FMM order
             ttfirstpts = Vector{Float64}(undef,naccinit)
             for l=1:naccinit
-                i,j = is[l],js[l]
-                ttij = ttime[i,j]
+                i,j = ijsrc[1,l],ijsrc[2,l]
+                ttij = fmmvars.ttime[i,j]
                 # store initial points' FMM order
                 ttfirstpts[l] = ttij
             end
@@ -313,26 +325,27 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
                 # ordered index
                 p = spidx[l]
                 # go from cartesian (i,j) to linear
-                idxconv.lfmm2grid[l] = cart2lin2D(is[p],js[p],n1)
+                i,j = ijsrc[1,l],ijsrc[2,l]
+                adjvars.idxconv.lfmm2grid[l] = cart2lin2D(i,j,n1)
 
                 ######################################
                 # store arrival time for first points in FMM order
-                ttgrid = ttime[is[p],js[p]]
+                ttgrid = fmmvars.ttime[i,j]
                 ## The following to avoid a singular upper triangular matrix in the
                 ##  adjoint equation. Otherwise there will be a row of only zeros in the LHS.
                 if ttgrid==0.0
-                    fmmord.ttime[l] = 10.0*eps()
+                    adjvars.fmmord.ttime[l] = 10.0*eps()
                     @warn("Source is exactly on a node, spurious results may appear. Work is in progress to fix the problem.\n Set smoothgradsourceradius>0 to mitigate the issue")
                 else
-                    fmmord.ttime[l] = ttgrid
+                    adjvars.fmmord.ttime[l] = ttgrid
                 end
 
                 #################################################################
                 # Here we store a 1 in the diagonal because we are on a source node...
                 #  store arrival time for first points in FMM order
                 #
-                addentry!(fmmord.vecDx,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                addentry!(fmmord.vecDy,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                addentry!(adjvars.fmmord.vecDx,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                addentry!(adjvars.fmmord.vecDy,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
                 #
                 #################################################################
 
@@ -350,9 +363,9 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
               -1  0;
                0 -1]
 
-    ## Init the min binary heap with void arrays but max size
-    Nmax = n1*n2
-    bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    # ## Init the min binary heap with void arrays but max size
+    # Nmax = n1*n2
+    # bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
 
     ## pre-allocate
     tmptt::Float64 = 0.0 
@@ -363,29 +376,29 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
         
         for ne=1:4 ## four potential neighbors
 
-            i = is[l] + neigh[ne,1]
-            j = js[l] + neigh[ne,2]
+            i = ijsrc[1,l] + neigh[ne,1]
+            j = ijsrc[2,l] + neigh[ne,2]
 
             ## if the point is out of bounds skip this iteration
             if (i>n1) || (i<1) || (j>n2) || (j<1)
                 continue
             end
 
-            if status[i,j]==0 ## far
+            if fmmvars.status[i,j]==0 ## far
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(ttime,vel,grd,status,i,j,idD)
+                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,i,j,idD)
 
                 # get handle
                 han = cart2lin2D(i,j,n1)
                 # insert into heap
-                insert_minheap!(bheap,tmptt,han)
+                insert_minheap!(fmmvars.bheap,tmptt,han)
                 # change status, add to narrow band
-                status[i,j]=1
+                fmmvars.status[i,j]=1
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
-                    codeDxy[han,:] .= idD
+                    adjvars.codeDxy[han,:] .= idD
                 end
             end
         end
@@ -397,29 +410,27 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if fmmvars.bheap.Nh[]<1
             break
         end
 
-        han,tmptt = pop_minheap!(bheap)
+        han,tmptt = pop_minheap!(fmmvars.bheap)
         #ia,ja = ind2sub((n1,n2),han)
         lin2cart2D!(han,n1,ptij)
         ia,ja = ptij[1],ptij[2]
         #ja = div(han-1,n1) +1
         #ia = han - n1*(ja-1)
         # set status to accepted
-        status[ia,ja] = 2 # 2=accepted
+        fmmvars.status[ia,ja] = 2 # 2=accepted
         # set traveltime of the new accepted point
-        ttime[ia,ja] = tmptt
-
+        fmmvars.ttime[ia,ja] = tmptt
 
         if dodiscradj
             # store the linear index of FMM order
-            idxconv.lfmm2grid[node] = cart2lin2D(ia,ja,n1)
+            adjvars.idxconv.lfmm2grid[node] = cart2lin2D(ia,ja,n1)
             # store arrival time for first points in FMM order
-            fmmord.ttime[node] = tmptt  
+            adjvars.fmmord.ttime[node] = tmptt  
         end
-
         
         ## try all neighbors of newly accepted point
         for ne=1:4 
@@ -432,33 +443,33 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
                 continue
             end
 
-            if status[i,j]==0 ## far, active
+            if fmmvars.status[i,j]==0 ## far, active
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(ttime,vel,grd,status,i,j,idD)
+                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,i,j,idD)
                 han = cart2lin2D(i,j,n1)
-                insert_minheap!(bheap,tmptt,han)
+                insert_minheap!(fmmvars.bheap,tmptt,han)
                 # change status, add to narrow band
-                status[i,j]=1
+                fmmvars.status[i,j]=1
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
-                    codeDxy[han,:] .= idD
+                    adjvars.codeDxy[han,:] .= idD
                 end
 
-            elseif status[i,j]==1 ## narrow band                
+            elseif fmmvars.status[i,j]==1 ## narrow band                
 
                 # update the traveltime for this point
-                tmptt = calcttpt_2ndord!(ttime,vel,grd,status,i,j,idD)
+                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,i,j,idD)
 
                 # get handle
                 han = cart2lin2D(i,j,n1)
                 # update the traveltime for this point in the heap
-                update_node_minheap!(bheap,tmptt,han)
+                update_node_minheap!(fmmvars.bheap,tmptt,han)
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
-                    codeDxy[han,:] .= idD
+                    adjvars.codeDxy[han,:] .= idD
                 end
 
             end
@@ -471,8 +482,8 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
 
         ## pre-compute the mapping between fmm and orig order
         for i=1:n12
-            ifm = idxconv.lfmm2grid[i]
-            idxconv.lgrid2fmm[ifm] = i
+            ifm = adjvars.idxconv.lfmm2grid[i]
+            adjvars.idxconv.lgrid2fmm[ifm] = i
         end
 
         # pre-determine derivative coefficients for positive codes (0,+1,+2)
@@ -509,11 +520,11 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
         for irow=1:n12
             
             # compute the coefficients for X  derivatives
-            setcoeffderiv2D!(fmmord.vecDx,irow,idxconv,codeDxy,allcoeffx,ptij,
+            setcoeffderiv2D!(adjvars.fmmord.vecDx,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffx,ptij,
                            axis=:X,simtype=simtype)
             
             # compute the coefficients for Y derivatives
-            setcoeffderiv2D!(fmmord.vecDy,irow,idxconv,codeDxy,allcoeffy,ptij,
+            setcoeffderiv2D!(adjvars.fmmord.vecDy,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffy,ptij,
                            axis=:Y,simtype=simtype)
             
         end
@@ -521,26 +532,26 @@ function ttFMM_hiord(vel::Array{Float64,2},src::Vector{Float64},grd::GridEik2D ;
         #end # @time
         
         # create the actual sparse arrays from the vectors
-        Nxnnz = fmmord.vecDx.Nnnz[]
-        Dx_fmmord = sparse(fmmord.vecDx.i[1:Nxnnz],
-                           fmmord.vecDx.j[1:Nxnnz],
-                           fmmord.vecDx.v[1:Nxnnz],
-                           fmmord.vecDx.Nsize[1], fmmord.vecDx.Nsize[2] )
+        Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
+        Dx_fmmord = sparse(adjvars.fmmord.vecDx.i[1:Nxnnz],
+                           adjvars.fmmord.vecDx.j[1:Nxnnz],
+                           adjvars.fmmord.vecDx.v[1:Nxnnz],
+                           adjvars.fmmord.vecDx.Nsize[1], adjvars.fmmord.vecDx.Nsize[2] )
 
-        Nynnz = fmmord.vecDy.Nnnz[]
-        Dy_fmmord = sparse(fmmord.vecDy.i[1:Nynnz],
-                           fmmord.vecDy.j[1:Nynnz],
-                           fmmord.vecDy.v[1:Nynnz],
-                           fmmord.vecDy.Nsize[1], fmmord.vecDy.Nsize[2] ) 
+        Nynnz = adjvars.fmmord.vecDy.Nnnz[]
+        Dy_fmmord = sparse(adjvars.fmmord.vecDy.i[1:Nynnz],
+                           adjvars.fmmord.vecDy.j[1:Nynnz],
+                           adjvars.fmmord.vecDy.v[1:Nynnz],
+                           adjvars.fmmord.vecDy.Nsize[1], adjvars.fmmord.vecDy.Nsize[2] ) 
         
         
 
         ## return all the stuff for discrete adjoint computations
-        return ttime,idxconv,fmmord.ttime,Dx_fmmord,Dy_fmmord
+        return Dx_fmmord,Dy_fmmord
     end # if dodiscradj
     ##======================================================
     
-    return ttime
+    return 
 end
 
 ##########################################################################
@@ -573,9 +584,8 @@ $(TYPEDSIGNATURES)
     where possible, otherwise revert to 1st order. 
    Two-dimensional Cartesian or  spherical grid depending on the type of 'grd'.
 """
-function calcttpt_2ndord!(ttime::Array{Float64,2},vel::Array{Float64,2},
-                         grd::GridEik2D,status::Array{Int64,2},
-                         i::Int64,j::Int64,codeD::MVector{2,Int64})
+function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
+                         grd::GridEik2D,i::Int64,j::Int64,codeD::MVector{2,Int64})
     
     #######################################################
     ##  Local solver Sethian et al., Rawlison et al.  ???##
@@ -653,8 +663,9 @@ function calcttpt_2ndord!(ttime::Array{Float64,2},vel::Array{Float64,2},
             isonb1st,isonb2nd = isonbord(i+ish,j+jsh,n1,n2)
                                     
             ## 1st order
-            if !isonb1st && status[i+ish,j+jsh]==2 ## 2==accepted
-                testval1 = ttime[i+ish,j+jsh]
+            if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
+                testval1 = fmmvars.ttime[i+ish,j+jsh]
+
                 ## pick the lowest value of the two
                 if testval1<chosenval1 ## < only
                     chosenval1 = testval1
@@ -666,8 +677,8 @@ function calcttpt_2ndord!(ttime::Array{Float64,2},vel::Array{Float64,2},
                     ## 2nd order
                     ish2::Int64 = 2*ish
                     jsh2::Int64 = 2*jsh
-                    if !isonb2nd && status[i+ish2,j+jsh2]==2 ## 2==accepted
-                        testval2 = ttime[i+ish2,j+jsh2]
+                    if !isonb2nd && fmmvars.status[i+ish2,j+jsh2]==2 ## 2==accepted
+                        testval2 = fmmvars.ttime[i+ish2,j+jsh2]
                         ## pick the lowest value of the two
                         ## <=, compare to chosenval 1, *not* 2!!
                         ## This because the direction has already been chosen
@@ -763,8 +774,8 @@ function calcttpt_2ndord!(ttime::Array{Float64,2},vel::Array{Float64,2},
                     isonb1st,isonb2nd = isonbord(i+ish,j+jsh,n1,n2)
                     
                     ## 1st order
-                    if !isonb1st && status[i+ish,j+jsh]==2 ## 2==accepted
-                        testval1 = ttime[i+ish,j+jsh]
+                    if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
+                        testval1 = fmmvars.ttime[i+ish,j+jsh]
                         ## pick the lowest value of the two
                         if testval1<chosenval1 ## < only
                             chosenval1 = testval1
@@ -819,11 +830,11 @@ function calcttpt_2ndord!(ttime::Array{Float64,2},vel::Array{Float64,2},
     tmpsq = sqrt(sqarg)
     soughtt1 =  (-beta + tmpsq)/(2.0*alpha)
     soughtt2 =  (-beta - tmpsq)/(2.0*alpha)
+
     ## choose the largest solution
     soughtt = max(soughtt1,soughtt2)
 
     return soughtt
-
 end
 
 ################################################################################
@@ -834,12 +845,10 @@ $(TYPEDSIGNATURES)
   Refinement of the grid around the source. FMM calculated inside a finer grid 
     and then passed on to coarser grid
 """
-function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2},
-                      vel::Array{Float64,2},src::Vector{Float64},grdcoarse::GridEik2D,
-                      inittt::Float64 ;                      
+function ttaroundsrc!(fmmcoarse::FMMvars2D,vel::Array{Float64,2},src::AbstractVector{Float64},
+                      grdcoarse::GridEik2D, inittt::Float64 ;                      
                       dodiscradj::Bool=false,idxconv::Union{MapOrderGridFMM2D,Nothing}=nothing,
                       fmmord::Union{VarsFMMOrder2D,Nothing}=nothing )
-
     
     ##
     if typeof(grdcoarse)==Grid2D
@@ -919,20 +928,30 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         end
     end
 
+    ##
+    ## Init arrays
+    ##
+    fmmfine = FMMvars2D(n1,n2)
+
     ## 
     ## Time array
     ##
     inittt = 1e30
-    ttime = Array{Float64}(undef,n1,n2)
-    ttime[:,:] .= inittt
+    #ttime = Array{Float64}(undef,n1,n2)
+    fmmfine.ttime[:,:] .= inittt
     ##
     ## Status of nodes
     ##
-    status = Array{Int64}(undef,n1,n2)
-    status[:,:] .= 0   ## set all to far
+    #status = Array{Int64}(undef,n1,n2)
+    fmmfine.status[:,:] .= 0   ## set all to far
     # derivative codes
     idD = MVector(0,0)
-
+    ##
+    ptij = MVector(0,0)
+    ##
+    ijsrc_coarse = Matrix{Int64}(undef,2,n1*n2)
+    counter_ijsrccoarse::Int64 = 1
+    
     ##
     ## Reset coodinates to match the fine grid
     ##
@@ -954,7 +973,7 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         ## Source location, etc. within fine grid
         ##  
         ## REGULAR grid (not staggered), use "grdfine","finegrd", source position in the fine grid!!
-        onsrc = sourceboxloctt!(ttime,velfinegrd,srcfine,grdfine, staggeredgrid=false )
+        ijsrc_fine = sourceboxloctt!(fmmfine,velfinegrd,srcfine,grdfine, staggeredgrid=false )
         
     elseif simtype==:spherical
         # set origin of the fine grid
@@ -968,14 +987,11 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         ## Source location, etc. within fine grid
         ##  
         ## REGULAR grid (not staggered), use "grdfine","finegrd", source position in the fine grid!!
-        onsrc = sourceboxloctt_sph!(ttime,velfinegrd,srcfine,grdfine)
+        ijsrc_fine = sourceboxloctt_sph!(fmmfine,velfinegrd,srcfine,grdfine)
 
     end
-    
+
     ######################################################
-
-    ptij = MVector(0,0)
-
     neigh = SA[1  0;
                0  1;
               -1  0;
@@ -983,31 +999,29 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
 
     #-------------------------------
     ## init FMM 
-
-    status[onsrc] .= 2 ## set to accepted on src
-    naccinit=count(status.==2)
-
-    ## get all i,j accepted
-    ijss = findall(status.==2) 
-    is = [l[1] for l in ijss]
-    js = [l[2] for l in ijss]
-    naccinit = length(ijss)
+    
+    ## number of accepted points       
+    naccinit = size(ijsrc_fine,2)
 
     ##===================================
     for l=1:naccinit
-        ia = is[l]
-        ja = js[l]
+        ia = ijsrc_fine[1,l]
+        ja = ijsrc_fine[2,l]
+        
         # if the node coincides with the coarse grid, store values
         oncoa,ia_coarse,ja_coarse = isacoarsegridnode(ia,ja,downscalefactor,i1coarse,j1coarse)
         if oncoa
             ##===================================
             ## UPDATE the COARSE GRID
-            ttimecoarse[ia_coarse,ja_coarse]  = ttime[ia,ja]
-            statuscoarse[ia_coarse,ja_coarse] = status[ia,ja]
+            fmmcoarse.ttime[ia_coarse,ja_coarse]  = fmmfine.ttime[ia,ja]
+            fmmcoarse.status[ia_coarse,ja_coarse] = fmmfine.status[ia,ja]
+            ijsrc_coarse[:,counter_ijsrccoarse] .= (ia_coarse,ja_coarse)
+            counter_ijsrccoarse +=1
             ##==================================
         end
     end
-
+    
+ 
     ##==========================================================##
     # discrete adjoint
     if dodiscradj       
@@ -1015,8 +1029,8 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         # discrete adjoint: first visited points in FMM order
         ttfirstpts = Vector{Float64}(undef,naccinit)
         for l=1:naccinit
-            i,j = is[l],js[l]
-            ttij = ttime[i,j]
+            i,j = ijsrc_fine[1,l],ijsrc_fine[2,l]
+            ttij = fmmfine.ttime[i,j]
             # store initial points' FMM order
             ttfirstpts[l] = ttij
         end
@@ -1030,14 +1044,15 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
             p = spidx[l]
 
             ## if the point belongs to the coarse grid, add it
-            oncoa,ia_coarse,ja_coarse = isacoarsegridnode(is[p],js[p],downscalefactor,i1coarse,j1coarse)
+            i,j = ijsrc_fine[1,l],ijsrc_fine[2,l]
+            oncoa,ia_coarse,ja_coarse = isacoarsegridnode(i,j,downscalefactor,i1coarse,j1coarse)
             if oncoa
                 # go from cartesian (i,j) to linear
                 idxconv.lfmm2grid[node_coarse] = cart2lin2D(ia_coarse,ja_coarse,idxconv.nx)
 
                 # store arrival time for first points in FMM order
-                fmmord.ttime[node_coarse] = ttime[is[p],js[p]]
-                
+                fmmord.ttime[node_coarse] = fmmfine.ttime[i,j]
+                ## update counter!
                 node_coarse +=1
             end
             #@show is[p],js[p],ttime[is[p],js[p]],idxconv.lfmm2grid[l]
@@ -1045,10 +1060,9 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     end # if dodiscradj
     ##==========================================================##
 
-
-    ## Init the min binary heap with void arrays but max size
-    Nmax=n1*n2
-    bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    # ## Init the min binary heap with void arrays but max size
+    # Nmax=n1*n2
+    # bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
 
     ## pre-allocate
     tmptt::Float64 = 0.0 
@@ -1058,25 +1072,26 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         
          for ne=1:4 ## four potential neighbors
 
-            i = is[l] + neigh[ne,1]
-            j = js[l] + neigh[ne,2]
-            
-            ## if the point is out of bounds skip this iteration
+            i = ijsrc_fine[1,l] + neigh[ne,1]
+            j = ijsrc_fine[2,l] + neigh[ne,2]
+
+             ## if the point is out of bounds skip this iteration
             if (i>n1) || (i<1) || (j>n2) || (j<1)
                 continue
             end
 
-            if status[i,j]==0 ## far
+
+            if fmmfine.status[i,j]==0 ## far
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(ttime,velfinegrd,grdfine,status,i,j,idD)
+                tmptt = calcttpt_2ndord!(fmmfine,velfinegrd,grdfine,i,j,idD)
                 # get handle
                 han = cart2lin2D(i,j,n1)
                 # insert into heap
-                insert_minheap!(bheap,tmptt,han)
+                insert_minheap!(fmmfine.bheap,tmptt,han)
                 # change status, add to narrow band
-                status[i,j]=1
-                
+                fmmfine.status[i,j]=1
+
             end            
         end
     end
@@ -1088,18 +1103,18 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if fmmfine.bheap.Nh[]<1
             break
         end
 
-        han,tmptt = pop_minheap!(bheap)
+        han,tmptt = pop_minheap!(fmmfine.bheap)
         #ia,ja = ind2sub((n1,n2),han)
         cija = lin2cart2D!(han,n1,ptij)
         ia,ja = ptij[1],ptij[2]
         # set status to accepted
-        status[ia,ja] = 2 # 2=accepted
+        fmmfine.status[ia,ja] = 2 # 2=accepted
         # set traveltime of the new accepted point
-        ttime[ia,ja] = tmptt
+        fmmfine.ttime[ia,ja] = tmptt
 
         ##===================================
         oncoa,ia_coarse,ja_coarse = isacoarsegridnode(ia,ja,downscalefactor,i1coarse,j1coarse)
@@ -1107,8 +1122,10 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
 
             ##===================================
             ## UPDATE the COARSE GRID
-            ttimecoarse[ia_coarse,ja_coarse] = tmptt
-            statuscoarse[ia_coarse,ja_coarse] = 2
+            fmmcoarse.ttime[ia_coarse,ja_coarse] = tmptt
+            fmmcoarse.status[ia_coarse,ja_coarse] = 2
+            ijsrc_coarse[:,counter_ijsrccoarse] .= (ia_coarse,ja_coarse)
+            counter_ijsrccoarse +=1
             ##===================================
 
             ##===================================
@@ -1132,20 +1149,22 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
         ##########################################################
         #  if (ia==n1) || (ia==1) || (ja==n2) || (ja==1)
         if (ia==1 && !outxmin) || (ia==n1 && !outxmax) || (ja==1 && !outymin) || (ja==n2 && !outymax)
+
             ## delete current narrow band to avoid problems when returned to coarse grid
-            statuscoarse[statuscoarse.==1] .= 0
+            fmmcoarse.status[fmmcoarse.status.==1] .= 0
 
             ## Prevent the difficult case of traveltime hitting the borders but
             ##   not the coarse grid, which would produce an empty "statuscoarse" and an empty "ttimecoarse".
             ## Probably needs a better fix..."
-            if count(statuscoarse.>0)<1
-                if firstwarning 
+            if count(fmmcoarse.status.>0)<1
+                if firstwarning
                     @warn("Traveltime hitting the borders but not the coarse grid, continuing.")
                     firstwarning=false
                 end
                 continue
             end
-            return nothing
+            
+            return ijsrc_coarse[:,1:counter_ijsrccoarse-1]
         end
         ##########################################################
 
@@ -1160,29 +1179,30 @@ function ttaroundsrc!(statuscoarse::Array{Int64,2},ttimecoarse::Array{Float64,2}
                 continue
             end
 
-            if status[i,j]==0 ## far, active
+            if fmmfine.status[i,j]==0 ## far, active
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(ttime,velfinegrd,grdfine,status,i,j,idD)
+                tmptt = calcttpt_2ndord!(fmmfine,velfinegrd,grdfine,i,j,idD)
                 han = cart2lin2D(i,j,n1)
-                insert_minheap!(bheap,tmptt,han)
+                insert_minheap!(fmmfine.bheap,tmptt,han)
                 # change status, add to narrow band
-                status[i,j]=1                
+                fmmfine.status[i,j]=1                
 
-            elseif status[i,j]==1 ## narrow band                
+            elseif fmmfine.status[i,j]==1 ## narrow band                
 
                 # update the traveltime for this point
-                tmptt = calcttpt_2ndord!(ttime,velfinegrd,grdfine,status,i,j,idD)
+                tmptt = calcttpt_2ndord!(fmmfine,velfinegrd,grdfine,i,j,idD)
                 # get handle
                 han = cart2lin2D(i,j,n1)
                 # update the traveltime for this point in the heap
-                update_node_minheap!(bheap,tmptt,han)
+                update_node_minheap!(fmmfine.bheap,tmptt,han)
 
             end
         end
         ##-------------------------------
     end
     error("ttaroundsrc!(): Ouch...")
+    return
 end
 
 
@@ -1192,72 +1212,10 @@ end
 
 """
 $(TYPEDSIGNATURES)
-"""
-function sourceboxloctt_sph!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::AbstractVector,
-                             grd::Grid2DSphere )
-
-    ## source location, etc.      
-    mindistsrc = 1e-5   
-    rsrc,θsrc=srcpos[1],srcpos[2]
-
-    ## regular grid
-    onsrc = zeros(Bool,grd.nr,grd.nθ)
-    onsrc[:,:] .= false
-    ix,iy = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
-    rr = rsrc-((ix-1)*grd.Δr+grd.rinit)
-    rθ = θsrc-((iy-1)*grd.Δθ+grd.θinit)
-
-    halfg = 0.0 #hgrid/2.0
-    ## distance in POLAR COORDINATES
-    ## sqrt(r1^+r2^2 - 2*r1*r2*cos(θ1-θ2))
-    r1=rsrc
-    r2=grd.r[ix]
-    dist = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iy]) )  #sqrt(rr^2+grd.r[ix]^2*rθ^2)
-    #@show dist,src,rr,rθ
-    if dist<=mindistsrc
-        onsrc[ix,iy] = true
-        ttime[ix,iy] = 0.0 
-    else
-        if (rr>=halfg) & (rθ>=halfg)
-            onsrc[ix:ix+1,iy:iy+1] .= true
-        elseif (rr<halfg) & (rθ>=halfg)
-            onsrc[ix-1:ix,iy:iy+1] .= true
-        elseif (rr<halfg) & (rθ<halfg)
-            onsrc[ix-1:ix,iy-1:iy] .= true
-        elseif (rr>=halfg) & (rθ<halfg)
-            onsrc[ix:ix+1,iy-1:iy] .= true
-        end
-        
-        ## set ttime around source ONLY FOUR points!!!
-        ijsrc = findall(onsrc)
-        for lcart in ijsrc
-            i = lcart[1]
-            j = lcart[2]
-            ## regular grid
-            # xp = (i-1)*grd.Δr+grd.rinit
-            # yp = (j-1)*grd.Δθ+grd.θinit
-            ii = Int(floor((rsrc-grd.rinit)/grd.Δr)) +1
-            jj = Int(floor((θsrc-grd.θinit)/grd.Δθ)) +1
-            ##ttime[i,j] = sqrt((rsrc-xp)^2+(θsrc-yp)^2) / vel[ii,jj]
-            ## sqrt(r1^+r2^2 -2*r1*r2*cos(θ1-θ2))
-            r1=rsrc
-            r2=grd.r[ii]
-            distp = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iy]))
-            ttime[i,j] = distp / vel[ii,jj]
-        end
-    end
-
-    return onsrc
-end
-
-#########################################################
-
-"""
-$(TYPEDSIGNATURES)
 
  Define the "box" of nodes around/including the source.
 """
-function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::AbstractVector,
+function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::AbstractVector,
                          grd::Grid2D; staggeredgrid::Bool )
     ## staggeredgrid keyword required!
     
@@ -1267,21 +1225,17 @@ function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::A
 
     if staggeredgrid==false
         ## regular grid
-        onsrc = zeros(Bool,grd.nx,grd.ny)
-        onsrc[:,:] .= false
         ix,iy = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid) 
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+        rx = xsrc-grd.x[ix]
+        ry = ysrc-grd.y[iy]
 
     elseif staggeredgrid==true
         ## STAGGERED grid
-        onsrc = zeros(Bool,grd.ntx,grd.nty)
-        onsrc[:,:] .= false
         ## grd.xinit-hgr because TIME array on STAGGERED grid
         hgr = grd.hgrid/2.0
         ix,iy = findclosestnode(xsrc,ysrc,grd.xinit-hgr,grd.yinit-hgr,grd.hgrid)
-        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
-        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+        rx = xsrc-(grd.x[ix]-hgr)
+        ry = ysrc-(grd.y[iy]-hgr)
     end
 
     halfg = 0.0 #hgrid/2.0
@@ -1289,47 +1243,162 @@ function sourceboxloctt!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::A
     dist = sqrt(rx^2+ry^2)
     #@show dist,src,rx,ry
     if dist<=mindistsrc
-        onsrc[ix,iy] = true
-        ttime[ix,iy] = 0.0 
+        ## single point
+        ijsrc = @MMatrix [ix; iy]
+        ## set status = accepted == 2
+        fmmvars.status[ix,iy] = 2
+        ## set traveltime for the source
+        fmmvars.ttime[ix,iy] =0.0
+
     else
-        if (rx>=halfg) & (ry>=halfg)
-            onsrc[ix:ix+1,iy:iy+1] .= true
-        elseif (rx<halfg) & (ry>=halfg)
-            onsrc[ix-1:ix,iy:iy+1] .= true
-        elseif (rx<halfg) & (ry<halfg)
-            onsrc[ix-1:ix,iy-1:iy] .= true
-        elseif (rx>=halfg) & (ry<halfg)
-            onsrc[ix:ix+1,iy-1:iy] .= true
+        # pre-allocate array of indices for source
+        ijsrc = @MMatrix zeros(Int64,2,4)
+
+        ## eight points
+        if rx>=halfg
+            srci = (ix,ix+1)
+        else
+            srci = (ix-1,ix)
         end
-        
+        if ry>=halfg
+            srcj = (iy,iy+1)
+        else
+            srcj = (iy-1,iy)
+        end
+       
+        l=1
+        for j=1:2, i=1:2
+            ijsrc[:,l] .= (srci[i],srcj[j])
+            l+=1
+        end
+
+        # if (rx>=halfg) & (ry>=halfg)
+        #     onsrc[ix:ix+1,iy:iy+1] .= true
+        # elseif (rx<halfg) & (ry>=halfg)
+        #     onsrc[ix-1:ix,iy:iy+1] .= true
+        # elseif (rx<halfg) & (ry<halfg)
+        #     onsrc[ix-1:ix,iy-1:iy] .= true
+        # elseif (rx>=halfg) & (ry<halfg)
+        #     onsrc[ix:ix+1,iy-1:iy] .= true
+        # end
+
         ## set ttime around source ONLY FOUR points!!!
-        ijsrc = findall(onsrc)
-        for lcart in ijsrc
-            i = lcart[1]
-            j = lcart[2]
+        for l=1:size(ijsrc,2)
+            i = ijsrc[1,l]
+            j = ijsrc[2,l]
+
+            ## set status = accepted == 2
+            fmmvars.status[i,j] = 2
+
             if staggeredgrid==false
                 ## regular grid
-                xp = (i-1)*grd.hgrid+grd.xinit
-                yp = (j-1)*grd.hgrid+grd.yinit
+                xp = grd.x[i] 
+                yp = grd.y[j]
                 ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
                 jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
-                ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+                ## set traveltime for the source
+                fmmvars.ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+
             elseif staggeredgrid==true
                 ## STAGGERED grid
                 ## grd.xinit-hgr because TIME array on STAGGERED grid
-                xp = (i-1)*grd.hgrid+grd.xinit-hgr
-                yp = (j-1)*grd.hgrid+grd.yinit-hgr
+                xp = grd.x[i]-hgr
+                yp = grd.y[j]-hgr
                 ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1 # i-1
                 jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1 # j-1            
                 #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-                ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+                ## set traveltime for the source
+                fmmvars.fmmvars.ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+
             end
         end
     end
     
-    return onsrc
+    return ijsrc
 end 
 
 #################################################################################
 
+
+"""
+$(TYPEDSIGNATURES)
+"""
+function sourceboxloctt_sph!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::AbstractVector,
+                             grd::Grid2DSphere )
+
+      # minimum distance between node and source position
+    mindistsrc = 10.0*eps()
+  
+    rsrc,θsrc=srcpos[1],srcpos[2]
+
+    ## regular grid
+    ir,iθ = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
+    rr = rsrc-grd.r[ir]
+    rθ = θsrc-grd.θ[iθ]
+
+    halfg = 0.0 #hgrid/2.0
+    ## distance in POLAR COORDINATES
+    ## sqrt(r1^+r2^2 - 2*r1*r2*cos(θ1-θ2))
+    r1=rsrc
+    r2=grd.r[ir]
+    dist = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iθ]) )  #sqrt(rr^2+grd.r[ir]^2*rθ^2)
+    #@show dist,src,rr,rθ
+    if dist<=mindistsrc
+        ## single point
+        ijsrc = @MMatrix [ir; iθ]
+        ## set status = accepted == 2
+        fmmvars.status[ir,iθ] = 2
+        ## set traveltime for the source
+        fmmvars.ttime[ir,iθ] =0.0
+        
+    else
+        # pre-allocate array of indices for source
+        ijsrc = @MMatrix zeros(Int64,2,4)
+
+        ## eight points
+        if rr>=halfg
+            srci = (ir,ir+1)
+        else
+            srci = (ir-1,ir)
+        end
+        if rθ>=halfg
+            srcj = (iθ,iθ+1)
+        else
+            srcj = (iθ-1,iθ)
+        end
+
+        l=1
+        for j=1:2, i=1:2
+            ijsrc[:,l] .= (srci[i],srcj[j])
+            l+=1
+        end
+
+        ## set ttime around source ONLY FOUR points!!!
+        for l=1:size(ijsrc,2)
+            i = ijsrc[1,l]
+            j = ijsrc[2,l]
+
+            ## set status = accepted == 2
+            fmmvars.status[i,j] = 2
+            
+            ## regular grid
+            # xp = (i-1)*grd.Δr+grd.rinit
+            # yp = (j-1)*grd.Δθ+grd.θinit
+            ii = Int(floor((rsrc-grd.rinit)/grd.Δr)) +1
+            jj = Int(floor((θsrc-grd.θinit)/grd.Δθ)) +1
+            ##ttime[i,j] = sqrt((rsrc-xp)^2+(θsrc-yp)^2) / vel[ii,jj]
+            ## sqrt(r1^+r2^2 -2*r1*r2*cos(θ1-θ2))
+            r1=rsrc
+            r2=grd.r[ii]
+            # distance
+            distp = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iθ]))
+            ## set traveltime for the source
+            fmmvars.ttime[i,j] = distp / vel[ii,jj]
+        end
+    end
+
+    return ijsrc
+end
+
+#########################################################
 

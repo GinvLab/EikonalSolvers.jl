@@ -90,8 +90,10 @@ $(TYPEDSIGNATURES)
 
 Bilinear interpolation.
 """
-function bilinear_interp(f::AbstractArray{Float64,2},grd::Union{Grid2D,Grid2DSphere}, xreq::Float64,yreq::Float64;
+function bilinear_interp(f::AbstractArray{Float64,2},grd::Union{Grid2D,Grid2DSphere}, xyzpt::AbstractVector{Float64};
                          return_coeffonly::Bool=false)
+
+    xreq,yreq = xyzpt[1],xyzpt[2]
 
     if typeof(grd)==Grid2D
         dx = grd.hgrid

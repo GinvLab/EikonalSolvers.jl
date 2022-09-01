@@ -152,6 +152,7 @@ function test_fwdtt_2D_FMM2ndord()
     # mean average error
     mae = (sum(abs.(ttime[:,:,1]-ansol2d)))/length(ansol2d)
 
+    #@show coordsrc[1:1,:],coordrec[1:1]
     @show mae
     if mae<=0.21
         return true

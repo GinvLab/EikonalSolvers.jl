@@ -91,10 +91,10 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
             # return ONLY traveltime picks at receivers
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async @time  ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
-                                                        vel,view(coordsrc,igrs,:),
-                                                        view(coordrec,igrs),grd,
-                                                        returntt=returntt )
+                @async  ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
+                                                         vel,view(coordsrc,igrs,:),
+                                                         view(coordrec,igrs),grd,
+                                                         returntt=returntt )
             end
         end
 
@@ -137,6 +137,11 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::AbstractArray{Float64,2
     ## pre-allocate ttime and status arrays plus the binary heap
     fmmvars = FMMvars3D(n1,n2,n3)
 
+    ## pre-allocate discrete adjoint variables
+    ##  No adjoint calculations
+    adjvars = nothing
+  
+
     if returntt
         ttimeGRPSRC = zeros(n1,n2,n3,nsrc)
     end
@@ -144,7 +149,7 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::AbstractArray{Float64,2
     ## group of pre-selected sources
     for s=1:nsrc
         # al = @allocated begin
-        ttFMM_hiord!(fmmvars,vel,view(coordsrc,s,:),grd)
+        ttFMM_hiord!(fmmvars,vel,view(coordsrc,s,:),grd,adjvars)
         # end
         # println("FWD $s after ttFMM allocated: $(al/1e6)")
         
@@ -173,9 +178,15 @@ $(TYPEDSIGNATURES)
 
  Higher order (2nd) fast marching method in 3D using traditional stencils on regular grid. 
 """
-function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVector{Float64},grd::GridEik3D ;
-                      dodiscradj::Bool=false ) 
-
+function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVector{Float64},grd::GridEik3D,
+                      adjvars::Union{AdjointVars3D,Nothing} )
+                      
+    if adjvars==nothing
+        dodiscradj=false
+    else
+        dodiscradj=true
+    end
+    
     if typeof(grd)==Grid3D
         simtype = :cartesian
     elseif typeof(grd)==Grid3DSphere
@@ -206,14 +217,26 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
     idD = MVector(0,0,0)
 
     ##======================================================
+    #al = @allocated begin
     if dodiscradj
         ##
         ##  discrete adjoint: init stuff
         ## 
-        idxconv = MapOrderGridFMM3D(n1,n2,n3)
-        fmmord = VarsFMMOrder3D(n1,n2,n3)
-        codeDxyz = zeros(Int64,n123,3)
-    end    
+        # idxconv = MapOrderGridFMM3D(n1,n2,n3)
+        # fmmord = VarsFMMOrder3D(n1,n2,n3)
+        # codeDxyz = zeros(Int64,n123,3)
+        ## avoid zeroing and just set current number of entries to 0
+        adjvars.fmmord.vecDx.Nnnz[] = 0
+        adjvars.fmmord.vecDy.Nnnz[] = 0
+        adjvars.fmmord.vecDz.Nnnz[] = 0
+        # for safety, zeroes the traveltime
+        adjvars.fmmord.ttime[:] .= 0.0
+        # for safety, zeroes the codes for derivatives
+        adjvars.codeDxyz[:,:] .= 0
+        
+    end
+    # end
+    # println("> allocated init discr. adj.: $(al/1e6)")
     ##======================================================
 
     ##########################################
@@ -227,10 +250,9 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
         ##
         if dodiscradj
             ijksrc = ttaroundsrc!(fmmvars,vel,src,grd,inittt,dodiscradj=dodiscradj,
-                                  idxconv=idxconv,fmmord=fmmord)
+                                  idxconv=adjvars.idxconv,fmmord=adjvars.fmmord)
         else
-            println("ttaroundsrc!()...")
-            @time  ijksrc = ttaroundsrc!(fmmvars,vel,src,grd,inittt)
+            ijksrc = ttaroundsrc!(fmmvars,vel,src,grd,inittt)
         end
 
         ## number of accepted points       
@@ -247,8 +269,8 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
             
             ## pre-compute some of the mapping between fmm and orig order
             for i=1:naccinit
-                ifm = idxconv.lfmm2grid[i]
-                idxconv.lgrid2fmm[ifm] = i
+                ifm = adjvars.idxconv.lfmm2grid[i]
+                adjvars.idxconv.lgrid2fmm[ifm] = i
             end
 
             for l=1:naccinit
@@ -257,26 +279,26 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
                     #################################################################
                     # Here we store a 1 in the diagonal because we are on a source node...
                     #  store arrival time for first points in FMM order
-                    addentry!(fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(fmmord.vecDz,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDz,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
                     #################################################################
                 end
 
                 ## "reconstruct" derivative stencils from known FMM order and arrival times
-                derivaroundsrcfmm3D!(l,idxconv,idD)
+                derivaroundsrcfmm3D!(l,adjvars.idxconv,idD)
 
                 if idD==[0,0,0] # 3 elements!!!
                     #################################################################
                     # Here we store a 1 in the diagonal because we are on a source node...
                     #  store arrival time for first points in FMM order
-                    addentry!(fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(fmmord.vecDz,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    addentry!(adjvars.fmmord.vecDz,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
                     #################################################################
                 else
-                    l_fmmord = idxconv.lfmm2grid[l]
-                    codeDxyz[l_fmmord,:] .= idD
+                    l_fmmord = adjvars.idxconv.lfmm2grid[l]
+                    adjvars.codeDxyz[l_fmmord,:] .= idD
                 end
             end
 
@@ -321,7 +343,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
                 p = spidx[l]
                 # go from cartesian (i,j) to linear
                 i,j,k = ijksrc[1,l],ijksrc[2,l],ijksrc[3,l]
-                idxconv.lfmm2grid[l] = cart2lin3D(i,j,k,n1,n2)
+                adjvars.idxconv.lfmm2grid[l] = cart2lin3D(i,j,k,n1,n2)
 
                 ######################################
                 # store arrival time for first points in FMM order
@@ -329,19 +351,19 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
                 ## The following to avoid a singular upper triangular matrix in the
                 ##  adjoint equation. Otherwise there will be a row of only zeros in the LHS.
                 if ttgrid==0.0
-                    fmmord.ttime[l] = 10.0*eps()
+                    adjvars.fmmord.ttime[l] = 10.0*eps()
                     @warn("Source is exactly on a node, spurious results may appear. Work is in progress to fix the problem.\n Set smoothgradsourceradius>0 to mitigate the issue.")
                 else
-                    fmmord.ttime[l] = ttgrid
+                    adjvars.fmmord.ttime[l] = ttgrid
                 end
 
                 #################################################################
                 # Here we store a 1 in the diagonal because we are on a source node...
                 #  store arrival time for first points in FMM order
                 #
-                addentry!(fmmord.vecDx,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                addentry!(fmmord.vecDy,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                addentry!(fmmord.vecDz,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                addentry!(adjvars.fmmord.vecDx,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                addentry!(adjvars.fmmord.vecDy,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                addentry!(adjvars.fmmord.vecDz,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
                 #
                 #################################################################
 
@@ -400,7 +422,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
-                    codeDxyz[han,:] .= idD
+                    adjvars.codeDxyz[han,:] .= idD
                 end
 
             end            
@@ -428,9 +450,9 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
 
         if dodiscradj
             # store the linear index of FMM order
-            idxconv.lfmm2grid[node] = cart2lin3D(ia,ja,ka,n1,n2)
+            adjvars.idxconv.lfmm2grid[node] = cart2lin3D(ia,ja,ka,n1,n2)
             # store arrival time for first points in FMM order
-            fmmord.ttime[node] = tmptt  
+            adjvars.fmmord.ttime[node] = tmptt  
         end
 
         ## try all neighbors of newly accepted point
@@ -456,7 +478,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
-                    codeDxyz[han,:] .= idD
+                    adjvars.codeDxyz[han,:] .= idD
                 end
 
             elseif fmmvars.status[i,j,k]==1 ## narrow band
@@ -470,7 +492,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
-                    codeDxyz[han,:] .= idD
+                    adjvars.codeDxyz[han,:] .= idD
                 end
             end
         end
@@ -480,12 +502,15 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
 
     ##======================================================
 
+    
     if dodiscradj
+
+        #al = @allocated begin
 
         ## pre-compute the mapping between fmm and orig order
         for i=1:n123
-            ifm = idxconv.lfmm2grid[i]
-            idxconv.lgrid2fmm[ifm] = i
+            ifm = adjvars.idxconv.lfmm2grid[i]
+            adjvars.idxconv.lgrid2fmm[ifm] = i
         end
 
         # pre-determine derivative coefficients for positive codes (0,+1,+2)
@@ -523,49 +548,62 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
 
         end
 
-        #@time begin 
+        #end # @time begin
+        #println("> deriv coeff, allocated $(al/1e6)")
+
+        #al = @allocated begin 
 
         ## set the derivative operators
         for irow=1:n123
-            
+
             # compute the coefficients for X  derivatives
-            setcoeffderiv3D!(fmmord.vecDx,irow,idxconv,codeDxyz,allcoeffx,ptijk,
+            setcoeffderiv3D!(adjvars.fmmord.vecDx,irow,adjvars.idxconv,adjvars.codeDxyz,allcoeffx,ptijk,
                              axis=:X,simtype=simtype)
             
             # compute the coefficients for Y derivatives
-            setcoeffderiv3D!(fmmord.vecDy,irow,idxconv,codeDxyz,allcoeffy,ptijk,
+            setcoeffderiv3D!(adjvars.fmmord.vecDy,irow,adjvars.idxconv,adjvars.codeDxyz,allcoeffy,ptijk,
                              axis=:Y,simtype=simtype)
 
             # compute the coefficients for Z derivatives
-            setcoeffderiv3D!(fmmord.vecDz,irow,idxconv,codeDxyz,allcoeffz,ptijk,
+            setcoeffderiv3D!(adjvars.fmmord.vecDz,irow,adjvars.idxconv,adjvars.codeDxyz,allcoeffz,ptijk,
                              axis=:Z,simtype=simtype)
 
         end
 
-        #end # @time
-        
+        #end # @time begin
+        #println("> setcoeffderiv, allocated $(al/1e6)")
+
+       #al = @allocated begin
+
         # create the actual sparse arrays from the vectors
-        Nxnnz = fmmord.vecDx.Nnnz[]
-        Dx_fmmord = sparse(fmmord.vecDx.i[1:Nxnnz],
-                           fmmord.vecDx.j[1:Nxnnz],
-                           fmmord.vecDx.v[1:Nxnnz],
-                           fmmord.vecDx.Nsize[1], fmmord.vecDx.Nsize[2])
+        Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
+        Dx_fmmord = sparse(adjvars.fmmord.vecDx.i[1:Nxnnz],
+                           adjvars.fmmord.vecDx.j[1:Nxnnz],
+                           adjvars.fmmord.vecDx.v[1:Nxnnz],
+                           adjvars.fmmord.vecDx.Nsize[1], adjvars.fmmord.vecDx.Nsize[2])
 
-        Nynnz = fmmord.vecDy.Nnnz[]
-        Dy_fmmord = sparse(fmmord.vecDy.i[1:Nynnz],
-                           fmmord.vecDy.j[1:Nynnz],
-                           fmmord.vecDy.v[1:Nynnz],
-                           fmmord.vecDy.Nsize[1], fmmord.vecDy.Nsize[2]) 
+        Nynnz = adjvars.fmmord.vecDy.Nnnz[]
+        Dy_fmmord = sparse(adjvars.fmmord.vecDy.i[1:Nynnz],
+                           adjvars.fmmord.vecDy.j[1:Nynnz],
+                           adjvars.fmmord.vecDy.v[1:Nynnz],
+                           adjvars.fmmord.vecDy.Nsize[1], adjvars.fmmord.vecDy.Nsize[2]) 
         
-        Nynnz = fmmord.vecDz.Nnnz[]
-        Dz_fmmord = sparse(fmmord.vecDz.i[1:Nynnz],
-                           fmmord.vecDz.j[1:Nynnz],
-                           fmmord.vecDz.v[1:Nynnz],
-                           fmmord.vecDz.Nsize[1], fmmord.vecDz.Nsize[2]) 
+        Nynnz = adjvars.fmmord.vecDz.Nnnz[]
+        Dz_fmmord = sparse(adjvars.fmmord.vecDz.i[1:Nynnz],
+                           adjvars.fmmord.vecDz.j[1:Nynnz],
+                           adjvars.fmmord.vecDz.v[1:Nynnz],
+                           adjvars.fmmord.vecDz.Nsize[1], adjvars.fmmord.vecDz.Nsize[2]) 
 
-        ## return all the stuff for discrete adjoint computations
-        return idxconv,fmmord.ttime,Dx_fmmord,Dy_fmmord,Dz_fmmord
+ 
+        #end # @time begin
+        #println("> sparse stuff, allocated $(al/1e6)")
+    
+
+       ## return all the stuff for discrete adjoint computations
+        return Dx_fmmord,Dy_fmmord,Dz_fmmord
     end # if dodiscradj
+
+ 
     ##======================================================
         
     return 
@@ -935,9 +973,11 @@ function ttaroundsrc!(fmmcoarse::FMMvars3D,vel::Array{Float64,3},src::AbstractVe
         simtype=:spherical
     end
 
+    downscalefactor::Int = 0
+    noderadius::Int = 0
     if dodiscradj
-        downscalefactor::Int = 5
-        noderadius::Int = 5
+        downscalefactor = 5
+        noderadius = 5
     else
         downscalefactor = 5
         noderadius = 3
@@ -1129,7 +1169,7 @@ function ttaroundsrc!(fmmcoarse::FMMvars3D,vel::Array{Float64,3},src::AbstractVe
         ttfirstpts = Vector{Float64}(undef,naccinit)
         for l=1:naccinit
             i,j,k = ijksrc_fine[1,l],ijksrc_fine[2,l],ijksrc_fine[3,l]
-            ttij = ttime[i,j,k]
+            ttij = fmmfine.ttime[i,j,k]
             # store initial points' FMM order
             ttfirstpts[l] = ttij
         end
@@ -1152,7 +1192,7 @@ function ttaroundsrc!(fmmcoarse::FMMvars3D,vel::Array{Float64,3},src::AbstractVe
                                                             idxconv.nx,idxconv.ny)
 
                 # store arrival time for first points in FMM order
-                fmmord.ttime[node_coarse] = ttime[i,j,k]
+                fmmord.ttime[node_coarse] = fmmfine.ttime[i,j,k]
 
                 ## update counter!
                 node_coarse +=1
@@ -1266,7 +1306,7 @@ function ttaroundsrc!(fmmcoarse::FMMvars3D,vel::Array{Float64,3},src::AbstractVe
                 continue
             end
 
-            return ijksrc_coarse[:,counter_ijksrccoarse-1]
+            return ijksrc_coarse[:,1:counter_ijksrccoarse-1]
         end
         ##########################################################
 
@@ -1305,7 +1345,7 @@ function ttaroundsrc!(fmmcoarse::FMMvars3D,vel::Array{Float64,3},src::AbstractVe
         ##-------------------------------
 
     end
-
+    error("ttaroundsrc!(): Ouch...")
     return
 end
 
@@ -1344,17 +1384,18 @@ function sourceboxloctt!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::Abstra
         rz = zsrc-(grd.z[iz]-hgr)
 
     end
-
   
     halfg = 0.0 #
     dist = sqrt(rx^2+ry^2+rz^2)
 
     if dist<=mindistsrc
         ## single point
-        ijksrc = @MMatrix [ix iy iz]
+        ijksrc = @MMatrix [ix; iy; iz]
         ## set status = accepted == 2
-        fmmvars.status[i,j,k] = 2
-        
+        fmmvars.status[ix,iy,iz] = 2
+        ## set traveltime for the source
+        fmmvars.ttime[ix,iy,iz] = 0.0
+
     else
         # pre-allocate array of indices for source
         ijksrc = @MMatrix zeros(Int64,3,8)
@@ -1418,6 +1459,7 @@ function sourceboxloctt!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::Abstra
                 ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
                 jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
                 kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+                ## set traveltime for the source
                 fmmvars.ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
 
             elseif staggeredgrid==true
@@ -1429,7 +1471,9 @@ function sourceboxloctt!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::Abstra
                 jj = j-1 
                 kk = k-1 
                 #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+                ## set traveltime for the source
                 fmmvars.ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+
             end
         end
     end
@@ -1470,9 +1514,11 @@ function sourceboxloctt_sph!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::Ab
     #@show dist,src,rr,rθ
     if dist<=mindistsrc
         ## single point
-        ijksrc = @MMatrix [ir iθ iφ]
+        ijksrc = @MMatrix [ir; iθ; iφ]
         ## set status = accepted == 2
         fmmvars.status[i,j,k] = 2
+        ## set traveltime for the source
+        fmmvars.fmmvars.ttime[ir,iθ,iφ] =0.0
         
     else
         # pre-allocate array of indices for source
@@ -1543,10 +1589,11 @@ function sourceboxloctt_sph!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::Ab
             φ1 = φsrc
             φ2 = grd.φ[k]
             distp = sqrt(r1^2+r2^2 -2*r1*r2*(sind(θ1)*sind(θ2)*cosd(φ1-φ2)+cosd(θ1)*cosd(θ2)))
-            ttime[i,j,k] = distp / vel[i,j,k]
+            ## set traveltime for the source
+            fmmvars.ttime[i,j,k] = distp / vel[i,j,k]
         end
     end
-    return onsrc
+    return ijksrc
 end
 
 ################################################################################

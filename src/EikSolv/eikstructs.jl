@@ -4,11 +4,13 @@
 struct FMMvars2D
     ttime::Array{Float64,2}
     status::Array{UInt8,2}
+    bheap::BinHeapMin
 
     function FMMvars2D(n1,n2)
         ttime = zeros(Float64,n1,n2)
         status = zeros(UInt8,n1,n2)
-        new(ttime,status)
+        bheap = init_minheap(n1*n2)
+        new(ttime,status,bheap)
     end
 end
 
@@ -216,7 +218,9 @@ end
 
 ##############################################################################
 
-struct MapOrderGridFMM2D
+abstract type MapOrderGridFMM end
+
+struct MapOrderGridFMM2D <: MapOrderGridFMM
     "Linear grid indices in FMM order (as visited by FMM)"
     lfmm2grid::Vector{Int64} # idx_fmmord
     "Linear FMM indices in grid order"
@@ -238,7 +242,7 @@ struct MapOrderGridFMM2D
 end
 
 
-struct MapOrderGridFMM3D
+struct MapOrderGridFMM3D <: MapOrderGridFMM
     "Linear grid indices in FMM order (as visited by FMM)"
     lfmm2grid::Vector{Int64} # idx_fmmord
     "Linear FMM indices in grid order"
@@ -332,6 +336,36 @@ struct CoeffDerivSpherical3D <: CoeffDerivatives
     secondord::Matrix{Float64}
 end
 
+####################################
+
+struct AdjointVars2D
+    idxconv::MapOrderGridFMM2D
+    fmmord::VarsFMMOrder2D
+    codeDxy::Array{Int64,2}
+
+    function AdjointVars2D(n1,n2)
+        idxconv = MapOrderGridFMM2D(n1,n2)
+        fmmord = VarsFMMOrder2D(n1,n2)
+        codeDxy = zeros(Int64,n1*n2,2)
+        new(idxconv,fmmord,codeDxy)
+    end
+end
+
+
+struct AdjointVars3D
+    idxconv::MapOrderGridFMM3D
+    fmmord::VarsFMMOrder3D
+    codeDxyz::Array{Int64,2}
+
+    function AdjointVars3D(n1,n2,n3)
+        idxconv = MapOrderGridFMM3D(n1,n2,n3)
+        fmmord = VarsFMMOrder3D(n1,n2,n3)
+        codeDxyz = zeros(Int64,n1*n2*n3,3)
+        new(idxconv,fmmord,codeDxyz)
+    end
+end
+
+####################################
 
 
 ###################################################

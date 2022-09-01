@@ -99,6 +99,13 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordr
     nsrc = size(xyzsrc,1)
     grad1 = zeros(nx,ny,nz)
 
+    ## pre-allocate ttime and status arrays plus the binary heap
+    fmmvars = FMMvars3D(nx,ny,nz)
+    
+    ## pre-allocate discrete adjoint variables
+    #al = @allocated
+    adjvars = AdjointVars3D(nx,ny,nz)
+    #println("> after init adjvars, allocated: $(al/1e6)")
 
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
@@ -106,12 +113,13 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordr
 
         ###########################################
         ## calc ttime, etc.
-        # al = @allocated begin
-        #     println("> start ttFMM_hiord()")
-        ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,Dz_fmmord1 = ttFMM_hiord(vel,xyzsrc[s,:],
-                                                                                      grd,dodiscradj=true)
-        # end
-        # println("s $s after ttFMM allocated: $(al/1e6)")
+        #al = @allocated begin
+        #    println("> start ttFMM_hiord()")
+        Dx_fmmord1,Dy_fmmord1,Dz_fmmord1 = ttFMM_hiord!(fmmvars,vel,
+                                                        view(xyzsrc,s,:),
+                                                        grd,adjvars)
+        #end
+        #println(" s $s after ttFMM allocated: $(al/1e6)")
         # sleep(5)
         # if extrapars.manualGCtrigger
         # # trigger garbage collector
@@ -120,11 +128,11 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordr
 
         ###########################################
         ## projection operator P ordered according to FMM order
-        # al = @allocated begin
-        # println("> start calcprojttfmmord()")
-        P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idxconv,coordrec[s])
-        # end
-        # println("s $s after P allocated: $(al/1e6)")
+        #al = @allocated begin
+        #println("> start calcprojttfmmord()")
+        P_fmmord1 = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
+        #end
+        #println(" s $s after P allocated: $(al/1e6)")
         # sleep(5)
         # if extrapars.manualGCtrigger
         #     # trigger garbage collector
@@ -134,12 +142,13 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordr
 
         ###########################################
         ## discrete adjoint formulation
-        # al = @allocated begin
-        #    println("> start calcprojttfmmord()")
-        grad1 .+= discradjoint3D_FMM_SINGLESRC(idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,Dz_fmmord1,
+        #al = @allocated begin
+        #println("> start discradjoint3D_FMM_SINGLESRC()")
+        grad1 .+= discradjoint3D_FMM_SINGLESRC(adjvars.idxconv,adjvars.fmmord.ttime,
+                                               Dx_fmmord1,Dy_fmmord1,Dz_fmmord1,
                                                P_fmmord1,pickobs1[s],stdobs[s],vel)
-        # end
-        # println("s $s after discr. adj. allocated: $(al/1e6)")
+        #end
+        #println(" s $s after discr. adj. allocated: $(al/1e6)")
         # sleep(5)
         # if extrapars.manualGCtrigger
         #     # trigger garbage collector
@@ -155,10 +164,10 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordr
         
     end
 
-    if extrapars.manualGCtrigger
-        # trigger garbage collector
-        GC.gc()
-    end
+    # if extrapars.manualGCtrigger
+    #     # trigger garbage collector
+    #     GC.gc()
+    # end
 
     return grad1
 end
@@ -284,7 +293,9 @@ $(TYPEDSIGNATURES)
 
  Solve the discrete adjoint equations and return the gradient of the misfit.
 """
-function discradjoint3D_FMM_SINGLESRC(idxconv,tt,Dx,Dy,Dz,P,pickobs,stdobs,vel3d)
+function discradjoint3D_FMM_SINGLESRC(idxconv::MapOrderGridFMM,tt::AbstractArray{Float64},
+                                      Dx::AbstractArray{Float64},Dy::AbstractArray{Float64},Dz::AbstractArray{Float64},
+                                      P::AbstractArray{Float64},pickobs,stdobs,vel3d::AbstractArray{Float64})
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
@@ -296,17 +307,6 @@ function discradjoint3D_FMM_SINGLESRC(idxconv,tt,Dx,Dy,Dz,P,pickobs,stdobs,vel3d
     lhs = UpperTriangular(tmplhs)
 
     # @show rank(tmplhs),size(tt)
-    # @show nnz(Dx),nnz(Dy),nnz(Dz)
-    # @show rank(Dx),rank(Dy),rank(Dz)
-    # @show rank(Dx.+Dy.+Dz)
-
-    # DD = Dx.+Dy.+Dz
-    # for i=1:size(DD,1)
-    #     nonzero = nnz(DD[i,:])
-    #     if nonzero<=0
-    #         @show i,nonzero
-    #     end
-    # end
     
     # solve the linear system
     lambda_fmmord = lhs\rhs

@@ -128,7 +128,7 @@ function calcgradsomesrc2Dalt(vel::Array{Float64,2},xysrc::Array{Float64,2},
             ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
             
         elseif gradalgo=="gradFMM_hiord"
-            ttgrdonesrc = ttFMM_hiord(vel,xysrc[s,:],grd)
+            ttgrdonesrc = ttFMM_hiord!(vel,xysrc[s,:],grd)
 
         elseif gradalgo=="gradFS_podlec"
             ttgrdonesrc = ttFS_podlec(vel,xysrc[s,:],grd)

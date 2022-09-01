@@ -101,22 +101,29 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
     nsrc = size(xysrc,1)
     grad1 = zeros(nx,ny)
   
+    ## pre-allocate ttime and status arrays plus the binary heap
+    fmmvars = FMMvars2D(nx,ny)
+    
+    ## pre-allocate discrete adjoint variables
+    adjvars = AdjointVars2D(nx,ny)
+
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
 
         ###########################################
         ## calc ttime, etc.
-        ttgrdonesrc,idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord(vel,xysrc[s,:],
-                                                                           grd,dodiscradj=true)
+        Dx_fmmord1,Dy_fmmord1 = ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),
+                                             grd,adjvars)
 
         # projection operator P ordered according to FMM order
-        P_fmmord1 = calcprojttfmmord(ttgrdonesrc,grd,idxconv,coordrec[s])
+        P_fmmord1 = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
 
         ###########################################
         # discrete adjoint formulation
-        grad1 .+= discradjoint2D_FMM_SINGLESRC(idxconv,tt_fmmord1,Dx_fmmord1,Dy_fmmord1,
-                                                 P_fmmord1,pickobs1[s],stdobs[s],vel)
+        grad1 .+= discradjoint2D_FMM_SINGLESRC(adjvars.idxconv,adjvars.fmmord.ttime,
+                                               Dx_fmmord1,Dy_fmmord1,
+                                               P_fmmord1,pickobs1[s],stdobs[s],vel)
 
         ###########################################
         ## smooth gradient around the source
@@ -229,7 +236,8 @@ $(TYPEDSIGNATURES)
 
  Projection operator P containing interpolation coefficients, ordered according to FMM order.
 """
-function calcprojttfmmord(ttime,grd,idxconv,coordrec)
+function calcprojttfmmord(ttime::AbstractArray{Float64},grd::GridEik,idxconv::MapOrderGridFMM,
+                          coordrec::AbstractArray{Float64})
 
     if typeof(idxconv)==MapOrderGridFMM2D
         simdim = :sim2D
@@ -249,11 +257,11 @@ function calcprojttfmmord(ttime,grd,idxconv,coordrec)
     for r=1:nrec
 
         if simdim==:sim2D 
-            coeff,ijcoe = bilinear_interp( ttime,grd,coordrec[r,1],coordrec[r,2],
+            coeff,ijcoe = bilinear_interp( ttime,grd,view(coordrec,r,:),
                                            return_coeffonly=true )
 
         elseif simdim==:sim3D 
-            coeff,ijcoe = trilinear_interp( ttime,grd,coordrec[r,1],coordrec[r,2],coordrec[r,3],
+            coeff,ijcoe = trilinear_interp( ttime,grd,view(coordrec,r,:),
                                             return_coeffonly=true )
 
         end
@@ -297,7 +305,10 @@ $(TYPEDSIGNATURES)
 
  Solve the discrete adjoint equations and return the gradient of the misfit.
 """
-function discradjoint2D_FMM_SINGLESRC(idxconv,tt,Dx,Dy,P,pickobs,stdobs,vel2d)
+function discradjoint2D_FMM_SINGLESRC(idxconv::MapOrderGridFMM,tt::AbstractArray{Float64},
+                                      Dx::AbstractArray{Float64},Dy::AbstractArray{Float64},
+                                      P::AbstractArray{Float64},pickobs,stdobs,
+                                      vel2d::AbstractArray{Float64})
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
