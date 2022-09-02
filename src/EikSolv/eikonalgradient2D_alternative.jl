@@ -114,6 +114,15 @@ function calcgradsomesrc2Dalt(vel::Array{Float64,2},xysrc::Array{Float64,2},
 
     grad1 = zeros(nx,ny)
     
+    if gradalgo=="gradFMM_hiord"
+        # in this case velocity and time arrays have the same shape
+        ttgrdonesrc = zeros(nx,ny,nsrc)
+        ## pre-allocate ttime and status arrays plus the binary heap
+        fmmvars = FMMvars2D(nx,ny)
+        ##  No discrete adjoint calculations (continuous adjoint in this case)
+        adjvars = nothing
+    end
+
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
@@ -128,7 +137,8 @@ function calcgradsomesrc2Dalt(vel::Array{Float64,2},xysrc::Array{Float64,2},
             ttgrdonesrc = ttFMM_podlec(vel,xysrc[s,:],grd)
             
         elseif gradalgo=="gradFMM_hiord"
-            ttgrdonesrc = ttFMM_hiord!(vel,xysrc[s,:],grd)
+            ttFMM_hiord!(fmmvars,vel,xysrc[s,:],grd,adjvars)
+            ttgrdonesrc = fmmvars.ttime
 
         elseif gradalgo=="gradFS_podlec"
             ttgrdonesrc = ttFS_podlec(vel,xysrc[s,:],grd)
@@ -140,7 +150,7 @@ function calcgradsomesrc2Dalt(vel::Array{Float64,2},xysrc::Array{Float64,2},
         
         ## ttime at receivers
         for i=1:curnrec
-            ttpicks1[i] = bilinear_interp( ttgrdonesrc,grd,coordrec[s][i,1],coordrec[s][i,2] )
+            ttpicks1[i] = bilinear_interp( ttgrdonesrc,grd,coordrec[s][i,:] )
         end
 
         ###########################################
@@ -463,9 +473,9 @@ end
 $(TYPEDSIGNATURES)
 """
 function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
-                         src::Vector{Float64},rec::Array{Float64,2},
-                         grd::Grid2D,pickobs::Vector{Float64},
-                         ttpicks::Vector{Float64},stdobs::Vector{Float64})
+                               src::Vector{Float64},rec::Array{Float64,2},
+                               grd::Grid2D,pickobs::Vector{Float64},
+                               ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(2,)
     mindistsrc = 1e-5
@@ -521,7 +531,8 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
 
     ## Init the max binary heap with void arrays but max size
     Nmax=ntx*nty
-    bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    #bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    bheap = init_maxheap(Nmax)
 
     ## conversion cart to lin indices, old sub2ind
     linid_ntxnty = LinearIndices((ntx,nty))
@@ -546,7 +557,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                 # get handle
                 #han = sub2ind((ntx,nty),i,j)
                 han = linid_ntxnty[i,j]
-                ## add tt of point to binary heap 
+                ## add tt of point to binary heap
                 insert_maxheap!(bheap,tt[i,j],han)
                 # change status, add to narrow band
                 status[i,j]=1
@@ -561,7 +572,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if bheap.Nh[]<1
             break
         end
         
@@ -737,7 +748,8 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
 
     ## Init the max binary heap with void arrays but max size
     Nmax=nx*ny
-    bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    #bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    bheap = init_maxheap(Nmax)
 
     ## conversion cart to lin indices, old sub2ind
     linid_nxny = LinearIndices((nx,ny))
@@ -777,7 +789,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if bheap.Nh[]<1
             break
         end
         
@@ -1317,7 +1329,8 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
 
     ## Init the max binary heap with void arrays but max size
     Nmax=nr*nθ
-    bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    #bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    bheap = init_maxheap(Nmax)
 
     ## conversion cart to lin indices, old sub2ind
     linid_nrnθ = LinearIndices((nr,nθ))
@@ -1357,7 +1370,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if bheap.Nh[]<1
             break
         end
         

@@ -34,7 +34,7 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
         simtype = :spherical
     end
     if simtype==:cartesian
-        n1,n2 = grd.nx,grd.ny #size(vel)  ## NOT A STAGGERED GRID!!!
+        n1,n2 = grd.nx,grd.ny 
         ax1min,ax1max = grd.x[1],grd.x[end]
         ax2min,ax2max = grd.y[1],grd.y[end]
     elseif simtype==:spherical
@@ -187,7 +187,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         simtype = :spherical
     end
     if simtype==:cartesian
-        n1,n2 = grd.nx,grd.ny #size(vel)  ## NOT A STAGGERED GRID!!!
+        n1,n2 = grd.nx,grd.ny 
     elseif simtype==:spherical
         n1,n2 = grd.nr,grd.nθ
     end
@@ -300,7 +300,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         ## source location, etc.      
         ## REGULAR grid
         if simtype==:cartesian
-            ijsrc = sourceboxloctt!(fmmvars,vel,src,grd, staggeredgrid=false )
+            ijsrc = sourceboxloctt!(fmmvars,vel,src,grd )
         elseif simtype==:spherical
             ijsrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
         end
@@ -973,7 +973,7 @@ function ttaroundsrc!(fmmcoarse::FMMvars2D,vel::Array{Float64,2},src::AbstractVe
         ## Source location, etc. within fine grid
         ##  
         ## REGULAR grid (not staggered), use "grdfine","finegrd", source position in the fine grid!!
-        ijsrc_fine = sourceboxloctt!(fmmfine,velfinegrd,srcfine,grdfine, staggeredgrid=false )
+        ijsrc_fine = sourceboxloctt!(fmmfine,velfinegrd,srcfine,grdfine )
         
     elseif simtype==:spherical
         # set origin of the fine grid
@@ -1205,9 +1205,6 @@ function ttaroundsrc!(fmmcoarse::FMMvars2D,vel::Array{Float64,2},src::AbstractVe
     return
 end
 
-
-#######################################################################################
-
 #################################################################################
 
 """
@@ -1216,28 +1213,17 @@ $(TYPEDSIGNATURES)
  Define the "box" of nodes around/including the source.
 """
 function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::AbstractVector,
-                         grd::Grid2D; staggeredgrid::Bool )
-    ## staggeredgrid keyword required!
-    
+                         grd::Grid2D )
+
     ## source location, etc.      
     mindistsrc = 1e-5   
     xsrc,ysrc=srcpos[1],srcpos[2]
 
-    if staggeredgrid==false
-        ## regular grid
-        ix,iy = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid) 
-        rx = xsrc-grd.x[ix]
-        ry = ysrc-grd.y[iy]
-
-    elseif staggeredgrid==true
-        ## STAGGERED grid
-        ## grd.xinit-hgr because TIME array on STAGGERED grid
-        hgr = grd.hgrid/2.0
-        ix,iy = findclosestnode(xsrc,ysrc,grd.xinit-hgr,grd.yinit-hgr,grd.hgrid)
-        rx = xsrc-(grd.x[ix]-hgr)
-        ry = ysrc-(grd.y[iy]-hgr)
-    end
-
+    ## regular grid
+    ix,iy = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid) 
+    rx = xsrc-grd.x[ix]
+    ry = ysrc-grd.y[iy]
+ 
     halfg = 0.0 #hgrid/2.0
     # Euclidean distance
     dist = sqrt(rx^2+ry^2)
@@ -1248,7 +1234,7 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
         ## set status = accepted == 2
         fmmvars.status[ix,iy] = 2
         ## set traveltime for the source
-        fmmvars.ttime[ix,iy] =0.0
+        fmmvars.ttime[ix,iy] = 0.0
 
     else
         # pre-allocate array of indices for source
@@ -1272,16 +1258,6 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
             l+=1
         end
 
-        # if (rx>=halfg) & (ry>=halfg)
-        #     onsrc[ix:ix+1,iy:iy+1] .= true
-        # elseif (rx<halfg) & (ry>=halfg)
-        #     onsrc[ix-1:ix,iy:iy+1] .= true
-        # elseif (rx<halfg) & (ry<halfg)
-        #     onsrc[ix-1:ix,iy-1:iy] .= true
-        # elseif (rx>=halfg) & (ry<halfg)
-        #     onsrc[ix:ix+1,iy-1:iy] .= true
-        # end
-
         ## set ttime around source ONLY FOUR points!!!
         for l=1:size(ijsrc,2)
             i = ijsrc[1,l]
@@ -1290,27 +1266,13 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
             ## set status = accepted == 2
             fmmvars.status[i,j] = 2
 
-            if staggeredgrid==false
-                ## regular grid
-                xp = grd.x[i] 
-                yp = grd.y[j]
-                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
-                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
-                ## set traveltime for the source
-                fmmvars.ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
-
-            elseif staggeredgrid==true
-                ## STAGGERED grid
-                ## grd.xinit-hgr because TIME array on STAGGERED grid
-                xp = grd.x[i]-hgr
-                yp = grd.y[j]-hgr
-                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1 # i-1
-                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1 # j-1            
-                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-                ## set traveltime for the source
-                fmmvars.fmmvars.ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
-
-            end
+            ## regular grid
+            xp = grd.x[i] 
+            yp = grd.y[j]
+            ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
+            jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
+            ## set traveltime for the source
+            fmmvars.ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
         end
     end
     
@@ -1326,7 +1288,7 @@ $(TYPEDSIGNATURES)
 function sourceboxloctt_sph!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::AbstractVector,
                              grd::Grid2DSphere )
 
-      # minimum distance between node and source position
+    # minimum distance between node and source position
     mindistsrc = 10.0*eps()
   
     rsrc,θsrc=srcpos[1],srcpos[2]

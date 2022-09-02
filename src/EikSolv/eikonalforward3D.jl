@@ -4,9 +4,6 @@
 ##        Eikonal forward 3D                         ## 
 #######################################################
 
-##using StaticArrays
-
-
 ###########################################################################
 
 """
@@ -316,7 +313,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
         ## source location, etc.      
         ## REGULAR grid
         if simtype==:cartesian
-            ijksrc = sourceboxloctt!(fmmvars,vel,src,grd, staggeredgrid=false )
+            ijksrc = sourceboxloctt!(fmmvars,vel,src,grd )
         elseif simtype==:spherical
             ijksrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
         end
@@ -1103,7 +1100,7 @@ function ttaroundsrc!(fmmcoarse::FMMvars3D,vel::Array{Float64,3},src::AbstractVe
         ## Source location, etc. within fine grid
         ##  
         ## REGULAR grid (not staggered), use "grdfine","finegrd", source position in the fine grid!!
-        ijksrc_fine = sourceboxloctt!(fmmfine,velfinegrd,srcfine,grdfine, staggeredgrid=false )
+        ijksrc_fine = sourceboxloctt!(fmmfine,velfinegrd,srcfine,grdfine)
         
 
 
@@ -1360,31 +1357,19 @@ $(TYPEDSIGNATURES)
  Define the "box" of nodes around/including the source.
 """
 function sourceboxloctt!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::AbstractVector{Float64},
-                         grd::Grid3D; staggeredgrid::Bool=false )
+                         grd::Grid3D )
 
     # minimum distance between node and source position
     mindistsrc = 10.0*eps()
   
     xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
     
-    if staggeredgrid==false
-        ## regular grid
-        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
-        rx = xsrc-grd.x[ix] 
-        ry = ysrc-grd.y[iy] 
-        rz = zsrc-grd.z[iz] 
+    ## regular grid
+    ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+    rx = xsrc-grd.x[ix] 
+    ry = ysrc-grd.y[iy] 
+    rz = zsrc-grd.z[iz] 
 
-    elseif staggeredgrid==true
-        # staggered grid
-        ## grd.xinit-hgr because TIME array on STAGGERED grid
-        hgr = grd.hgrid/2.0
-        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
-        rx = xsrc-(grd.x[ix]-hgr)
-        ry = ysrc-(grd.y[iy]-hgr)
-        rz = zsrc-(grd.z[iz]-hgr)
-
-    end
-  
     halfg = 0.0 #
     dist = sqrt(rx^2+ry^2+rz^2)
 
@@ -1422,25 +1407,6 @@ function sourceboxloctt!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::Abstra
             ijksrc[:,l] .= (srci[i],srcj[j],srck[k])
             l+=1
         end
-                        
-        # if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
-        #     onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
-        # elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
-        #     onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
-        # elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
-        #     onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
-        # elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
-        #     onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
-
-        # elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
-        #     onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
-        # elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
-        #     onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
-        # elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
-        #     onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
-        # elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
-        #     onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
-        # end
 
         ## set ttime around source ONLY FOUR points!!!
         for l=1:size(ijksrc,2)
@@ -1451,30 +1417,16 @@ function sourceboxloctt!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::Abstra
             ## set status = accepted == 2
             fmmvars.status[i,j,k] = 2            
 
-            if staggeredgrid==false
-                ## regular grid
-                xp = grd.x[i] 
-                yp = grd.y[j]
-                zp = grd.z[k]
-                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
-                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
-                kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
-                ## set traveltime for the source
-                fmmvars.ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            ## regular grid
+            xp = grd.x[i] 
+            yp = grd.y[j]
+            zp = grd.z[k]
+            ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+            jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+            kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+            ## set traveltime for the source
+            fmmvars.ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
 
-            elseif staggeredgrid==true
-                ## grd.xinit-hgr because TIME array on STAGGERED grid
-                xp = grd.x[i]-hgr
-                yp = grd.y[j]-hgr
-                zp = grd.z[k]-hgr
-                ii = i-1 
-                jj = j-1 
-                kk = k-1 
-                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
-                ## set traveltime for the source
-                fmmvars.ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
-
-            end
         end
     end
     return ijksrc
@@ -1487,7 +1439,6 @@ end
 $(TYPEDSIGNATURES)
 """
 function sourceboxloctt_sph!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::AbstractVector{Float64},grd::Grid3DSphere )
-    ## staggeredgrid keyword required!
 
     # minimum distance between node and source position
     mindistsrc = 10.0*eps()
@@ -1547,25 +1498,6 @@ function sourceboxloctt_sph!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::Ab
             l+=1
         end
 
-        # if (rr>=halfg) & (rθ>=halfg) & (rφ>=halfg)
-        #     onsrc[ir:ir+1,iθ:iθ+1,iφ:iφ+1] .= true
-        # elseif (rr<halfg) & (rθ>=halfg) & (rφ>=halfg)
-        #     onsrc[ir-1:ir,iθ:iθ+1,iφ:iφ+1] .= true
-        # elseif (rr<halfg) & (rθ<halfg) & (rφ>=halfg)
-        #     onsrc[ir-1:ir,iθ-1:iθ,iφ:iφ+1] .= true
-        # elseif (rr>=halfg) & (rθ<halfg) & (rφ>=halfg)
-        #     onsrc[ir:ir+1,iθ-1:iθ,iφ:iφ+1] .= true
-
-        # elseif (rr>=halfg) & (rθ>=halfg) & (rφ<halfg)
-        #     onsrc[ir:ir+1,iθ:iθ+1,iφ-1:iφ] .= true
-        # elseif (rr<halfg) & (rθ>=halfg) & (rφ<halfg)
-        #     onsrc[ir-1:ir,iθ:iθ+1,iφ-1:iφ] .= true
-        # elseif (rr<halfg) & (rθ<halfg) & (rφ<halfg)
-        #     onsrc[ir-1:ir,iθ-1:iθ,iφ-1:iφ] .= true
-        # elseif (rr>=halfg) & (rθ<halfg) & (rφ<halfg)
-        #     onsrc[ir:ir+1,iθ-1:iθ,iφ-1:iφ] .= true
-        # end
-
         ## set ttime around source ONLY FOUR points!!!
         for l=1:size(ijksrc,2)
             i = ijksrc[1,l]
@@ -1597,11 +1529,3 @@ function sourceboxloctt_sph!(fmmvars::FMMvars3D,vel::Array{Float64,3},srcpos::Ab
 end
 
 ################################################################################
-
-
-#########################################################
-#end
-#########################################################
-
-
-

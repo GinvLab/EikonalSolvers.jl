@@ -27,7 +27,8 @@ The computations are run in parallel depending on the number of workers (nworker
 
     """
 function gradttime3Dalt(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
-                        pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ; gradttalgo::String="gradFMM_hiord",smoothgradsourceradius::Integer=0,smoothgrad::Bool=true)
+                        pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
+                        gradttalgo::String="gradFMM_hiord",smoothgradsourceradius::Integer=0,smoothgrad::Bool=true)
     
     if typeof(grd)==Grid3D
         simtype = :cartesian
@@ -101,6 +102,15 @@ function calcgradsomesrc3Dalt(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coo
     nsrc = size(xyzsrc,1)
     grad1 = zeros(nx,ny,nz)
 
+    if adjalgo=="gradFMM_hiord"
+        # in this case velocity and time arrays have the same shape
+        ttgrdonesrc = zeros(nx,ny,nz,nsrc)
+        ## pre-allocate ttime and status arrays plus the binary heap
+        fmmvars = FMMvars3D(nx,ny,nz)
+        ##  No discrete adjoint calculations (continuous adjoint in this case)
+        adjvars = nothing
+    end
+
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
@@ -115,7 +125,8 @@ function calcgradsomesrc3Dalt(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coo
             ttonesrc = ttFMM_podlec(vel,xyzsrc[s,:],grd)
  
         elseif adjalgo=="gradFMM_hiord"
-            ttonesrc = ttFMM_hiord(vel,xyzsrc[s,:],grd)
+            ttFMM_hiord!(fmmvars,vel,xyzsrc[s,:],grd,adjvars)
+            ttonesrc = fmmvars.ttime
 
         elseif adjalgo=="gradFS_podlec"
             ttonesrc = ttFS_podlec(vel,xyzsrc[s,:],grd)
@@ -127,8 +138,7 @@ function calcgradsomesrc3Dalt(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coo
             
         ## ttime at receivers
         for i=1:curnrec
-            ttpicks1[i] = trilinear_interp( ttonesrc,grd,coordrec[s][i,1],
-                                            coordrec[s][i,2],coordrec[s][i,3] )
+            ttpicks1[i] = trilinear_interp(ttonesrc,grd,coordrec[s][i,:])
         end
 
         ###########################################
@@ -493,7 +503,8 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
 
     ## Init the max binary heap with void arrays but max size
     Nmax=ntx*nty*ntz
-    bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    #bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    bheap = init_maxheap(Nmax)
 
     ## conversion cart to lin indices, old sub2ind
     linid_ntxntyntz = LinearIndices((ntx,nty,ntz))
@@ -533,7 +544,7 @@ function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if bheap.Nh[]<1
             break
         end
         
@@ -730,8 +741,8 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
 
     ## Init the max binary heap with void arrays but max size
     Nmax=nx*ny*nz
- 
-    bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    #bheap = build_maxheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
+    bheap = init_maxheap(Nmax)
 
     ## conversion cart to lin indices, old sub2ind
     linid_nxnynz = LinearIndices((nx,ny,nz))
@@ -771,7 +782,7 @@ function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
    
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if bheap.Nh[]<1
             break
         end
         

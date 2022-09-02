@@ -22,7 +22,7 @@ module BinHeaps
 using DocStringExtensions
 
 export BinHeapMax,BinHeapMin,topval_heap
-export init_maxheap,build_maxheap
+export init_maxheap,build_maxheap!
 export insert_maxheap!,update_node_maxheap!,pop_maxheap!
 export init_minheap,build_minheap!
 export insert_minheap!,update_node_minheap!,pop_minheap!
@@ -136,7 +136,7 @@ function init_maxheap(Nmax::Integer)
     handles = zeros(Int64,Nmax)
     idxhan = zeros(Int64,Nmax)
     ## copy to avoid modifying input arrays!!
-    h = BinHeapMax(Nmax,Ref(Nmax),values,handles,idxhan)
+    h = BinHeapMax(Nmax,Ref(0),values,handles,idxhan)
     return h
 end
 
@@ -170,7 +170,7 @@ function build_maxheap!(values::Array{Float64,1},Nmax::Integer,
 
     ## get all the addresses of the handles
     for i=1:h.Nh[]
-        h.idxhan[h.handle[i]] = i
+        h.idxhan[h.handles[i]] = i
     end
     
     return h
@@ -251,7 +251,7 @@ $(TYPEDSIGNATURES)
 function insert_maxheap!(h::BinHeapMax,val::Float64,handle::Int64)
     ## Go UP the tree (max heap) from the bottom...
     # extend heap
-    @assert h.Nmax>(h.Nh[]+1)
+    @assert h.Nmax>h.Nh[]
     ## IMPORTANT: make sure handle is unique
     ## commented because slows things down
     #   @assert ~(handle in h.handles[1:h.Nh])
@@ -435,7 +435,7 @@ $(TYPEDSIGNATURES)
 function insert_minheap!(h::BinHeapMin,val::Float64,handle::Int64)
     ## Go UP the tree (min heap) from the bottom...
     # extend heap
-    @assert h.Nmax>=h.Nh[]
+    @assert h.Nmax>h.Nh[]
     ## IMPORTANT: make sure handle is unique
     ## commented because slows things down
     #   @assert ~(handle in h.handles[1:h.Nh[]])

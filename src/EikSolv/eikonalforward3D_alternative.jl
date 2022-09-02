@@ -137,6 +137,10 @@ function ttforwsomesrc3Dalt(vel::Array{Float64,3},coordsrc::Array{Float64,2},
     if ttalgo=="ttFMM_hiord" 
         # in this case velocity and time arrays have the same shape
         ttimeGRPSRC = zeros(grd.nx,grd.ny,grd.nz,nsrc)
+        ## pre-allocate ttime and status arrays plus the binary heap
+        fmmvars = FMMvars3D(grd.nx,grd.ny,grd.nz)
+        ##  No discrete adjoint calculations
+        adjvars = nothing
     else
         # in this case the time array has shape(velocity)+1
         ttimeGRPSRC = zeros(grd.ntx,grd.nty,grd.ntz,nsrc)
@@ -155,8 +159,9 @@ function ttforwsomesrc3Dalt(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         
 
         elseif ttalgo=="ttFMM_hiord"        
-            ttimeGRPSRC[:,:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
-                    
+            ttFMM_hiord!(fmmvars,vel,coordsrc[s,:],grd,adjvars)
+            ttimeGRPSRC[:,:,:,s] .= fmmvars.ttime
+            
         else
             println("\n WRONG ttalgo name $algo .... \n")
             return nothing
@@ -165,8 +170,8 @@ function ttforwsomesrc3Dalt(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         
         ## Interpolate at receivers positions
         for i=1:size(coordrec[s],1)
-            ttpicksGRPSRC[s][i] = trilinear_interp( ttimeGRPSRC[:,:,:,s], grd,
-                                                    coordrec[s][i,1],coordrec[s][i,2],coordrec[s][i,3])
+            ttpicksGRPSRC[s][i] = trilinear_interp(view(ttimeGRPSRC,:,:,:,s),grd,
+                                                   coordrec[s][i,:])
         end
     end
 
@@ -198,7 +203,7 @@ function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     ##------------------------
     ## source location, etc.      
     ## STAGGERED grid
-    onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=true )
+    onsrc = sourceboxloctt_alternative!(ttime,vel,src,grd, staggeredgrid=true )
 
     ######################################################################################
 
@@ -674,7 +679,7 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     
     ## source location, etc.      
     ## STAGGERED grid
-    onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=true )
+    onsrc = sourceboxloctt_alternative!(ttime,vel,src,grd, staggeredgrid=true )
     
     ##================================
     slowness = 1.0./vel
@@ -756,7 +761,7 @@ function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D)
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if bheap.Nh[]<1
             break
         end
 
@@ -1111,3 +1116,98 @@ end
 
 ####################################################################333
 
+
+"""
+$(TYPEDSIGNATURES)
+
+ Define the "box" of nodes around/including the source.
+"""
+function sourceboxloctt_alternative!(ttime::Array{Float64,3},vel::Array{Float64,3},
+                                     srcpos::Vector{Float64},grd::Grid3D; staggeredgrid::Bool )
+    ## staggeredgrid keyword required!
+
+    mindistsrc = 1e-5
+  
+    xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
+    
+    if staggeredgrid==false
+        ## regular grid
+        onsrc = zeros(Bool,grd.nx,grd.ny,grd.nz)
+        onsrc[:,:,:] .= false
+        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit)
+
+    elseif staggeredgrid==true
+        ## grd.xinit-hgr because TIME array on STAGGERED grid
+        onsrc = zeros(Bool,grd.ntx,grd.nty,grd.ntz)
+        onsrc[:,:,:] .= false
+        hgr = grd.hgrid/2.0
+        ix,iy,iz = findclosestnode(xsrc,ysrc,zsrc,grd.xinit-hgr,grd.yinit-hgr,grd.zinit-hgr,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+        rz = zsrc-((iz-1)*grd.hgrid+grd.zinit-hgr)
+
+    end
+
+  
+    halfg = 0.0 #hgrid/2.0
+    dist = sqrt(rx^2+ry^2+rz^2)
+    #@show dist,src,rx,ry
+    if dist<=mindistsrc
+        onsrc[ix,iy,iz] = true
+        ttime[ix,iy,iz] = 0.0 
+    else
+        
+        if (rx>=halfg) & (ry>=halfg) & (rz>=halfg)
+            onsrc[ix:ix+1,iy:iy+1,iz:iz+1] .= true
+        elseif (rx<halfg) & (ry>=halfg) & (rz>=halfg)
+            onsrc[ix-1:ix,iy:iy+1,iz:iz+1] .= true
+        elseif (rx<halfg) & (ry<halfg) & (rz>=halfg)
+            onsrc[ix-1:ix,iy-1:iy,iz:iz+1] .= true
+        elseif (rx>=halfg) & (ry<halfg) & (rz>=halfg)
+            onsrc[ix:ix+1,iy-1:iy,iz:iz+1] .= true
+
+        elseif (rx>=halfg) & (ry>=halfg) & (rz<halfg)
+            onsrc[ix:ix+1,iy:iy+1,iz-1:iz] .= true
+        elseif (rx<halfg) & (ry>=halfg) & (rz<halfg)
+            onsrc[ix-1:ix,iy:iy+1,iz-1:iz] .= true
+        elseif (rx<halfg) & (ry<halfg) & (rz<halfg)
+            onsrc[ix-1:ix,iy-1:iy,iz-1:iz] .= true
+        elseif (rx>=halfg) & (ry<halfg) & (rz<halfg)
+            onsrc[ix:ix+1,iy-1:iy,iz-1:iz] .= true
+        end
+
+        ## set ttime around source ONLY FOUR points!!!
+        ijksrc = findall(onsrc)
+        for lcart in ijksrc
+            i = lcart[1]
+            j = lcart[2]
+            k = lcart[3]
+            if staggeredgrid==false
+                ## regular grid
+                xp = (i-1)*grd.hgrid+grd.xinit
+                yp = (j-1)*grd.hgrid+grd.yinit
+                zp = (k-1)*grd.hgrid+grd.zinit
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid) +1)
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid) +1)
+                kk = Int(floor((zsrc-grd.zinit)/grd.hgrid) +1)            
+                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            elseif staggeredgrid==true
+                ## grd.xinit-hgr because TIME array on STAGGERED grid
+                xp = (i-1)*grd.hgrid+grd.xinit-hgr
+                yp = (j-1)*grd.hgrid+grd.yinit-hgr
+                zp = (k-1)*grd.hgrid+grd.zinit-hgr
+                ii = i-1 
+                jj = j-1 
+                kk = k-1 
+                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+                ttime[i,j,k] = sqrt( (xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2) / vel[ii,jj,kk]
+            end
+        end
+    end
+    return onsrc
+end
+
+###############################################################################

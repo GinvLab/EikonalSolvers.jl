@@ -121,6 +121,10 @@ function ttforwsomesrc2Dalt(vel::Array{Float64,2},coordsrc::Array{Float64,2},
     if ttalgo=="ttFMM_hiord"
         # in this case velocity and time arrays have the same shape
         ttGRPSRC = zeros(grd.nx,grd.ny,nsrc)
+        ## pre-allocate ttime and status arrays plus the binary heap
+        fmmvars = FMMvars2D(grd.nx,grd.ny)
+        ##  No discrete adjoint calculations
+        adjvars = nothing        
     else
         # in this case the time array has shape(velocity)+1
         ttGRPSRC = zeros(grd.ntx,grd.nty,nsrc)
@@ -138,7 +142,8 @@ function ttforwsomesrc2Dalt(vel::Array{Float64,2},coordsrc::Array{Float64,2},
             ttGRPSRC[:,:,s] = ttFMM_podlec(vel,coordsrc[s,:],grd)
 
         elseif ttalgo=="ttFMM_hiord"
-            ttGRPSRC[:,:,s] = ttFMM_hiord(vel,coordsrc[s,:],grd)
+            ttFMM_hiord!(fmmvars,vel,coordsrc[s,:],grd,adjvars)
+            ttGRPSRC[:,:,s] .= fmmvars.ttime
 
         else
             println("\nttforwsomesrc(): Wrong ttalgo name... \n")
@@ -146,9 +151,8 @@ function ttforwsomesrc2Dalt(vel::Array{Float64,2},coordsrc::Array{Float64,2},
         end
 
         ## interpolate at receivers positions
-        for i=1:size(coordrec[s],1) 
-            ttpicksGRPSRC[s][i] = bilinear_interp( ttGRPSRC[:,:,s], grd,
-                                                   coordrec[s][i,1],coordrec[s][i,2])
+        for i=1:size(coordrec[s],1)
+            ttpicksGRPSRC[s][i] = bilinear_interp(view(ttGRPSRC,:,:,s),grd,coordrec[s][i,:])
         end
     end
 
@@ -187,7 +191,7 @@ function ttFS_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
 
     ## source location, etc.      
     ## STAGGERED grid
-    onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=true )
+    onsrc = sourceboxloctt_alternative!(ttime,vel,src,grd, staggeredgrid=true )
 
     ######################################################
 
@@ -368,7 +372,7 @@ function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
 
     ## source location, etc.
     ## STAGGERED grid
-    onsrc = sourceboxloctt!(ttime,vel,src,grd, staggeredgrid=true )
+    onsrc = sourceboxloctt_alternative!(ttime,vel,src,grd, staggeredgrid=true )
 
     ###################################################### 
     ## indices of points clockwise
@@ -477,7 +481,7 @@ function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D)
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
 
         ## if no top left exit the game...
-        if bheap.Nh<1
+        if bheap.Nh[]<1
             break
         end
 
@@ -618,4 +622,86 @@ function calcttpt_podlec!(ttime::Array{Float64,2},ttlocmin::Vector{Float64},init
 end
 
 
+
 #################################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+ Define the "box" of nodes around/including the source.
+"""
+function sourceboxloctt_alternative!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
+                                     grd::Grid2D; staggeredgrid::Bool )
+    ## staggeredgrid keyword required!
+    
+    ## source location, etc.      
+    mindistsrc = 1e-5   
+    xsrc,ysrc=srcpos[1],srcpos[2]
+
+    if staggeredgrid==false
+        ## regular grid
+        onsrc = zeros(Bool,grd.nx,grd.ny)
+        onsrc[:,:] .= false
+        ix,iy = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid) 
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit)
+
+    elseif staggeredgrid==true
+        ## STAGGERED grid
+        onsrc = zeros(Bool,grd.ntx,grd.nty)
+        onsrc[:,:] .= false
+        ## grd.xinit-hgr because TIME array on STAGGERED grid
+        hgr = grd.hgrid/2.0
+        ix,iy = findclosestnode(xsrc,ysrc,grd.xinit-hgr,grd.yinit-hgr,grd.hgrid)
+        rx = xsrc-((ix-1)*grd.hgrid+grd.xinit-hgr)
+        ry = ysrc-((iy-1)*grd.hgrid+grd.yinit-hgr)
+    end
+
+    halfg = 0.0 #hgrid/2.0
+    # Euclidean distance
+    dist = sqrt(rx^2+ry^2)
+    #@show dist,src,rx,ry
+    if dist<=mindistsrc
+        onsrc[ix,iy] = true
+        ttime[ix,iy] = 0.0 
+    else
+        if (rx>=halfg) & (ry>=halfg)
+            onsrc[ix:ix+1,iy:iy+1] .= true
+        elseif (rx<halfg) & (ry>=halfg)
+            onsrc[ix-1:ix,iy:iy+1] .= true
+        elseif (rx<halfg) & (ry<halfg)
+            onsrc[ix-1:ix,iy-1:iy] .= true
+        elseif (rx>=halfg) & (ry<halfg)
+            onsrc[ix:ix+1,iy-1:iy] .= true
+        end
+        
+        ## set ttime around source ONLY FOUR points!!!
+        ijsrc = findall(onsrc)
+        for lcart in ijsrc
+            i = lcart[1]
+            j = lcart[2]
+            if staggeredgrid==false
+                ## regular grid
+                xp = (i-1)*grd.hgrid+grd.xinit
+                yp = (j-1)*grd.hgrid+grd.yinit
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
+                ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+            elseif staggeredgrid==true
+                ## STAGGERED grid
+                ## grd.xinit-hgr because TIME array on STAGGERED grid
+                xp = (i-1)*grd.hgrid+grd.xinit-hgr
+                yp = (j-1)*grd.hgrid+grd.yinit-hgr
+                ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1 # i-1
+                jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1 # j-1            
+                #### vel[isrc[1,1],jsrc[1,1]] STAGGERED GRID!!!
+                ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+            end
+        end
+    end
+    
+    return onsrc
+end 
+
+#################################################################################
+
