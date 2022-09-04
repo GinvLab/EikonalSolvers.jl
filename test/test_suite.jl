@@ -6,8 +6,6 @@ using EikonalSolvers
 
 # using PyPlot
 
-setextraparams!(EikonalSolvers.extrapars,allowfixsqarg=false,refinearoundsrc=true)
-
 ###################################
 ######################################################
 ##         Cartesian coordinates                    ##

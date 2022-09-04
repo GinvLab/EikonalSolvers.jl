@@ -5,12 +5,21 @@ struct FMMvars2D
     ttime::Array{Float64,2}
     status::Array{UInt8,2}
     bheap::BinHeapMin
+    "refine grid around source"
+    refinearoundsrc::Bool
+    "brute-force fix negative saqarg"
+    allowfixsqarg::Bool 
 
-    function FMMvars2D(n1,n2)
+    function FMMvars2D(n1,n2; refinearoundsrc,allowfixsqarg)
         ttime = zeros(Float64,n1,n2)
         status = zeros(UInt8,n1,n2)
         bheap = init_minheap(n1*n2)
-        new(ttime,status,bheap)
+        begin
+            if allowfixsqarg==true
+                @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
+            end
+        end
+        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg)
     end
 end
 
@@ -18,12 +27,21 @@ struct FMMvars3D
     ttime::Array{Float64,3}
     status::Array{UInt8,3}
     bheap::BinHeapMin
+    "refine grid around source"
+    refinearoundsrc::Bool
+    "brute-force fix negative saqarg"
+    allowfixsqarg::Bool 
 
-    function FMMvars3D(n1,n2,n3)
+    function FMMvars3D(n1,n2,n3; refinearoundsrc,allowfixsqarg)
         ttime = zeros(Float64,n1,n2,n3)
         status = zeros(UInt8,n1,n2,n3)
         bheap = init_minheap(n1*n2*n3)
-        new(ttime,status,bheap)
+        begin
+            if allowfixsqarg==true
+                @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
+            end
+        end
+        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg)
     end
 end
 
@@ -367,5 +385,20 @@ end
 
 ####################################
 
+"""
+$(TYPEDEF)
+
+# Fields 
+
+$(TYPEDFIELDS)
+"""
+Base.@kwdef struct ExtraParams
+    "brute-force fix negative sqarg"
+    allowfixsqarg::Bool
+    "refine grid around source?"
+    refinearoundsrc::Bool
+    "trigger GC manually at selected points"
+    manualGCtrigger::Bool
+end
 
 ###################################################

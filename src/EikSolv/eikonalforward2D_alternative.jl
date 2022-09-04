@@ -122,7 +122,8 @@ function ttforwsomesrc2Dalt(vel::Array{Float64,2},coordsrc::Array{Float64,2},
         # in this case velocity and time arrays have the same shape
         ttGRPSRC = zeros(grd.nx,grd.ny,nsrc)
         ## pre-allocate ttime and status arrays plus the binary heap
-        fmmvars = FMMvars2D(grd.nx,grd.ny)
+        fmmvars = FMMvars2D(grd.nx,grd.ny,refinearoundsrc=true,
+                        allowfixsqarg=false)
         ##  No discrete adjoint calculations
         adjvars = nothing        
     else

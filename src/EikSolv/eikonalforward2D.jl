@@ -19,6 +19,9 @@ The computations are run in parallel depending on the number of workers (nworker
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
 - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
 - `returntt` (optional): whether to return the 3D array(s) of traveltimes for the entire model
+- `extraparams` (optional) : a struct containing some "extra" parameters, namely
+    * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
+    * `allowfixsqarg`: brute-force fix negative saqarg
 
 # Returns
 - `ttpicks`: array(nrec,nsrc) the traveltimes at receivers
@@ -26,8 +29,13 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float64,2},
-                      coordrec::Vector{Array{Float64,2}} ; returntt::Bool=false) 
+                      coordrec::Vector{Array{Float64,2}} ; returntt::Bool=false,
+                      extraparams::Union{ExtraParams,Nothing}=nothing  )
         
+    if extraparams==nothing
+        extraparams = setdefaultextraparams()
+    end
+
     if typeof(grd)==Grid2D
         simtype = :cartesian
     elseif typeof(grd)==Grid2DSphere
@@ -77,8 +85,8 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttime[:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                                         vel,coordsrc[igrs,:],
-                                                                        coordrec[igrs],grd,
-                                                                        returntt=returntt )
+                                                                        coordrec[igrs],grd,extraparams,
+                                                                        returntt=returntt)
             end
 
         else
@@ -87,8 +95,8 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                         vel,coordsrc[igrs,:],
-                                                        coordrec[igrs],grd,
-                                                        returntt=returntt )
+                                                        coordrec[igrs],grd,extraparams,
+                                                        returntt=returntt)
             end
         end
         
@@ -107,8 +115,8 @@ $(TYPEDSIGNATURES)
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
-                         coordrec::Vector{Array{Float64,2}},grd::GridEik2D ;
-                         returntt::Bool=false )
+                         coordrec::Vector{Array{Float64,2}},grd::GridEik2D,
+                         extrapars::ExtraParams ; returntt::Bool=false )
     
     if typeof(grd)==Grid2D
         #simtype = :cartesian
@@ -127,7 +135,8 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
     end
 
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars = FMMvars2D(n1,n2)
+    fmmvars = FMMvars2D(n1,n2,refinearoundsrc=extrapars.refinearoundsrc,
+                        allowfixsqarg=extrapars.allowfixsqarg)
 
     ## pre-allocate discrete adjoint variables
     ##  No adjoint calculations
@@ -163,8 +172,6 @@ end
 
 
 #################################################################################
-
-#########################################################################
 
 """
 $(TYPEDSIGNATURES)
@@ -229,7 +236,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
     
     ##########################################
     
-    if extrapars.refinearoundsrc
+    if fmmvars.refinearoundsrc
         ##---------------------------------
         ## 
         ## Refinement around the source      
@@ -808,7 +815,7 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
 
         if sqarg<0.0
 
-            if extrapars.allowfixsqarg==true
+            if fmmvars.allowfixsqarg==true
             
                 gamma = beta^2/(4.0*alpha)
                 sqarg = beta^2-4.0*alpha*gamma
@@ -931,7 +938,7 @@ function ttaroundsrc!(fmmcoarse::FMMvars2D,vel::Array{Float64,2},src::AbstractVe
     ##
     ## Init arrays
     ##
-    fmmfine = FMMvars2D(n1,n2)
+    fmmfine = FMMvars2D(n1,n2,refinearoundsrc=false,allowfixsqarg=false)
 
     ## 
     ## Time array

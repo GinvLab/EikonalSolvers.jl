@@ -30,8 +30,13 @@ The computations are run in parallel depending on the number of workers (nworker
 """
 function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                      pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
-                     smoothgradsourceradius::Integer=3,smoothgrad::Bool=false )
-   
+                     smoothgradsourceradius::Integer=3,smoothgrad::Bool=false,
+                     extraparams::Union{ExtraParams,Nothing}=nothing )
+
+    if extraparams==nothing
+        extraparams = setdefaultextraparams()
+    end
+
     if typeof(grd)==Grid3D
         simtype = :cartesian
     elseif typeof(grd)==Grid3DSphere
@@ -71,9 +76,10 @@ function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float6
     @sync for s=1:nchu
         igrs = grpsrc[s,1]:grpsrc[s,2]
         @async grad .+= remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
-                                            coordsrc[igrs,:],coordrec[igrs],
-                                            grd,stdobs[igrs],pickobs[igrs],
-                                            smoothgradsourceradius )
+                                         coordsrc[igrs,:],coordrec[igrs],
+                                         grd,stdobs[igrs],pickobs[igrs],
+                                         smoothgradsourceradius,
+                                         extraparams )
     end    
 
     ## smooth gradient
@@ -93,14 +99,15 @@ Calculate the gradient for some requested sources
 """
 function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                            grd::GridEik3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
-                           smoothgradsourceradius::Integer )
+                           smoothgradsourceradius::Integer, extrapars::ExtraParams )
 
     nx,ny,nz=size(vel)
     nsrc = size(xyzsrc,1)
     grad1 = zeros(nx,ny,nz)
 
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars = FMMvars3D(nx,ny,nz)
+    fmmvars = FMMvars3D(nx,ny,nz,refinearoundsrc=extrapars.refinearoundsrc,
+                        allowfixsqarg=extrapars.allowfixsqarg)
     
     ## pre-allocate discrete adjoint variables
     #al = @allocated

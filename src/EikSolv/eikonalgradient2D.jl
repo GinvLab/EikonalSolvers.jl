@@ -30,7 +30,12 @@ The computations are run in parallel depending on the number of workers (nworker
 function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float64,2},
                      coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
                      stdobs::Vector{Vector{Float64}} ;
-                     smoothgradsourceradius::Integer=3,smoothgrad::Bool=false )
+                     smoothgradsourceradius::Integer=3,smoothgrad::Bool=false,
+                     extraparams::Union{ExtraParams,Nothing}=nothing)
+
+    if extraparams==nothing
+        extraparams = setdefaultextraparams()
+    end
 
     if typeof(grd)==Grid2D
         simtype = :cartesian
@@ -69,9 +74,10 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
             @async grad .+= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
-                                                 coordsrc[igrs,:],coordrec[igrs],
-                                                 grd,stdobs[igrs],pickobs[igrs],
-                                                 smoothgradsourceradius )
+                                             coordsrc[igrs,:],coordrec[igrs],
+                                             grd,stdobs[igrs],pickobs[igrs],
+                                             smoothgradsourceradius,
+                                             extraparams )
         end
     end
 
@@ -95,14 +101,15 @@ Calculate the gradient for some requested sources
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
                            coordrec::Vector{Array{Float64,2}},grd::GridEik2D,
                            stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
-                           smoothgradsourceradius::Integer )
+                           smoothgradsourceradius::Integer, extrapars::ExtraParams )
                            
     nx,ny=size(vel)
     nsrc = size(xysrc,1)
     grad1 = zeros(nx,ny)
   
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars = FMMvars2D(nx,ny)
+    fmmvars = FMMvars2D(nx,ny,refinearoundsrc=extrapars.refinearoundsrc,
+                        allowfixsqarg=extrapars.allowfixsqarg)
     
     ## pre-allocate discrete adjoint variables
     adjvars = AdjointVars2D(nx,ny)

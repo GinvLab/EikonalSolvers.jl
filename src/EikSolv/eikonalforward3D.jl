@@ -19,6 +19,9 @@ The computations are run in parallel depending on the number of workers (nworker
 - `coordsrc`: the coordinates of the source(s) (x,y,z), a 3-column array 
 - `coordrec`: the coordinates of the receiver(s) (x,y,z), a 3-column array
 - `returntt` (optional): whether to return the 3D array(s) of traveltimes for the entire model
+- `extraparams` (optional) : a struct containing some "extra" parameters, namely
+    * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
+    * `allowfixsqarg`: brute-force fix negative saqarg
 
 # Returns
 - `ttpicks`: array(nrec,nsrc) the traveltimes at receivers
@@ -26,7 +29,12 @@ The computations are run in parallel depending on the number of workers (nworker
 
 """
 function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},
-                      coordrec::Vector{Array{Float64,2}}; returntt::Bool=false) 
+                      coordrec::Vector{Array{Float64,2}}; returntt::Bool=false,
+                      extraparams::Union{ExtraParams,Nothing}=nothing) 
+    
+    if extraparams==nothing
+        extraparams = setdefaultextraparams()
+    end
     
     if typeof(grd)==Grid3D
         simtype = :cartesian
@@ -80,7 +88,7 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttime[:,:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
                                                                           vel,view(coordsrc,igrs,:),
-                                                                          view(coordrec,igrs),grd,
+                                                                          view(coordrec,igrs),grd,extraparams,
                                                                           returntt=returntt )
             end
 
@@ -90,7 +98,7 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async  ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
                                                          vel,view(coordsrc,igrs,:),
-                                                         view(coordrec,igrs),grd,
+                                                         view(coordrec,igrs),grd,extraparams,
                                                          returntt=returntt )
             end
         end
@@ -112,8 +120,8 @@ $(TYPEDSIGNATURES)
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::AbstractArray{Float64,2},
-                         coordrec::AbstractVector{Array{Float64,2}},grd::GridEik3D ;
-                         returntt::Bool=false )
+                         coordrec::AbstractVector{Array{Float64,2}},grd::GridEik3D,
+                         extrapars::ExtraParams ; returntt::Bool=false )
 
     if typeof(grd)==Grid3D
         #simtype = :cartesian
@@ -132,13 +140,13 @@ function ttforwsomesrc3D(vel::Array{Float64,3},coordsrc::AbstractArray{Float64,2
     end
 
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars = FMMvars3D(n1,n2,n3)
+    fmmvars = FMMvars3D(n1,n2,n3,refinearoundsrc=extrapars.refinearoundsrc,
+                        allowfixsqarg=extrapars.allowfixsqarg)
 
     ## pre-allocate discrete adjoint variables
     ##  No adjoint calculations
     adjvars = nothing
   
-
     if returntt
         ttimeGRPSRC = zeros(n1,n2,n3,nsrc)
     end
@@ -239,7 +247,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
     ##########################################
     ## refinearoundsrc=true
 
-    if extrapars.refinearoundsrc
+    if fmmvars.refinearoundsrc
 
         ##---------------------------------
         ## 
@@ -922,7 +930,7 @@ function calcttpt_2ndord!(fmmvars::FMMvars3D,vel::Array{Float64,3},grd::GridEik3
 
         if sqarg<0.0
 
-            if extrapars.allowfixsqarg==true
+            if fmmvars.allowfixsqarg==true
                 
                 gamma = beta^2/(4.0*alpha)
                 sqarg = beta^2-4.0*alpha*gamma
@@ -1057,7 +1065,7 @@ function ttaroundsrc!(fmmcoarse::FMMvars3D,vel::Array{Float64,3},src::AbstractVe
     ##
     ## Init arrays
     ##
-    fmmfine = FMMvars3D(n1,n2,n3)
+    fmmfine = FMMvars3D(n1,n2,n3,refinearoundsrc=false,allowfixsqarg=false)
 
     ## 
     ## Time array

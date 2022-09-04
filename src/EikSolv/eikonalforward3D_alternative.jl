@@ -138,7 +138,8 @@ function ttforwsomesrc3Dalt(vel::Array{Float64,3},coordsrc::Array{Float64,2},
         # in this case velocity and time arrays have the same shape
         ttimeGRPSRC = zeros(grd.nx,grd.ny,grd.nz,nsrc)
         ## pre-allocate ttime and status arrays plus the binary heap
-        fmmvars = FMMvars3D(grd.nx,grd.ny,grd.nz)
+        fmmvars = FMMvars3D(grd.nx,grd.ny,grd.nz,refinearoundsrc=true,
+                        allowfixsqarg=false)
         ##  No discrete adjoint calculations
         adjvars = nothing
     else

@@ -106,7 +106,8 @@ function calcgradsomesrc3Dalt(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coo
         # in this case velocity and time arrays have the same shape
         ttgrdonesrc = zeros(nx,ny,nz,nsrc)
         ## pre-allocate ttime and status arrays plus the binary heap
-        fmmvars = FMMvars3D(nx,ny,nz)
+        fmmvars = FMMvars3D(nx,ny,nz,refinearoundsrc=true,
+                        allowfixsqarg=false)
         ##  No discrete adjoint calculations (continuous adjoint in this case)
         adjvars = nothing
     end

@@ -48,6 +48,9 @@ using Distributed
 include("BinHeap/BinHeaps.jl")
 using .BinHeaps
 
+# control the ExtraParams
+include("EikSolv/extraparams.jl")
+
 ## general utils
 include("EikSolv/eikstructs.jl")
 include("EikSolv/eikonalutils_spherical.jl")
@@ -71,13 +74,11 @@ include("EikSolv/eikonalgradient3D_alternative.jl")
 include("HMCtraveltimes.jl")
 using .HMCtraveltimes
 
-# control the ExtraParams
-include("extraparams.jl")
 
-const extrapars = ExtraParams(allowfixsqarg=false,
-                              refinearoundsrc=true,
-                              manualGCtrigger=true)
-warningextrapar(extrapars)
+# const extrapars = ExtraParams(allowfixsqarg=false,
+#                               refinearoundsrc=true,
+#                               manualGCtrigger=true)
+# warningextrapar(extrapars)
 
 
 end
