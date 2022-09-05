@@ -43,6 +43,7 @@ Base.@kwdef struct EikonalProb
     coordsrc::Array{Float64,2}
     coordrec::Vector{Array{Float64,2}}
     logVel::Bool=false
+    smoothgradsourceradius::Integer
 end
 
 ## use  x.T * C^-1 * x  = ||L^-1 * x ||^2 ?
@@ -88,7 +89,9 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         #################################################
         if typeof(eikprob.grd)==Grid2D
             grad = gradttime2D(velnd,eikprob.grd,eikprob.coordsrc,
-                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs)
+                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
+                               smoothgradsourceradius=eikprob.smoothgradsourceradius) 
+
         elseif typeof(eikprob.grd)==Grid3D
             grad = gradttime3D(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs)
@@ -99,8 +102,9 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
             vecgrad = (1.0./velnd) .* grad
         end
 
+
         # flatten traveltime array
-        vecgrad = vec(grad) 
+        vecgrad = vec(grad)
         # return flattened gradient
         return  vecgrad
         

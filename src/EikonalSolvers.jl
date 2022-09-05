@@ -1,7 +1,7 @@
 
 #
 # MIT License
-# Copyright (c) 2019 Andrea Zunino
+# Copyright (c) 2022 Andrea Zunino
 # 
 
 ##############################################
@@ -19,18 +19,26 @@ $(EXPORTS)
 """
 module EikonalSolvers
 
-using DocStringExtensions
 
-export Grid2D,traveltime2D,gradttime2D
-export Grid2DSphere,traveltime2Dsphere,gradttime2Dsphere
+export Grid2D,Grid2DSphere
+export traveltime2D,gradttime2D
+export traveltime2Dalt,gradttime2Dalt
 
-export Grid3D,traveltime3D,gradttime3D
-export Grid3DSphere,traveltime3Dsphere,gradttime3Dsphere
+export Grid3D,Grid3DSphere
+export traveltime3D,gradttime3D
+export traveltime3Dalt,gradttime3Dalt
 
 export ttmisfitfunc
 export EikonalProb
 
-export setextraparams!
+export ExtraParams
+
+
+using LinearAlgebra
+using OffsetArrays
+using SparseArrays
+using DocStringExtensions
+using StaticArrays
 
 # using LinearAlgebra
 ## For parallelisation
@@ -40,34 +48,35 @@ using Distributed
 include("BinHeap/BinHeaps.jl")
 using .BinHeaps
 
+
 ## general utils
+include("EikSolv/eikstructs.jl")
 include("EikSolv/eikonalutils_spherical.jl")
 include("EikSolv/eikonalutils.jl")
+include("EikSolv/utils.jl")
 
 ## 2D stuff
 include("EikSolv/eikonalforward2D.jl")
 include("EikSolv/eikonalgradient2D.jl")
-# spherical/polar coodinates
-include("EikSolv/eikonalforward2D_spherical.jl")
-include("EikSolv/eikonalgradient2D_spherical.jl")
+include("EikSolv/eikonalforward2D_alternative.jl")
+include("EikSolv/eikonalgradient2D_alternative.jl")
 
 ## 3D stuff
 include("EikSolv/eikonalforward3D.jl")
 include("EikSolv/eikonalgradient3D.jl")
-# spherical/polar coodinates
-include("EikSolv/eikonalforward3D_spherical.jl")
-include("EikSolv/eikonalgradient3D_spherical.jl")
+include("EikSolv/eikonalforward3D_alternative.jl")
+include("EikSolv/eikonalgradient3D_alternative.jl")
+
 
 ## Hamiltonian Monte Carlo setup
 include("HMCtraveltimes.jl")
 using .HMCtraveltimes
 
-# control the ExtraParams
-include("extraparams.jl")
 
-const extrapars = ExtraParams(allowfixsqarg=false,
-                        refinearoundsrc=true)
-warningextrapar(extrapars)
+# const extrapars = ExtraParams(allowfixsqarg=false,
+#                               refinearoundsrc=true,
+#                               manualGCtrigger=true)
+# warningextrapar(extrapars)
 
 
 end
