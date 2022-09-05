@@ -392,13 +392,27 @@ $(TYPEDEF)
 
 $(TYPEDFIELDS)
 """
-Base.@kwdef struct ExtraParams
+struct ExtraParams
     "brute-force fix negative sqarg"
     allowfixsqarg::Bool
     "refine grid around source?"
     refinearoundsrc::Bool
     "trigger GC manually at selected points"
     manualGCtrigger::Bool
+    "Serial, Threads or Distributed run?"
+    parallelkind::Symbol
+
+    function ExtraParams(; allowfixsqarg::Bool=false,
+                         refinearoundsrc::Bool=true,
+                         manualGCtrigger::Bool=false,
+                         parallelkind::Symbol=:sharedmem)
+        
+        if !(parallelkind in [:serial,:sharedmem,:distribmem])
+            error("ExtraParams(): 'parallelkind' must be one of :serial, :sharedmem or :distribmem")
+        end
+        return new(allowfixsqarg,refinearoundsrc,manualGCtrigger,
+                   parallelkind)
+    end    
 end
 
 ###################################################

@@ -34,7 +34,7 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
                      extraparams::Union{ExtraParams,Nothing}=nothing)
 
     if extraparams==nothing
-        extraparams = setdefaultextraparams()
+        extraparams =  ExtraParams()
     end
 
     if typeof(grd)==Grid2D
@@ -60,33 +60,70 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
     @assert all(ax2min.<=coordsrc[:,2].<=ax2max)
 
     nsrc = size(coordsrc,1)
-    nw = nworkers()
-
-    ## calculate how to subdivide the srcs among the workers
-    grpsrc = distribsrcs(nsrc,nw)
-    nchu = size(grpsrc,1)
-    ## array of workers' ids
-    wks = workers()
-    
     grad = zeros(n1,n2)
-    ## do the calculations
-    @sync begin 
-        for s=1:nchu
-            igrs = grpsrc[s,1]:grpsrc[s,2]
-            @async grad .+= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
-                                             coordsrc[igrs,:],coordrec[igrs],
-                                             grd,stdobs[igrs],pickobs[igrs],
-                                             smoothgradsourceradius,
-                                             extraparams )
+    
+    if extraparams.parallelkind==:distribmem
+        ##====================================
+        ## Distributed memory
+        ##====================
+        nw = nworkers()
+        ## calculate how to subdivide the srcs among the workers
+        grpsrc = distribsrcs(nsrc,nw)
+        nchu = size(grpsrc,1)
+        ## array of workers' ids
+        wks = workers()
+        ## do the calculations
+        @sync begin 
+            for s=1:nchu
+                igrs = grpsrc[s,1]:grpsrc[s,2]
+                @async grad .+= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
+                                                 coordsrc[igrs,:],coordrec[igrs],
+                                                 grd,stdobs[igrs],pickobs[igrs],
+                                                 smoothgradsourceradius,
+                                                 extraparams )
+            end
         end
+
+
+    elseif extraparams.parallelkind==:sharedmem
+        ##====================================
+        ## Shared memory        
+        ##====================
+        nth = Threads.nthreads()
+        grpsrc = distribsrcs(nsrc,nth)
+        nchu = size(grpsrc,1)            
+        ##  do the calculations
+        Threads.@threads for s=1:nchu
+            igrs = grpsrc[s,1]:grpsrc[s,2]
+            grad .+= calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
+                                       grd,view(stdobs,igrs),view(pickobs,igrs),
+                                       smoothgradsourceradius,
+                                       extraparams )
+        end
+        
+
+
+    elseif extraparams.parallelkind==:serial
+        ##====================================
+        ## Serial run
+        ##====================
+        grad[:,:] .= calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
+                                       smoothgradsourceradius,extraparams )
+
     end
+
 
     ## smooth gradient
     if smoothgrad
         l = 5  # 5 pixels kernel
         grad = smoothgradient(l,grad)
     end
- 
+
+    if extraparams.manualGCtrigger
+        # trigger garbage collector
+        #println("Triggering GC")
+        GC.gc()
+    end
     return grad
 end
 
@@ -98,9 +135,9 @@ $(TYPEDSIGNATURES)
 
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
-                           coordrec::Vector{Array{Float64,2}},grd::GridEik2D,
-                           stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
+function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2},
+                           coordrec::AbstractVector{Array{Float64,2}},grd::GridEik2D,
+                           stdobs::AbstractVector{Vector{Float64}},pickobs1::AbstractVector{Vector{Float64}},
                            smoothgradsourceradius::Integer, extrapars::ExtraParams )
                            
     nx,ny=size(vel)
@@ -137,7 +174,13 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::Array{Float64,2},
         smoothgradaroundsrc2D!(grad1,xysrc[s,:],grd,radiuspx=smoothgradsourceradius)
 
     end
-
+ 
+    if extrapars.manualGCtrigger
+        # trigger garbage collector
+        #println("Triggering GC")
+        GC.gc()
+    end
+    
     return grad1
 end 
 

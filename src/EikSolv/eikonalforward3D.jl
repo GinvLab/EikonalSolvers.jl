@@ -33,7 +33,7 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
                       extraparams::Union{ExtraParams,Nothing}=nothing) 
     
     if extraparams==nothing
-        extraparams = setdefaultextraparams()
+        extraparams = ExtraParams()
     end
     
     if typeof(grd)==Grid3D
@@ -69,22 +69,24 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
         ttpicks[i] = zeros(curnrec)
     end    
 
-    ## calculate how to subdivide the srcs among the workers
-    nw = nworkers()
-    grpsrc = distribsrcs(nsrc,nw)
-    nchu = size(grpsrc,1)
-    ## array of workers' ids
-    wks = workers()
-
     if returntt
         ttime = zeros(n1,n2,n3,nsrc)
     end
 
-    @sync begin
 
-        if returntt
+    if extraparams.parallelkind==:distribmem
+        ##====================================
+        ## Distributed memory
+        ## calculate how to subdivide the srcs among the workers
+        nw = nworkers()
+        grpsrc = distribsrcs(nsrc,nw)
+        nchu = size(grpsrc,1)
+        ## array of workers' ids
+        wks = workers()
+
+        if returntt            
             # return both traveltime picks at receivers and at all grid points
-            for s=1:nchu
+            @sync for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttime[:,:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
                                                                           vel,view(coordsrc,igrs,:),
@@ -94,7 +96,7 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
 
         else
             # return ONLY traveltime picks at receivers
-            for s=1:nchu
+            @sync for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async  ttpicks[igrs] = remotecall_fetch(ttforwsomesrc3D,wks[s],
                                                          vel,view(coordsrc,igrs,:),
@@ -103,7 +105,49 @@ function traveltime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float
             end
         end
 
+
+    elseif extraparams.parallelkind==:sharedmem
+        ##====================================
+        ## Shared memory
+        nth = Threads.nthreads()
+        grpsrc = distribsrcs(nsrc,nth)
+        nchu = size(grpsrc,1)      
+
+        if returntt            
+            # return both traveltime picks at receivers and at all grid points
+            Threads.@threads for s=1:nchu
+                igrs = grpsrc[s,1]:grpsrc[s,2]
+                ttime[:,:,:,igrs],ttpicks[igrs] = ttforwsomesrc3D(vel,view(coordsrc,igrs,:),
+                                                                  view(coordrec,igrs),grd,extraparams,
+                                                                  returntt=returntt )
+            end
+
+        else
+            # return ONLY traveltime picks at receivers
+            Threads.@threads for s=1:nchu
+                igrs = grpsrc[s,1]:grpsrc[s,2]
+                ttpicks[igrs] = ttforwsomesrc3D(vel,view(coordsrc,igrs,:),
+                                                view(coordrec,igrs),grd,extraparams,
+                                                returntt=returntt )
+            end
+        end
+
+
+    elseif extraparams.parallelkind==:serial
+        ##====================================
+        ## Serial run
+        if returntt            
+            # return both traveltime picks at receivers and at all grid points
+            ttime[:,:,:,:],ttpicks = ttforwsomesrc3D(vel,coordsrc,coordrec,grd,extraparams,
+                                                           returntt=returntt )
+        else
+            # return ONLY traveltime picks at receivers
+            ttpicks = ttforwsomesrc3D(vel,coordsrc,coordrec,grd,extraparams,
+                                            returntt=returntt )
+        end
+
     end
+        
 
     if returntt
         return ttpicks,ttime
@@ -1158,8 +1202,8 @@ function ttaroundsrc!(fmmcoarse::FMMvars3D,vel::Array{Float64,3},src::AbstractVe
         if oncoa
             ##===================================
             ## UPDATE the COARSE GRID
-            fmmcoarse.ttime[ia_coarse,ja_coarse,ka_coarse]  = ttime[ia,ja,ka]
-            fmmcoarse.status[ia_coarse,ja_coarse,ka_coarse] = status[ia,ja,ka]
+            fmmcoarse.ttime[ia_coarse,ja_coarse,ka_coarse]  = fmmfine.ttime[ia,ja,ka]
+            fmmcoarse.status[ia_coarse,ja_coarse,ka_coarse] = fmmfine.status[ia,ja,ka]
             ijksrc_coarse[:,counter_ijksrccoarse] .= (ia_coarse,ja_coarse,ka_coarse)
             counter_ijksrccoarse +=1
             ##==================================

@@ -31,7 +31,7 @@ export traveltime3Dalt,gradttime3Dalt
 export ttmisfitfunc
 export EikonalProb
 
-export setextraparams!
+export ExtraParams
 
 
 using LinearAlgebra
@@ -48,8 +48,6 @@ using Distributed
 include("BinHeap/BinHeaps.jl")
 using .BinHeaps
 
-# control the ExtraParams
-include("EikSolv/extraparams.jl")
 
 ## general utils
 include("EikSolv/eikstructs.jl")

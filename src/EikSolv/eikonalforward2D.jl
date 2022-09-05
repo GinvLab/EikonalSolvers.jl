@@ -33,7 +33,7 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
                       extraparams::Union{ExtraParams,Nothing}=nothing  )
         
     if extraparams==nothing
-        extraparams = setdefaultextraparams()
+        extraparams =  ExtraParams()
     end
 
     if typeof(grd)==Grid2D
@@ -66,32 +66,35 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
 
     ## calculate how to subdivide the srcs among the workers
     #nsrc = size(coordsrc,1)
-    nw = nworkers()
-    grpsrc = distribsrcs(nsrc,nw)
-    nchu = size(grpsrc,1)
-    ## array of workers' ids
-    wks = workers()
-
+   
     if returntt
         # return traveltime array and picks at receivers
         ttime = zeros(n1,n2,nsrc)
     end
 
-    @sync begin
+    
+    if extraparams.parallelkind==:distribmem
+        ##====================================
+        ## Distributed memory
+        ##====================
+        nw = nworkers()
+        grpsrc = distribsrcs(nsrc,nw)
+        nchu = size(grpsrc,1)
+        ## array of workers' ids
+        wks = workers()
 
         if returntt 
             # return traveltime picks at receivers and at all grid points 
-            for s=1:nchu
+            @sync for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttime[:,:,igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                                         vel,coordsrc[igrs,:],
                                                                         coordrec[igrs],grd,extraparams,
                                                                         returntt=returntt)
             end
-
         else
             # return ONLY traveltime picks at receivers 
-            for s=1:nchu
+            @sync for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
                                                         vel,coordsrc[igrs,:],
@@ -99,9 +102,54 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
                                                         returntt=returntt)
             end
         end
-        
-    end # sync
 
+        
+    elseif extraparams.parallelkind==:sharedmem
+        ##====================================
+        ## Shared memory
+        ##====================
+        nth = Threads.nthreads()
+        grpsrc = distribsrcs(nsrc,nth)
+        nchu = size(grpsrc,1)      
+
+        if returntt            
+            # return both traveltime picks at receivers and at all grid points
+            Threads.@threads for s=1:nchu
+                igrs = grpsrc[s,1]:grpsrc[s,2]
+                ttime[:,:,igrs],ttpicks[igrs] = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
+                                                                  view(coordrec,igrs),grd,extraparams,
+                                                                  returntt=returntt )
+            end
+
+        else
+            # return ONLY traveltime picks at receivers
+            Threads.@threads for s=1:nchu
+                igrs = grpsrc[s,1]:grpsrc[s,2]
+                ttpicks[igrs] = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
+                                                view(coordrec,igrs),grd,extraparams,
+                                                returntt=returntt )
+            end
+        end
+
+
+    elseif extraparams.parallelkind==:serial
+        ##====================================
+        ## Serial run
+        ##====================
+        if returntt            
+            # return both traveltime picks at receivers and at all grid points
+            ttime[:,:,:],ttpicks = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
+                                                           view(coordrec,igrs),grd,extraparams,
+                                                           returntt=returntt )
+        else
+            # return ONLY traveltime picks at receivers
+            ttpicks = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
+                                      view(coordrec,igrs),grd,extraparams,
+                                      returntt=returntt )
+        end
+
+    end
+    
     if returntt 
         return ttpicks,ttime
     end
@@ -114,8 +162,8 @@ $(TYPEDSIGNATURES)
 
   Compute the forward problem for a group of sources.
 """
-function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::Array{Float64,2},
-                         coordrec::Vector{Array{Float64,2}},grd::GridEik2D,
+function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::AbstractArray{Float64,2},
+                         coordrec::AbstractVector{Array{Float64,2}},grd::GridEik2D,
                          extrapars::ExtraParams ; returntt::Bool=false )
     
     if typeof(grd)==Grid2D

@@ -1,7 +1,7 @@
 name = "EikonalSolvers"
 uuid = "0631ba50-6b23-11e9-3fc3-378508ba069a"
 authors = ["Andrea Zunino <inverseproblem@users.noreply.github.com>"]
-version = "0.8.0"
+version = "0.9.0"
 
 [deps]
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
