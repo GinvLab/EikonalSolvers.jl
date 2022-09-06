@@ -138,13 +138,11 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
         ##====================
         if returntt            
             # return both traveltime picks at receivers and at all grid points
-            ttime[:,:,:],ttpicks = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
-                                                           view(coordrec,igrs),grd,extraparams,
+            ttime[:,:,:],ttpicks = ttforwsomesrc2D(vel,coordsrc,coordrec,grd,extraparams,
                                                            returntt=returntt )
         else
             # return ONLY traveltime picks at receivers
-            ttpicks = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
-                                      view(coordrec,igrs),grd,extraparams,
+            ttpicks = ttforwsomesrc2D(vel,coordsrc,coordrec,grd,extraparams,
                                       returntt=returntt )
         end
 
@@ -272,13 +270,16 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         # idxconv = MapOrderGridFMM2D(n1,n2)
         # fmmord = VarsFMMOrder2D(n1,n2)
         # codeDxy = zeros(Int64,n12,2)
-        adjvars.fmmord.vecDx.Nnnz[] = 0
-        adjvars.fmmord.vecDy.Nnnz[] = 0
+        adjvars.fmmord.vecDx.lastrowupdated[] = 0
+        adjvars.fmmord.vecDy.lastrowupdated[] = 0
         # for safety, zeroes the traveltime
         adjvars.fmmord.ttime[:] .= 0.0
         # for safety, zeroes the codes for derivatives
         adjvars.codeDxy[:,:] .= 0
-        
+
+        # init row stuff
+        colindsonsrc = MVector(0)
+        colvalsonsrc = SA[1.0]
     end    
     ##======================================================
     
@@ -314,30 +315,43 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                 adjvars.idxconv.lgrid2fmm[ifm] = i
             end
 
+      
+            # loop on points "on" source
             for l=1:naccinit
 
                 if l<=skipnptsDxy
                     #################################################################
                     # Here we store a 1 in the diagonal because we are on a source node...
                     #  store arrival time for first points in FMM order
-                    addentry!(adjvars.fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(adjvars.fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                    colindsonsrc[1] = l
+                    nnzcol = 1
+                    addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
+                    addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
+                    # addentry!(adjvars.fmmord.vecDx,l,l,1.0)   
+                    # addentry!(adjvars.fmmord.vecDy,l,l,1.0)     
                     #################################################################
-                end
 
-                ## "reconstruct" derivative stencils from known FMM order and arrival times
-                derivaroundsrcfmm2D!(l,adjvars.idxconv,idD)
-
-                if idD==[0,0]
-                    #################################################################
-                    # Here we store a 1 in the diagonal because we are on a source node...
-                    #  store arrival time for first points in FMM order
-                    addentry!(adjvars.fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(adjvars.fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    #################################################################
                 else
-                    l_fmmord = adjvars.idxconv.lfmm2grid[l]
-                    adjvars.codeDxy[l_fmmord,:] .= idD
+
+                    ## "reconstruct" derivative stencils from known FMM order and arrival times
+                    derivaroundsrcfmm2D!(l,adjvars.idxconv,idD)
+
+                    if idD==[0,0]
+                        #################################################################
+                        # Here we store a 1 in the diagonal because we are on a source node...
+                        #  store arrival time for first points in FMM order
+                        colindsonsrc[1] = l
+                        nnzcol = 1
+                        addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
+                        addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
+                        # addentry!(adjvars.fmmord.vecDx,l,l,1.0)
+                        # addentry!(adjvars.fmmord.vecDy,l,l,1.0)
+                        #################################################################
+                    else
+                        l_fmmord = adjvars.idxconv.lfmm2grid[l]
+                        adjvars.codeDxy[l_fmmord,:] .= idD
+                    end
+
                 end
             end
 
@@ -399,8 +413,12 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                 # Here we store a 1 in the diagonal because we are on a source node...
                 #  store arrival time for first points in FMM order
                 #
-                addentry!(adjvars.fmmord.vecDx,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                addentry!(adjvars.fmmord.vecDy,l,l,1.0)                   ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                colindsonsrc[1] = l
+                nnzcol = 1
+                addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
+                addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
+                # addentry!(adjvars.fmmord.vecDx,l,l,1.0)
+                # addentry!(adjvars.fmmord.vecDy,l,l,1.0)
                 #
                 #################################################################
 
@@ -571,8 +589,14 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
 
         #@time begin 
 
-        ## set the derivative operators
-        for irow=1:n12
+        ##
+        ## Set the derivative operators in FMM order, from source onwards
+        ## 
+        ##   for from adjvars.fmmord.vecDx.lastrowupdated[]+1 onwards because some rows have already
+        ##   been updated above and the CSR format used here requires to add rows in sequence to
+        ##   avoid expensive re-allocations
+        startloop = adjvars.fmmord.vecDx.lastrowupdated[]+1
+        for irow=startloop:n12
             
             # compute the coefficients for X  derivatives
             setcoeffderiv2D!(adjvars.fmmord.vecDx,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffx,ptij,
@@ -586,23 +610,24 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
 
         #end # @time
         
-        # create the actual sparse arrays from the vectors
-        Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
-        Dx_fmmord = sparse(adjvars.fmmord.vecDx.i[1:Nxnnz],
-                           adjvars.fmmord.vecDx.j[1:Nxnnz],
-                           adjvars.fmmord.vecDx.v[1:Nxnnz],
-                           adjvars.fmmord.vecDx.Nsize[1], adjvars.fmmord.vecDx.Nsize[2] )
+        # # create the actual sparse arrays from the vectors
+        # Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
+        # Dx_fmmord = sparse(adjvars.fmmord.vecDx.i[1:Nxnnz],
+        #                    adjvars.fmmord.vecDx.j[1:Nxnnz],
+        #                    adjvars.fmmord.vecDx.v[1:Nxnnz],
+        #                    adjvars.fmmord.vecDx.Nsize[1], adjvars.fmmord.vecDx.Nsize[2] )
 
-        Nynnz = adjvars.fmmord.vecDy.Nnnz[]
-        Dy_fmmord = sparse(adjvars.fmmord.vecDy.i[1:Nynnz],
-                           adjvars.fmmord.vecDy.j[1:Nynnz],
-                           adjvars.fmmord.vecDy.v[1:Nynnz],
-                           adjvars.fmmord.vecDy.Nsize[1], adjvars.fmmord.vecDy.Nsize[2] ) 
+        # Nynnz = adjvars.fmmord.vecDy.Nnnz[]
+        # Dy_fmmord = sparse(adjvars.fmmord.vecDy.i[1:Nynnz],
+        #                    adjvars.fmmord.vecDy.j[1:Nynnz],
+        #                    adjvars.fmmord.vecDy.v[1:Nynnz],
+        #                    adjvars.fmmord.vecDy.Nsize[1], adjvars.fmmord.vecDy.Nsize[2] ) 
         
-        
-
         ## return all the stuff for discrete adjoint computations
-        return Dx_fmmord,Dy_fmmord
+        #return Dx_fmmord,Dy_fmmord
+
+        
+        
     end # if dodiscradj
     ##======================================================
     

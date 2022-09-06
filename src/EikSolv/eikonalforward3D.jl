@@ -332,22 +332,24 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
                     addentry!(adjvars.fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
                     addentry!(adjvars.fmmord.vecDz,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
                     #################################################################
-                end
 
-                ## "reconstruct" derivative stencils from known FMM order and arrival times
-                derivaroundsrcfmm3D!(l,adjvars.idxconv,idD)
-
-                if idD==[0,0,0] # 3 elements!!!
-                    #################################################################
-                    # Here we store a 1 in the diagonal because we are on a source node...
-                    #  store arrival time for first points in FMM order
-                    addentry!(adjvars.fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(adjvars.fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    addentry!(adjvars.fmmord.vecDz,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
-                    #################################################################
                 else
-                    l_fmmord = adjvars.idxconv.lfmm2grid[l]
-                    adjvars.codeDxyz[l_fmmord,:] .= idD
+
+                    ## "reconstruct" derivative stencils from known FMM order and arrival times
+                    derivaroundsrcfmm3D!(l,adjvars.idxconv,idD)
+
+                    if idD==[0,0,0] # 3 elements!!!
+                        #################################################################
+                        # Here we store a 1 in the diagonal because we are on a source node...
+                        #  store arrival time for first points in FMM order
+                        addentry!(adjvars.fmmord.vecDx,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                        addentry!(adjvars.fmmord.vecDy,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                        addentry!(adjvars.fmmord.vecDz,l,l,1.0)      ## <<<<<<<<<<<<<========= CHECK this! =============#####
+                        #################################################################
+                    else
+                        l_fmmord = adjvars.idxconv.lfmm2grid[l]
+                        adjvars.codeDxyz[l_fmmord,:] .= idD
+                    end
                 end
             end
 
