@@ -138,13 +138,11 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
         ##====================
         if returntt            
             # return both traveltime picks at receivers and at all grid points
-            ttime[:,:,:],ttpicks = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
-                                                           view(coordrec,igrs),grd,extraparams,
+            ttime[:,:,:],ttpicks = ttforwsomesrc2D(vel,coordsrc,coordrec,grd,extraparams,
                                                            returntt=returntt )
         else
             # return ONLY traveltime picks at receivers
-            ttpicks = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
-                                      view(coordrec,igrs),grd,extraparams,
+            ttpicks = ttforwsomesrc2D(vel,coordsrc,coordrec,grd,extraparams,
                                       returntt=returntt )
         end
 
