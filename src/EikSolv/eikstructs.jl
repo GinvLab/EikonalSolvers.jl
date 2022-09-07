@@ -285,15 +285,19 @@ end
 # structs for sparse matrices to represent derivatives (discrete adjoint)
 
 struct VecSPDerivMat
-    i::Vector{Int64}
+    iptr::Vector{Int64}
     j::Vector{Int64}
     v::Vector{Float64}
-    Nnnz::Base.RefValue{Int64}
+    lastrowupdated::Base.RefValue{Int64}
     Nsize::Vector{Int64}
+    Nnnz::Base.RefValue{Int64}
 
-    function VecSPDerivMat(; i,j,v,Nsize)
+    function VecSPDerivMat(; iptr,j,v,Nsize)
+        lastrowupdated = Ref(0)
+        iptr[1] = 1
         Nnnz = Ref(0)
-        new(i,j,v,Nnnz,Nsize) 
+        @assert length(iptr)==Nsize[1]+1
+        new(iptr,j,v,lastrowupdated,Nsize,Nnnz) 
     end
 end
 
@@ -307,9 +311,9 @@ struct VarsFMMOrder2D
     function VarsFMMOrder2D(nx,ny)
         nxy =  nx*ny
         ttime = zeros(nxy)
-        vecDx = VecSPDerivMat( i=zeros(Int64,nxy*3), j=zeros(Int64,nxy*3),
+        vecDx = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
                                v=zeros(nxy*3), Nsize=[nxy,nxy] )
-        vecDy = VecSPDerivMat( i=zeros(Int64,nxy*3), j=zeros(Int64,nxy*3),
+        vecDy = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
                                v=zeros(nxy*3), Nsize=[nxy,nxy] )
         return new(ttime,vecDx,vecDy)
     end
@@ -324,11 +328,11 @@ struct VarsFMMOrder3D
     function VarsFMMOrder3D(nx,ny,nz)
         nxyz =  nx*ny*nz
         ttime = zeros(nxyz)
-        vecDx = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
+        vecDx = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-        vecDy = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
+        vecDy = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-        vecDz = VecSPDerivMat( i=zeros(Int64,nxyz*3), j=zeros(Int64,nxyz*3),
+        vecDz = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
 
         return new(ttime,vecDx,vecDy,vecDz)

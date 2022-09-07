@@ -373,12 +373,31 @@ end
 
 ###################################################
 
-function addentry!(D::VecSPDerivMat,i::Integer,j::Integer,v::Float64)
-    p = D.Nnnz[]+1
-    D.i[p] = i
-    D.j[p] = j
-    D.v[p] = v
-    D.Nnnz[] = p 
+function addrowCSRmat!(D::VecSPDerivMat,irow::Integer,colinds::AbstractVector{<:Integer},
+                       colvals::AbstractVector{<:Float64},nnzcol::Integer)
+
+    #@show irow,D.lastrowupdated[]
+    @assert D.lastrowupdated[]==irow-1
+    # set 1 to first entry
+    if irow==1
+        D.iptr[irow] = 1
+    end
+    # count total nnz values
+    D.Nnnz[] += nnzcol 
+    # update col pointer
+    D.iptr[irow+1] = D.iptr[irow] + nnzcol
+
+    # if there are values, then add them
+    for p=1:nnzcol
+        j = D.iptr[irow]-1+p
+        D.j[j] = colinds[p]
+        D.v[j] = colvals[p]
+    end
+    jj = D.iptr[irow]:D.iptr[irow+1]-1
+    #@show irow,D.j[jj],D.v[jj]
+
+    D.lastrowupdated[] = irow
+    #@show irow,D.j[j],D.j[j]
     return
 end
 
