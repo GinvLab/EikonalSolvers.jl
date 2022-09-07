@@ -272,6 +272,8 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         # codeDxy = zeros(Int64,n12,2)
         adjvars.fmmord.vecDx.lastrowupdated[] = 0
         adjvars.fmmord.vecDy.lastrowupdated[] = 0
+        adjvars.fmmord.vecDx.Nnnz[] = 0
+        adjvars.fmmord.vecDy.Nnnz[] = 0
         # for safety, zeroes the traveltime
         adjvars.fmmord.ttime[:] .= 0.0
         # for safety, zeroes the codes for derivatives
@@ -587,8 +589,6 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
 
         end
 
-        #@time begin 
-
         ##
         ## Set the derivative operators in FMM order, from source onwards
         ## 
@@ -596,38 +596,26 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         ##   been updated above and the CSR format used here requires to add rows in sequence to
         ##   avoid expensive re-allocations
         startloop = adjvars.fmmord.vecDx.lastrowupdated[]+1
+
+        colinds = MVector(0,0,0)
+        colvals = MVector(0.0,0.0,0.0)
+        idxperm = MVector(0,0,0)
+
         for irow=startloop:n12
             
             # compute the coefficients for X  derivatives
             setcoeffderiv2D!(adjvars.fmmord.vecDx,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffx,ptij,
-                           axis=:X,simtype=simtype)
+                             colinds,colvals,idxperm,
+                             axis=:X,simtype=simtype)
+
             
             # compute the coefficients for Y derivatives
             setcoeffderiv2D!(adjvars.fmmord.vecDy,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffy,ptij,
-                           axis=:Y,simtype=simtype)
-            
+                             colinds,colvals,idxperm,
+                             axis=:Y,simtype=simtype)
+                        
         end
 
-        #end # @time
-        
-        # # create the actual sparse arrays from the vectors
-        # Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
-        # Dx_fmmord = sparse(adjvars.fmmord.vecDx.i[1:Nxnnz],
-        #                    adjvars.fmmord.vecDx.j[1:Nxnnz],
-        #                    adjvars.fmmord.vecDx.v[1:Nxnnz],
-        #                    adjvars.fmmord.vecDx.Nsize[1], adjvars.fmmord.vecDx.Nsize[2] )
-
-        # Nynnz = adjvars.fmmord.vecDy.Nnnz[]
-        # Dy_fmmord = sparse(adjvars.fmmord.vecDy.i[1:Nynnz],
-        #                    adjvars.fmmord.vecDy.j[1:Nynnz],
-        #                    adjvars.fmmord.vecDy.v[1:Nynnz],
-        #                    adjvars.fmmord.vecDy.Nsize[1], adjvars.fmmord.vecDy.Nsize[2] ) 
-        
-        ## return all the stuff for discrete adjoint computations
-        #return Dx_fmmord,Dy_fmmord
-
-        
-        
     end # if dodiscradj
     ##======================================================
     
