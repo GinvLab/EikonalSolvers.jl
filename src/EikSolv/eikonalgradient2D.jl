@@ -159,6 +159,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
         ## calc ttime, etc.
         ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),grd,adjvars)
 
+        ###########################################
         # projection operator P ordered according to FMM order
         P_fmmord1 = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
 
@@ -168,7 +169,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
 
         ###########################################
         ## smooth gradient around the source
-        smoothgradaroundsrc2D!(grad1,xysrc[s,:],grd,radiuspx=smoothgradsourceradius)
+        smoothgradaroundsrc2D!(grad1,view(xysrc,s,:),grd,radiuspx=smoothgradsourceradius)
 
     end
  
@@ -190,7 +191,7 @@ $(TYPEDSIGNATURES)
     """
 function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFMM2D,
                           codeDxy_orig::Array{Int64,2},allcoeff::CoeffDerivatives,ijpt::AbstractVector,
-                          colinds,colvals,idxperm ;
+                          colinds::AbstractVector{Int64},colvals::AbstractVector{Float64},idxperm::AbstractVector{Int64} ;
                           axis::Symbol, simtype::Symbol)
     
     # get the linear index in the original grid
@@ -257,8 +258,6 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
         coeff = allcoeff.secondord
     end   
 
-
-
     if simtype==:cartesian
         ## store coefficients in the struct for sparse matrices
         for p=1:nnzcol 
@@ -272,16 +271,6 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
             colinds[p] = ifmmord
             colvals[p] = mycoeff
         end
-        ##########################################
-        ## Add one entire row at a time!
-        ##########################################
-        ## the following is needed because in Julia the
-        ##    row indices in every column NEED to be SORTED!
-        sortperm!(idxperm,colinds)
-        colinds[:] .= colinds[idxperm]
-        colvals[:] .= colvals[idxperm]
-        addrowCSRmat!(D,irow,colinds,colvals,nnzcol)  
-
 
     elseif simtype==:spherical
         ## store coefficients in the struct for sparse matrices
@@ -298,33 +287,23 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
             iorig = cart2lin2D(i,j,nx)
             ifmmord = idxconv.lgrid2fmm[iorig]
             ##
-             ##
-            ## the following is needed because in Julia the
-            ##    row indices in every column NEED to be SORTED!
-            if signcod<0.0
-                colinds[p] = ifmmord
-                colvals[p] = mycoeff
-            else
-                # reverse the order 
-                q = nnzcol-p+1
-                colinds[q] = ifmmord
-                colvals[q] = mycoeff
-            end
-            ##addentry!(D, irow, ifmmord, mycoeff )
-        end
-        ##########################################
-        ## Add one entire row at a time!
-        ##########################################
-         ## the following is needed because in Julia the
-        ##    row indices in every column NEED to be SORTED!
-        sortperm!(idxperm,colinds)
-        colinds[:] .= colinds[idxperm]
-        colvals[:] .= colvals[idxperm]
-        addrowCSRmat!(D,irow,colinds,colvals,nnzcol)  
+            colinds[p] = ifmmord
+            colvals[p] = mycoeff
+        end       
 
     end
-
-        return
+    
+    ##########################################
+    ## Add one entire row at a time!
+    ##########################################
+    ## the following is needed because in Julia the
+    ##    row indices in every column NEED to be SORTED!
+    sortperm!(idxperm,colinds)
+    colinds[:] .= colinds[idxperm]
+    colvals[:] .= colvals[idxperm]
+    addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
+    
+    return
 end
 
 ##############################################################################
@@ -437,8 +416,7 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ## compute the lhs terms
     calclhsterms!(vecDx,tt)
     calclhsterms!(vecDy,tt)
-    # end
- 
+    # end 
 
     #===========================================
     ###  !!! REMARK from SparseArrays:  !!! ####
@@ -517,11 +495,22 @@ end
 
 #######################################################################################
 
+"""
+$(TYPEDSIGNATURES)
+
+Calculates the following in place, maintaining the sparse structure:
+     2 * diag(vecD * tt) * vecD
+"""
 function calclhsterms!(vecD::VecSPDerivMat,tt::Vector{Float64})
     # Remark: equivalent to CSR format 
 
-    # tmp1 = zeros(nrows)
+    ##
+    ## Calculates the following in place, maintaining the sparse structure:
+    ##   2*diag(Dx*tt)*Dx 
+    ##
+
     # ## CSR matrix-vector product
+    # tmp1 = zeros(nrows)
     # for i=1:nrows
     #     # pi=pointers to column indices
     #     for l=vecD.pi[i]:vecD.pi[i+1]-1

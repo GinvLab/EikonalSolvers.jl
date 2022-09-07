@@ -158,57 +158,21 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::AbstractArray{Float64,2
 
         ###########################################
         ## calc ttime, etc.
-        #al = @allocated begin
-        #    println("> start ttFMM_hiord()")
-        Dx_fmmord1,Dy_fmmord1,Dz_fmmord1 = ttFMM_hiord!(fmmvars,vel,
-                                                        view(xyzsrc,s,:),
-                                                        grd,adjvars)
-        #end
-        #println(" s $s after ttFMM allocated: $(al/1e6)")
-        # sleep(5)
-        # if extrapars.manualGCtrigger
-        # # trigger garbage collector
-        # GC.gc()
-        # end
+        ttFMM_hiord!(fmmvars,vel,view(xyzsrc,s,:),grd,adjvars)
 
         ###########################################
         ## projection operator P ordered according to FMM order
-        #al = @allocated begin
-        #println("> start calcprojttfmmord()")
         P_fmmord1 = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
-        #end
-        #println(" s $s after P allocated: $(al/1e6)")
-        # sleep(5)
-        # if extrapars.manualGCtrigger
-        #     # trigger garbage collector
-        #     GC.gc()
-        # end
-
 
         ###########################################
         ## discrete adjoint formulation
-        #al = @allocated begin
-        #println("> start discradjoint3D_FMM_SINGLESRC()")
-        grad1 .+= discradjoint3D_FMM_SINGLESRC(adjvars.idxconv,adjvars.fmmord.ttime,
-                                               Dx_fmmord1,Dy_fmmord1,Dz_fmmord1,
-                                               P_fmmord1,pickobs1[s],stdobs[s],vel)
-        #end
-        #println(" s $s after discr. adj. allocated: $(al/1e6)")
-        # sleep(5)
-        # if extrapars.manualGCtrigger
-        #     # trigger garbage collector
-        #     GC.gc()
-        # end
+        grad1 .+= discradjoint3D_FMM_SINGLESRC(adjvars,P_fmmord1,pickobs1[s],stdobs[s],vel)
 
         ###########################################
         ## smooth gradient around the source
-        #al = @allocated begin
-        smoothgradaroundsrc3D!(grad1,xyzsrc[s,:],grd,radiuspx=smoothgradsourceradius)
-        # end
-        # println("$s after smoothing allocated: $(al/1e6)")
+        smoothgradaroundsrc3D!(grad1,view(xyzsrc,s,:),grd,radiuspx=smoothgradsourceradius)
         
     end
-
     
     if extrapars.manualGCtrigger
         # trigger garbage collector
@@ -229,7 +193,8 @@ $(TYPEDSIGNATURES)
  Set the coefficients (elements) of the derivative matrices in the x and y directions.
     """
 function setcoeffderiv3D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFMM3D,
-                          codeDxy_orig::Array{Int64,2},allcoeff::CoeffDerivatives,ijpt::AbstractVector;
+                          codeDxy_orig::Array{Int64,2},allcoeff::CoeffDerivatives,ijpt::AbstractVector,
+                          colinds::AbstractVector{Int64},colvals::AbstractVector{Float64},idxperm::AbstractVector{Int64} ;
                           axis::Symbol,simtype::Symbol)
     
     # get the linear index in the original grid
@@ -245,13 +210,23 @@ function setcoeffderiv3D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     # extract codes for X and Y
     codex,codey,codez = codeDxy_orig[iptorig,1],codeDxy_orig[iptorig,2],codeDxy_orig[iptorig,3]
 
+    ## row stuff
+    ## they must to be zeroed/filled every time!
+    tmi = typemax(eltype(colinds))
+    colinds[:] .= tmi # for permsort!() to work with only 2 out of 3 elements
+    colvals[:] .= 0.0
+    idxperm[:] .= 0
+
     whX::Int=0
     whY::Int=0
     whZ::Int=0
 
     if axis==:X
         if codex==0
-            # no derivatives have been used...
+            ## no derivatives have been used, so no element will
+            ##  be added, but the row counter will increase...
+            nnzcol = 0
+            addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
             return
         else
             code = codex
@@ -262,7 +237,10 @@ function setcoeffderiv3D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
 
     elseif axis==:Y
         if codey==0
-            # no derivatives have been used...
+            ## no derivatives have been used, so no element will
+            ##  be added, but the row counter will increase...
+            nnzcol = 0
+            addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
             return
         else
             code = codey
@@ -273,7 +251,10 @@ function setcoeffderiv3D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
         
     elseif axis==:Z
         if codez==0
-            # no derivatives have been used...
+            ## no derivatives have been used, so no element will
+            ##  be added, but the row counter will increase...
+            nnzcol = 0
+            addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
             return
         else
             code = codez
@@ -288,6 +269,7 @@ function setcoeffderiv3D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     
     # at this point abs(code) can only be 1 or 2
     abscode = abs(code)
+    nnzcol = abscode+1
     signcod = sign(code)
     ## select first or second order coefficients
     if abscode==1
@@ -307,9 +289,10 @@ function setcoeffderiv3D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
             iorig = cart2lin3D(i,j,k,nx,ny)
             ifmmord = idxconv.lgrid2fmm[iorig]
             ##
-            addentry!(D, irow, ifmmord, mycoeff )
+            colinds[p] = ifmmord
+            colvals[p] = mycoeff
         end
-
+        
     elseif simtype==:spherical
         ## store coefficients in the struct for sparse matrices
         for p=1:abscode+1 
@@ -326,11 +309,22 @@ function setcoeffderiv3D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
             iorig = cart2lin3D(i,j,k,nx,ny)
             ifmmord = idxconv.lgrid2fmm[iorig]
             ##
-            addentry!(D, irow, ifmmord, mycoeff )
+            colinds[p] = ifmmord
+            colvals[p] = mycoeff
         end
 
     end
-
+    
+    ##########################################
+    ## Add one entire row at a time!
+    ##########################################
+    ## the following is needed because in Julia the
+    ##    row indices in every column NEED to be SORTED!
+    sortperm!(idxperm,colinds)
+    colinds[:] .= colinds[idxperm]
+    colvals[:] .= colvals[idxperm]
+    addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
+    
     return
 end
 
@@ -339,28 +333,110 @@ end
 $(TYPEDSIGNATURES)
 
  Solve the discrete adjoint equations and return the gradient of the misfit.
-"""
-function discradjoint3D_FMM_SINGLESRC(idxconv::MapOrderGridFMM,tt::AbstractArray{Float64},
-                                      Dx::AbstractArray{Float64},Dy::AbstractArray{Float64},Dz::AbstractArray{Float64},
-                                      P::AbstractArray{Float64},pickobs,stdobs,vel3d::AbstractArray{Float64})
+    """
+function discradjoint3D_FMM_SINGLESRC(adjvars::AdjointVars3D,P::AbstractArray{Float64},
+                                      pickobs::AbstractVector{Float64},
+                                      stdobs::AbstractVector{Float64},
+                                      vel3d::AbstractArray{Float64})
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
 
+    idxconv = adjvars.idxconv
+    tt = adjvars.fmmord.ttime
+    vecDx = adjvars.fmmord.vecDx
+    vecDy = adjvars.fmmord.vecDy
+    vecDz = adjvars.fmmord.vecDz
+    Ni,Nj = vecDx.Nsize
+
+
+    ################################
+    ##  right hand side
+    ################################
     rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
-    ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
-    ##   the solver (\) does not use the correct sparse algo for matrix division
-    tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) .+ (2.0.*Diagonal(Dz*tt)*Dz) ))
+
+    #end
+    #@timeit to "calclhsterms" begin
+
+    ################################
+    ##   left hand side
+    ################################
+    ## compute the lhs terms
+    calclhsterms!(vecDx,tt)
+    calclhsterms!(vecDy,tt)
+    calclhsterms!(vecDz,tt)
+
+    # end 
+
+    #===========================================
+    ###  !!! REMARK from SparseArrays:  !!! ####
+    ============================================
+    The row indices in every column NEED to be SORTED. If your 
+    SparseMatrixCSC object contains unsorted row indices, one quick way 
+    to sort them is by doing a double transpose.
+
+    # struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrixCSC{Tv,Ti}
+    #     m::Int                  # Number of rows
+    #     n::Int                  # Number of columns
+    #     colptr::Vector{Ti}      # Column j is in colptr[j]:(colptr[j+1]-1)
+    #     rowval::Vector{Ti}      # Row indices of stored values
+    #     nzval::Vector{Tv}       # Stored values, typically nonzeros
+    # end
+
+    ============================================#
+
+    #@timeit to "sparsify" begin
+    ## We have a CSR matrix as vectors, we need a traspose of it,
+    ##  so we construct directly a CSC by exchanging i and j indices
+    Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
+    lhs1term = SparseMatrixCSC(Nj,Ni,vecDx.iptr,vecDx.j[1:Nxnnz],vecDx.v[1:Nxnnz])
+    # see remark above
+    #lhs1term = copy(transpose(copy(transpose(lhs1term))))
+
+    Nynnz = adjvars.fmmord.vecDy.Nnnz[]
+    lhs2term = SparseMatrixCSC(Nj,Ni,vecDy.iptr,vecDy.j[1:Nynnz],vecDy.v[1:Nynnz])
+    # see remark above
+    #lhs2term = copy(transpose(copy(transpose(lhs2term))))
+
+    Nznnz = adjvars.fmmord.vecDz.Nnnz[]
+    lhs3term = SparseMatrixCSC(Nj,Ni,vecDz.iptr,vecDz.j[1:Nznnz],vecDz.v[1:Nznnz])
+    # see remark above
+    #lhs2term = copy(transpose(copy(transpose(lhs2term))))
+
+    #end
+    #@timeit to "sum terms" begin
+    
+    # they are already transposed, so only add them
+    tmplhs = lhs1term .+ lhs2term .+ lhs3term
+
+    ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
 
-    # @show rank(tmplhs),size(tt)
-    
-    # solve the linear system
+    #@show typeof(lhs)
+    #end   
+    ## OLD stuff...
+    # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
+    # ##   the solver (\) does not use the correct sparse algo for matrix division
+    # tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) ))
+    # lhs = UpperTriangular(tmplhs)
+
+    ################################
+    ##  solve the linear system
+    ################################
+    #@timeit to "solve lin. system" begin
     lambda_fmmord = lhs\rhs
+    #end
 
-    # println("reorder lambda, calc grad")
-    # @time begin
 
+    ## OLD stuff...
+    # rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
+    # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
+    # ##   the solver (\) does not use the correct sparse algo for matrix division
+    # tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) .+ (2.0.*Diagonal(Dz*tt)*Dz) ))
+    # lhs = UpperTriangular(tmplhs)
+    # # solve the linear system
+    # lambda_fmmord = lhs\rhs
+   
     ##--------------------------------------
     # reorder lambda from fmmord to original grid!!
     N = length(lambda_fmmord)

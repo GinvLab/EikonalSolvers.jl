@@ -119,8 +119,8 @@ end
 
 ########################################################################
 
-function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::Vector{<:Real},grd::Union{Grid2D,Grid2DSphere} ;
-                                radiuspx::Integer)
+function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::AbstractVector{<:Real},
+                                grd::Union{Grid2D,Grid2DSphere} ; radiuspx::Integer)
 
     ## no smoothing
     if radiuspx==0
@@ -209,7 +209,7 @@ end
 
 ################################################################3
 
-function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::Vector{<:Real},grd::Union{Grid3D,Grid3DSphere} ;
+function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::AbstractVector{<:Real},grd::Union{Grid3D,Grid3DSphere} ;
                                 radiuspx::Integer)
 
     ## no smoothing

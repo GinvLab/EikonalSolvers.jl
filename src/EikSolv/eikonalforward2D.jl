@@ -329,8 +329,6 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                     nnzcol = 1
                     addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
                     addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
-                    # addentry!(adjvars.fmmord.vecDx,l,l,1.0)   
-                    # addentry!(adjvars.fmmord.vecDy,l,l,1.0)     
                     #################################################################
 
                 else
@@ -346,9 +344,8 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                         nnzcol = 1
                         addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
                         addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
-                        # addentry!(adjvars.fmmord.vecDx,l,l,1.0)
-                        # addentry!(adjvars.fmmord.vecDy,l,l,1.0)
                         #################################################################
+
                     else
                         l_fmmord = adjvars.idxconv.lfmm2grid[l]
                         adjvars.codeDxy[l_fmmord,:] .= idD
@@ -437,10 +434,6 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                0  1;
               -1  0;
                0 -1]
-
-    # ## Init the min binary heap with void arrays but max size
-    # Nmax = n1*n2
-    # bheap = build_minheap!(Array{Float64}(undef,0),Nmax,Array{Int64}(undef,0))
 
     ## pre-allocate
     tmptt::Float64 = 0.0 
@@ -605,14 +598,12 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
             
             # compute the coefficients for X  derivatives
             setcoeffderiv2D!(adjvars.fmmord.vecDx,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffx,ptij,
-                             colinds,colvals,idxperm,
-                             axis=:X,simtype=simtype)
+                             colinds,colvals,idxperm, axis=:X,simtype=simtype)
 
             
             # compute the coefficients for Y derivatives
             setcoeffderiv2D!(adjvars.fmmord.vecDy,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffy,ptij,
-                             colinds,colvals,idxperm,
-                             axis=:Y,simtype=simtype)
+                             colinds,colvals,idxperm, axis=:Y,simtype=simtype)
                         
         end
 
