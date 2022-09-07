@@ -412,32 +412,41 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     #                                                                       #
     
     # Create a TimerOutput, this is the main type that keeps track of everything.
-    to = TimerOutput()
+    #to = TimerOutput()
 
-    @timeit to "rhs" begin
-        
-        idxconv = adjvars.idxconv
-        tt = adjvars.fmmord.ttime
-        vecDx = adjvars.fmmord.vecDx
-        vecDy = adjvars.fmmord.vecDy
-        Ni,Nj = vecDx.Nsize
+    #@timeit to "rhs" begin
+    
+    idxconv = adjvars.idxconv
+    tt = adjvars.fmmord.ttime
+    vecDx = adjvars.fmmord.vecDx
+    vecDy = adjvars.fmmord.vecDy
+    Ni,Nj = vecDx.Nsize
 
-        ################################
-        ##  right hand side
-        ################################
-        rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
+    ################################
+    ##  right hand side
+    ################################
+    rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
 
-    end
+    #end
 
-    @timeit to "calclhsterms" begin
+    #@timeit to "calclhsterms" begin
 
-        ################################
-        ##   left hand side
-        ################################
-        ## compute the lhs terms
-        calclhsterms!(vecDx,tt)
-        calclhsterms!(vecDy,tt)
-    end
+    ################################
+    ##   left hand side
+    ################################
+    ## compute the lhs terms
+    calclhsterms!(vecDx,tt)
+    calclhsterms!(vecDy,tt)
+    # end
+ 
+
+    #===========================================
+    ###  !!! REMARK from SparseArrays:  !!! ####
+    ============================================
+    The row indices in every column NEED to be SORTED. If your 
+    SparseMatrixCSC object contains unsorted row indices, one quick way 
+    to sort them is by doing a double transpose.
+
     # struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrixCSC{Tv,Ti}
     #     m::Int                  # Number of rows
     #     n::Int                  # Number of columns
@@ -446,43 +455,33 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     #     nzval::Vector{Tv}       # Stored values, typically nonzeros
     # end
 
-    #===========================================
-    ###  !!! REMARK from SparseArrays:  !!! ####
-    ============================================
-    The row indices in every column NEED to be SORTED. If your 
-    SparseMatrixCSC object contains unsorted row indices, one quick way 
-    to sort them is by doing a double transpose.
     ============================================#
-    @timeit to "sparsify" begin
-        ## We have a CSR matrix as vectors, we need a traspose of it,
-        ##  so we construct directly a CSC by exchanging i and j indices
-        Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
-        lhs1term = SparseMatrixCSC(Nj,Ni,vecDx.iptr,vecDx.j[1:Nxnnz],vecDx.v[1:Nxnnz])
-        # see remark above
-        #lhs1term = copy(transpose(copy(transpose(lhs1term))))
 
-        Nynnz = adjvars.fmmord.vecDy.Nnnz[]
-        lhs2term = SparseMatrixCSC(Nj,Ni,vecDy.iptr,vecDy.j[1:Nynnz],vecDy.v[1:Nynnz])
-        # see remark above
-        #lhs2term = copy(transpose(copy(transpose(lhs2term))))
+    #@timeit to "sparsify" begin
+    ## We have a CSR matrix as vectors, we need a traspose of it,
+    ##  so we construct directly a CSC by exchanging i and j indices
+    Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
+    lhs1term = SparseMatrixCSC(Nj,Ni,vecDx.iptr,vecDx.j[1:Nxnnz],vecDx.v[1:Nxnnz])
+    # see remark above
+    #lhs1term = copy(transpose(copy(transpose(lhs1term))))
 
-        # @show lhs1term.colptr-vecDx.iptr
-        # @show lhs1term.rowval-vecDx.j[1:Nxnnz]
-        # @show lhs1term.nzval-vecDx.v[1:Nxnnz]
-        # @show size(lhs1term.colptr),size(vecDx.iptr)
-        # @show size(lhs1term.rowval),size(vecDx.j[1:Nxnnz])
-        # @show size(lhs1term.nzval),size(vecDx.v)
-    end
+    Nynnz = adjvars.fmmord.vecDy.Nnnz[]
+    lhs2term = SparseMatrixCSC(Nj,Ni,vecDy.iptr,vecDy.j[1:Nynnz],vecDy.v[1:Nynnz])
+    # see remark above
+    #lhs2term = copy(transpose(copy(transpose(lhs2term))))
 
-    @timeit to "sum terms" begin
-        # they are already transposed, so only add them
-        tmplhs = lhs1term .+ lhs2term
+    #end
+    #@timeit to "sum terms" begin
+    
+    # they are already transposed, so only add them
+    tmplhs = lhs1term .+ lhs2term
 
-        ## make sure it's recognised as upper triangular...
-        lhs = UpperTriangular(tmplhs)
+    ## make sure it's recognised as upper triangular...
+    lhs = UpperTriangular(tmplhs)
 
-        @show typeof(lhs)
-    end   
+    #@show typeof(lhs)
+    #end   
+    ## OLD stuff...
     # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
     # ##   the solver (\) does not use the correct sparse algo for matrix division
     # tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) ))
@@ -491,28 +490,28 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ################################
     ##  solve the linear system
     ################################
-    @timeit to "solve lin. system" begin
-        lambda_fmmord = lhs\rhs
-    end
+    #@timeit to "solve lin. system" begin
+    lambda_fmmord = lhs\rhs
+    #end
     
-    @timeit to "reorder lambda" begin
-        ##--------------------------------------
-        # reorder lambda from fmmord to original grid!!
-        N = length(lambda_fmmord)
-        lambda = Vector{Float64}(undef,N)
-        for p=1:N
-            iorig = idxconv.lfmm2grid[p]
-            lambda[iorig] = lambda_fmmord[p]
-        end
-
-        #gradvec = 2.0 .* transpose(lambda) * Diagonal(1.0./ (vec(vel2d).^2) )
-        gradvec = 2.0 .* lambda ./ vec(vel2d).^3
-
-        grad2d = reshape(gradvec,idxconv.nx,idxconv.ny)
+    #@timeit to "reorder lambda" begin
+    ##--------------------------------------
+    # reorder lambda from fmmord to original grid!!
+    N = length(lambda_fmmord)
+    lambda = Vector{Float64}(undef,N)
+    for p=1:N
+        iorig = idxconv.lfmm2grid[p]
+        lambda[iorig] = lambda_fmmord[p]
     end
 
-    show(to)
-    println()
+    #gradvec = 2.0 .* transpose(lambda) * Diagonal(1.0./ (vec(vel2d).^2) )
+    gradvec = 2.0 .* lambda ./ vec(vel2d).^3
+
+    grad2d = reshape(gradvec,idxconv.nx,idxconv.ny)
+    #end
+
+    #show(to)
+    #println()
     return grad2d
 end
 
@@ -549,25 +548,7 @@ function calclhsterms!(vecD::VecSPDerivMat,tt::Vector{Float64})
             vecD.v[l] = 2.0*tmp1*vecD.v[l]
         end
     end
-    
-    # ## CSR matrix-vector product
-    # tmp1 = zeros(nrows)
-    # for i=1:nrows
-    #     # pi=pointers to column indices
-    #     for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-    #         j = vecD.j[l]
-    #         # dot product
-    #         tmp1[i] += vecD.v[l]*tt[j]
-    #     end
-    # end
-    
-    # for i=1:nrows
-    #     ## scale all rows by 2*tmp1
-    #     for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-    #         vecD.v[l] = 2.0*tmp1[i]*vecD.v[l]
-    #     end
-    # end
-    
+   
     return 
 end
 
