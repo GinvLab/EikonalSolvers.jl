@@ -23,6 +23,12 @@ The computations are run in parallel depending on the number of workers (nworker
 - `pickobs`: observed traveltime picks
 - `stdobs`: standard deviation of error on observed traveltime picks, an array with same shape than `pickobs`
 - `smoothgrad`: smooth the gradient? true or false
+    * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
+    * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
+    * `radiussmoothgradsrc`: radius for smoothing the gradient around the source. Zero means no smoothing.
+    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this.
+    * `smoothgradkern`: smooth the gradient with a kernel of size (in pixels). Zero means no smoothing.
+    * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
 - `grad`: the gradient as a 3D array
@@ -30,7 +36,6 @@ The computations are run in parallel depending on the number of workers (nworker
 """
 function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                      pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
-                     smoothgradsourceradius::Integer=3,smoothgrad::Bool=false,
                      extraparams::Union{ExtraParams,Nothing}=nothing )
 
     if extraparams==nothing
@@ -81,7 +86,6 @@ function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float6
             @async grad .+= remotecall_fetch(calcgradsomesrc3D,wks[s],vel,
                                              view(coordsrc,igrs,:),view(coordrec,igrs),
                                              grd,view(stdobs,igrs),view(pickobs,igrs),
-                                             smoothgradsourceradius,
                                              extraparams )
         end    
         
@@ -98,7 +102,6 @@ function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float6
             igrs = grpsrc[s,1]:grpsrc[s,2]
             grad .+= calcgradsomesrc3D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
                                        grd,view(stdobs,igrs),view(pickobs,igrs),
-                                       smoothgradsourceradius,
                                        extraparams )
         end
 
@@ -108,14 +111,13 @@ function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float6
         ## Serial run
         ##====================
         grad[:,:,:] .= calcgradsomesrc3D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
-                                       smoothgradsourceradius,extraparams )
+                                         extraparams )
     end
 
 
     ## smooth gradient
-    if smoothgrad
-        l = 5  # 5 pixels kernel
-        grad = smoothgradient(l,grad)
+    if extraparams.smoothgradkern>0
+        grad = smoothgradient(extraparams.smoothgradkern,grad)
     end
 
     if extraparams.manualGCtrigger
@@ -136,9 +138,8 @@ Calculate the gradient for some requested sources
 function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::AbstractArray{Float64,2},
                            coordrec::AbstractVector{Matrix{Float64}},
                            grd::GridEik3D,stdobs::AbstractVector{Vector{Float64}},
-                           pickobs1::AbstractVector{Vector{Float64}},
-                           smoothgradsourceradius::Integer, extrapars::ExtraParams )
-
+                           pickobs1::AbstractVector{Vector{Float64}},extrapars::ExtraParams )
+                           
     nx,ny,nz=size(vel)
     nsrc = size(xyzsrc,1)
     grad1 = zeros(nx,ny,nz)
@@ -170,7 +171,7 @@ function calcgradsomesrc3D(vel::Array{Float64,3},xyzsrc::AbstractArray{Float64,2
 
         ###########################################
         ## smooth gradient around the source
-        smoothgradaroundsrc3D!(grad1,view(xyzsrc,s,:),grd,radiuspx=smoothgradsourceradius)
+        smoothgradaroundsrc3D!(grad1,view(xyzsrc,s,:),grd,radiuspx=extrapars.radiussmoothgradsrc)
         
     end
     
@@ -348,7 +349,6 @@ function discradjoint3D_FMM_SINGLESRC(adjvars::AdjointVars3D,P::AbstractArray{Fl
     vecDy = adjvars.fmmord.vecDy
     vecDz = adjvars.fmmord.vecDz
     Ni,Nj = vecDx.Nsize
-
 
     ################################
     ##  right hand side

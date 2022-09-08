@@ -317,35 +317,31 @@ Calculate the misfit functional
     - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
     - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
     - `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
+    - `extraparams` (optional) : a struct containing some "extra" parameters, namely
+        * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
+        * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
+        * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this.
+        * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
     The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
 
 """
-function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs,
-                      stdobs,coordsrc,
-                      coordrec,grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere} )
-                      
-# function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::Vector{Vector{Float64}},
-#                       stdobs::Vector{Vector{Float64}},coordsrc::Array{Float64,2},
-#                       coordrec::Vector{Array{Float64,2}},grd::Union{Grid2D,Grid3D,Grid2DSphere,Grid3DSphere};
-#                       ttalgo::String="ttFMM_hiord")
+function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::AbstractArray,
+                      stdobs::AbstractArray,coordsrc::AbstractArray,
+                      coordrec,grd::GridEik ; extraparams::Union{ExtraParams,Nothing}=nothing)
+    
+    if extraparams==nothing
+        extraparams = ExtraParams()
+    end
 
-    if typeof(grd)==Grid2D 
+    if typeof(grd)<:GridEik2D
         # compute the forward response
-        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec)
+        ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec,extraparams=extraparams)
 
-    elseif typeof(grd)==Grid2DSphere
+    elseif typeof(grd)<:GridEik3D
         # compute the forward response
-        ttpicks = traveltime2Dsphere(velmod,grd,coordsrc,coordrec)
-
-    elseif typeof(grd)==Grid3D 
-        # compute the forward response
-        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec)
-
-    elseif typeof(grd)==Gride3DSphere
-        # compute the forward response
-        ttpicks = traveltime3Dsphere(velmod,grd,coordsrc,coordrec)
+        ttpicks = traveltime3D(velmod,grd,coordsrc,coordrec,extraparams=extraparams)
 
     else
         error("Input velocity model has wrong dimensions.")

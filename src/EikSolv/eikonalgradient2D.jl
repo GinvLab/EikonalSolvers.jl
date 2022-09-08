@@ -21,7 +21,12 @@ The computations are run in parallel depending on the number of workers (nworker
 - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays 
 - `pickobs`: observed traveltime picks
 - `stdobs`: standard deviation of error on observed traveltime picks, an array with same shape than `pickobs`
-- `smoothgrad`: smooth the gradient? true or false
+    * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
+    * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
+    * `radiussmoothgradsrc`: radius for smoothing the gradient around the source. Zero means no smoothing.
+    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this.
+    * `smoothgradkern`: smooth the gradient with a kernel of size (in pixels). Zero means no smoothing.
+    * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
 - `grad`: the gradient as a 2D array
@@ -30,7 +35,6 @@ The computations are run in parallel depending on the number of workers (nworker
 function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float64,2},
                      coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
                      stdobs::Vector{Vector{Float64}} ;
-                     smoothgradsourceradius::Integer=3,smoothgrad::Bool=false,
                      extraparams::Union{ExtraParams,Nothing}=nothing)
 
     if extraparams==nothing
@@ -79,7 +83,6 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
                 @async grad .+= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
                                                  coordsrc[igrs,:],coordrec[igrs],
                                                  grd,stdobs[igrs],pickobs[igrs],
-                                                 smoothgradsourceradius,
                                                  extraparams )
             end
         end
@@ -97,7 +100,6 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
             igrs = grpsrc[s,1]:grpsrc[s,2]
             grad .+= calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
                                        grd,view(stdobs,igrs),view(pickobs,igrs),
-                                       smoothgradsourceradius,
                                        extraparams )
         end
         
@@ -107,16 +109,15 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         ##====================================
         ## Serial run
         ##====================
-        grad[:,:] .= calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
-                                       smoothgradsourceradius,extraparams )
+        grad[:,:] .= calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,
+                                       pickobs,extraparams )
 
     end
 
 
     ## smooth gradient
-    if smoothgrad
-        l = 5  # 5 pixels kernel
-        grad = smoothgradient(l,grad)
+    if extraparams.smoothgradkern>0
+        grad = smoothgradient(extraparams.smoothgradkern,grad)
     end
 
     if extraparams.manualGCtrigger
@@ -138,7 +139,7 @@ Calculate the gradient for some requested sources
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2},
                            coordrec::AbstractVector{Array{Float64,2}},grd::GridEik2D,
                            stdobs::AbstractVector{Vector{Float64}},pickobs1::AbstractVector{Vector{Float64}},
-                           smoothgradsourceradius::Integer, extrapars::ExtraParams )
+                           extrapars::ExtraParams )
                            
     nx,ny=size(vel)
     nsrc = size(xysrc,1)
@@ -169,7 +170,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
 
         ###########################################
         ## smooth gradient around the source
-        smoothgradaroundsrc2D!(grad1,view(xysrc,s,:),grd,radiuspx=smoothgradsourceradius)
+        smoothgradaroundsrc2D!(grad1,view(xysrc,s,:),grd,radiuspx=extrapars.radiussmoothgradsrc)
 
     end
  
