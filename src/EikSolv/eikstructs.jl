@@ -405,17 +405,24 @@ struct ExtraParams
     manualGCtrigger::Bool
     "Serial, Threads or Distributed run?"
     parallelkind::Symbol
+    "Radius for smoothing the gradient around the source. Zero means no smoothing."
+    radiussmoothgradsrc::UInt64
+    "Smooth the gradient with a kernel of size (in pixels). Zero means no smoothing."
+    smoothgradkern::UInt64
+
 
     function ExtraParams(; allowfixsqarg::Bool=false,
                          refinearoundsrc::Bool=true,
                          manualGCtrigger::Bool=false,
-                         parallelkind::Symbol=:sharedmem)
+                         parallelkind::Symbol=:sharedmem,
+                         radiussmoothgradsrc::Integer=3,
+                         smoothgradkern::Integer=0 )
         
         if !(parallelkind in [:serial,:sharedmem,:distribmem])
             error("ExtraParams(): 'parallelkind' must be one of :serial, :sharedmem or :distribmem")
         end
         return new(allowfixsqarg,refinearoundsrc,manualGCtrigger,
-                   parallelkind)
+                   parallelkind,radiussmoothgradsrc,smoothgradkern)
     end    
 end
 

@@ -20,8 +20,10 @@ The computations are run in parallel depending on the number of workers (nworker
 - `coordrec`: the coordinates of the receiver(s) (x,y,z), a 3-column array
 - `returntt` (optional): whether to return the 3D array(s) of traveltimes for the entire model
 - `extraparams` (optional) : a struct containing some "extra" parameters, namely
+    * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
     * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
-    * `allowfixsqarg`: brute-force fix negative saqarg
+    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this.
+    * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
 - `ttpicks`: array(nrec,nsrc) the traveltimes at receivers

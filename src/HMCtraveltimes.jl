@@ -11,7 +11,7 @@
 HMCtraveltimes
 
 A convenience module to facilitate the use of `EikonalSolvers` within the 
- framework of Hamiltonian Monte Carlo inversion by employing the package `HMCtomo`. 
+ framework of Hamiltonian Monte Carlo inversion by employing the package `HMCsampler`. 
 
 # Exports
 
@@ -43,7 +43,7 @@ Base.@kwdef struct EikonalProb
     coordsrc::Array{Float64,2}
     coordrec::Vector{Array{Float64,2}}
     logVel::Bool=false
-    smoothgradsourceradius::Integer
+    extraparams::Union{ExtraParams,Nothing}=nothing
 end
 
 ## use  x.T * C^-1 * x  = ||L^-1 * x ||^2 ?
@@ -61,7 +61,6 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         vecvel = inpvecvel
     end
 
-
     if typeof(eikprob.grd)==Grid2D
         # reshape vector to 2D array
         velnd = reshape(vecvel,eikprob.grd.nx,eikprob.grd.ny)
@@ -78,7 +77,7 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         #############################################
         #println("logpdf")
         misval = ttmisfitfunc(velnd,eikprob.dobs,eikprob.stdobs,eikprob.coordsrc,
-                              eikprob.coordrec,eikprob.grd) 
+                              eikprob.coordrec,eikprob.grd,extraparams=extraparams) 
 
         return misval
         
@@ -90,18 +89,18 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         if typeof(eikprob.grd)==Grid2D
             grad = gradttime2D(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
-                               smoothgradsourceradius=eikprob.smoothgradsourceradius) 
+                               extraparams=extraparams)
 
         elseif typeof(eikprob.grd)==Grid3D
             grad = gradttime3D(velnd,eikprob.grd,eikprob.coordsrc,
-                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs)
+                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
+                               extraparams=extraparams)
         end
 
         if eikprob.logVel==true
             # derivative of ln(vel)
-            vecgrad = (1.0./velnd) .* grad
+            grad = (1.0./velnd) .* grad
         end
-
 
         # flatten traveltime array
         vecgrad = vec(grad)
