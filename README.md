@@ -5,10 +5,12 @@
 
 Docs: <https://juliageoph.gitlab.io/EikonalSolvers.jl>
 
-A library to perform __seismic traveltime__ computations by solving the eikonal equation in two (__2D__) and three dimensions (__3D__) with the possibility of computing the __gradient of a misfit function__ with respect to the velocity model.
-Different eikonal solvers are available, based either on the fast marching (FMM) method (1st and 2nd order) or the fast sweeping (FS) method for global updates with different local stencils. 
+A library to perform __seismic traveltime__ computations by solving the eikonal equation in two (__2D__) and three dimensions (__3D__) with the possibility of computing the __gradient of a misfit function__ with respect to the velocity model. The coordinate system can be either regular Cartesian or spherical.
+The forward algorithm is based on a fast marching (FMM) method (2nd order) with a refinement of the grid around the source location. The computation of the gradient relies on the __discrete adjoint__ method.
 
-Both forward and gradient (adjoint) computations are parallelised using Julia's distributed computing functions. The  parallelisation is "by source", distributing calculations for different seismic sources to different processors.
+For historical reasons, alternative solvers are available (poorly maintained), including a first order FMM method and the fast sweeping (FS) method for global updates with different kinds of local stencils. Additionally, a continuos adjoint method to calculate the gradient is also provided.
+
+Both forward and gradient (adjoint) computations can be run in paralle using either Julia's distributed computing functions for distributed memory or threads for multicore processor. The  parallelisation scheme is "by source", distributing calculations for different seismic sources to different processors.
 
 
 ## Example of forward calculations in 2D
