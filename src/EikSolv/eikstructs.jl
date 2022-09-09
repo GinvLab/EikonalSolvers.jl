@@ -1,52 +1,6 @@
 
 ######################################################
 
-struct FMMvars2D
-    ttime::Array{Float64,2}
-    status::Array{UInt8,2}
-    bheap::BinHeapMin
-    "refine grid around source"
-    refinearoundsrc::Bool
-    "brute-force fix negative saqarg"
-    allowfixsqarg::Bool 
-
-    function FMMvars2D(n1,n2; refinearoundsrc,allowfixsqarg)
-        ttime = zeros(Float64,n1,n2)
-        status = zeros(UInt8,n1,n2)
-        bheap = init_minheap(n1*n2)
-        begin
-            if allowfixsqarg==true
-                @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
-            end
-        end
-        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg)
-    end
-end
-
-struct FMMvars3D
-    ttime::Array{Float64,3}
-    status::Array{UInt8,3}
-    bheap::BinHeapMin
-    "refine grid around source"
-    refinearoundsrc::Bool
-    "brute-force fix negative saqarg"
-    allowfixsqarg::Bool 
-
-    function FMMvars3D(n1,n2,n3; refinearoundsrc,allowfixsqarg)
-        ttime = zeros(Float64,n1,n2,n3)
-        status = zeros(UInt8,n1,n2,n3)
-        bheap = init_minheap(n1*n2*n3)
-        begin
-            if allowfixsqarg==true
-                @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
-            end
-        end
-        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg)
-    end
-end
-
-######################################################
-
 abstract type GridEik end
 abstract type GridEik2D <: GridEik end
 abstract type GridEik3D <: GridEik end
@@ -234,7 +188,47 @@ struct Grid3DSphere <: GridEik3D
     end
 end
 
-##############################################################################
+##################################################################
+
+"""
+$(TYPEDEF)
+
+# Fields 
+
+$(TYPEDFIELDS)
+"""
+struct ExtraParams
+    "brute-force fix negative sqarg"
+    allowfixsqarg::Bool
+    "refine grid around source?"
+    refinearoundsrc::Bool
+    "trigger GC manually at selected points"
+    manualGCtrigger::Bool
+    "Serial, Threads or Distributed run? Either :serial, :sharedmem or :distribmem"
+    parallelkind::Symbol
+    "Radius for smoothing the gradient around the source. Zero means no smoothing."
+    radiussmoothgradsrc::UInt64
+    "Smooth the gradient with a kernel of size (in pixels). Zero means no smoothing."
+    smoothgradkern::UInt64
+
+
+    function ExtraParams(; allowfixsqarg::Bool=false,
+                         refinearoundsrc::Bool=true,
+                         manualGCtrigger::Bool=false,
+                         parallelkind::Symbol=:sharedmem,
+                         radiussmoothgradsrc::Integer=3,
+                         smoothgradkern::Integer=0 )
+        
+        if !(parallelkind in [:serial,:sharedmem,:distribmem])
+            error("ExtraParams(): 'parallelkind' must be one of :serial, :sharedmem or :distribmem")
+        end
+        return new(allowfixsqarg,refinearoundsrc,manualGCtrigger,
+                   parallelkind,radiussmoothgradsrc,smoothgradkern)
+    end    
+end
+
+###############################################################
+###############################################################
 
 abstract type MapOrderGridFMM end
 
@@ -387,43 +381,51 @@ struct AdjointVars3D
     end
 end
 
-####################################
 
-"""
-$(TYPEDEF)
+######################################################
 
-# Fields 
-
-$(TYPEDFIELDS)
-"""
-struct ExtraParams
-    "brute-force fix negative sqarg"
-    allowfixsqarg::Bool
-    "refine grid around source?"
+struct FMMvars2D
+    ttime::Array{Float64,2}
+    status::Array{UInt8,2}
+    bheap::BinHeapMin
+    "refine grid around source"
     refinearoundsrc::Bool
-    "trigger GC manually at selected points"
-    manualGCtrigger::Bool
-    "Serial, Threads or Distributed run?"
-    parallelkind::Symbol
-    "Radius for smoothing the gradient around the source. Zero means no smoothing."
-    radiussmoothgradsrc::UInt64
-    "Smooth the gradient with a kernel of size (in pixels). Zero means no smoothing."
-    smoothgradkern::UInt64
+    "brute-force fix negative saqarg"
+    allowfixsqarg::Bool 
 
-
-    function ExtraParams(; allowfixsqarg::Bool=false,
-                         refinearoundsrc::Bool=true,
-                         manualGCtrigger::Bool=false,
-                         parallelkind::Symbol=:sharedmem,
-                         radiussmoothgradsrc::Integer=3,
-                         smoothgradkern::Integer=0 )
-        
-        if !(parallelkind in [:serial,:sharedmem,:distribmem])
-            error("ExtraParams(): 'parallelkind' must be one of :serial, :sharedmem or :distribmem")
+    function FMMvars2D(n1,n2; refinearoundsrc,allowfixsqarg)
+        ttime = zeros(Float64,n1,n2)
+        status = zeros(UInt8,n1,n2)
+        bheap = init_minheap(n1*n2)
+        begin
+            if allowfixsqarg==true
+                @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
+            end
         end
-        return new(allowfixsqarg,refinearoundsrc,manualGCtrigger,
-                   parallelkind,radiussmoothgradsrc,smoothgradkern)
-    end    
+        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg)
+    end
 end
 
-###################################################
+struct FMMvars3D
+    ttime::Array{Float64,3}
+    status::Array{UInt8,3}
+    bheap::BinHeapMin
+    "refine grid around source"
+    refinearoundsrc::Bool
+    "brute-force fix negative saqarg"
+    allowfixsqarg::Bool 
+
+    function FMMvars3D(n1,n2,n3; refinearoundsrc,allowfixsqarg)
+        ttime = zeros(Float64,n1,n2,n3)
+        status = zeros(UInt8,n1,n2,n3)
+        bheap = init_minheap(n1*n2*n3)
+        begin
+            if allowfixsqarg==true
+                @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
+            end
+        end
+        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg)
+    end
+end
+
+####################################

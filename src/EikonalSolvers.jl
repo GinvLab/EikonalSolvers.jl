@@ -34,10 +34,8 @@ export EikonalProb
 export ExtraParams
 
 
-
-println("Hello -> using TimerOutputs")
-using TimerOutputs
-
+# println("Hello -> using TimerOutputs")
+# using TimerOutputs
 
 
 using LinearAlgebra

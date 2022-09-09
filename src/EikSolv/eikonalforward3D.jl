@@ -11,7 +11,7 @@ $(TYPEDSIGNATURES)
 
 Calculate traveltime for 3D velocity models. 
 Returns the traveltime at receivers and optionally the array(s) of traveltime on the gridded model.
-The computations are run in parallel depending on the number of workers (nworkers()) available.
+The computations are run in parallel depending on the value of `extraparams.parallelkind`.
 
 # Arguments
 - `vel`: the 3D velocity model 

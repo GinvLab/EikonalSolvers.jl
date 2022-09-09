@@ -13,7 +13,7 @@ $(TYPEDSIGNATURES)
 Calculate the gradient using the adjoint state method for 3D velocity models. 
 Returns the gradient of the misfit function with respect to velocity calculated at the given point (velocity model).
 The gradient is calculated using the adjoint state method. 
-The computations are run in parallel depending on the number of workers (nworkers()) available.
+The computations are run in parallel depending on the value of `extraparams.parallelkind`.
 
 # Arguments
 - `vel`: the 3D velocity model 

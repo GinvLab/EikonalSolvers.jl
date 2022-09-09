@@ -310,21 +310,22 @@ Calculate the misfit functional
 ```math
     S = \\dfrac{1}{2} \\sum_i \\dfrac{\\left( \\mathbf{\\tau}_i^{\\rm{calc}}(\\mathbf{v})-\\mathbf{\\tau}_i^{\\rm{obs}} \\right)^2}{\\sigma_i^2} \\, .
 ```
+
 # Arguments
-    - `velmod`: velocity model, either a 2D or 3D array.
-    - `ttpicksobs`: a vector of vectors of the traveltimes at the receivers.
-    - `stdobs`: a vector of vectors standard deviations representing the error on the measured traveltimes.
-    - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
-    - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
-    - `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
-    - `extraparams` (optional) : a struct containing some "extra" parameters, namely
-        * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
-        * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
-        * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this.
-        * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
+- `velmod`: velocity model, either a 2D or 3D array.
+- `ttpicksobs`: a vector of vectors of the traveltimes at the receivers.
+- `stdobs`: a vector of vectors standard deviations representing the error on the measured traveltimes.
+- `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
+- `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
+- `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
+- `extraparams` (optional) : a struct containing some "extra" parameters, namely
+    * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
+    * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
+    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this.
+    * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
-    The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
+The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
 
 """
 function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::AbstractArray,

@@ -323,6 +323,9 @@ end
 
 ##=============================================================
 
+"""
+$(TYPEDSIGNATURES)
+"""
 function build_minheap!(values::Array{Float64,1},Nmax::Integer,
                         handles::Array{Int64,1})
     

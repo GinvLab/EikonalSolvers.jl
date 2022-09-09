@@ -2,7 +2,6 @@
 
 
 
-
 # API, exported functions
 ```@meta
 Author = "Andrea Zunino"
@@ -12,31 +11,24 @@ Author = "Andrea Zunino"
 EikonalSolvers.EikonalSolvers
 ```
 
-## Cartesian grid 2D functions
+## Cartesian/spherical grid 2D functions
 ```@docs
 Grid2D
+Grid2DSphere
 traveltime2D
 gradttime2D
 ```
-##  Cartesian grid 3D functions
+##  Cartesian/spherical grid 3D functions
 ```@docs
 Grid3D
+Grid3DSphere
 traveltime3D
 gradttime3D
 ```
 
-## Spherical grid 2D functions
+## Extra parameters
 ```@docs
-Grid2DSphere
-traveltime2Dsphere
-gradttime2Dsphere
-```
-
-## Spherical grid 3D functions
-```@docs
-Grid3DSphere
-traveltime3Dsphere
-gradttime3Dsphere
+ExtraParams
 ```
 
 ## Misfit functional
@@ -44,14 +36,17 @@ gradttime3Dsphere
 ttmisfitfunc
 ```
 
-## HMCtomo wrapper
+## HMCsampler wrapper
 ```@docs
 EikonalSolvers.HMCtraveltimes
 EikonalSolvers.HMCtraveltimes.EikonalProb
 ```
 
-## Extra parameters
-Use at your own risk...
+
+## Alternative algorithms
 ```@docs
-setextraparams!
+traveltime2Dalt
+gradttime2Dalt
+traveltime3Dalt
+gradttime3Dalt
 ```
