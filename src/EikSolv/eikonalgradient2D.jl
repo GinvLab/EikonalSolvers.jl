@@ -100,8 +100,8 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         Threads.@threads for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
             grads[s] = calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
-                                       grd,view(stdobs,igrs),view(pickobs,igrs),
-                                       extraparams )
+                                         grd,view(stdobs,igrs),view(pickobs,igrs),
+                                         extraparams )
         end
         grad = sum(grads)
 
