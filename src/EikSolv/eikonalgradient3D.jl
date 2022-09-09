@@ -98,12 +98,14 @@ function gradttime3D(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float6
         grpsrc = distribsrcs(nsrc,nth)
         nchu = size(grpsrc,1)            
         ##  do the calculations
+        grads = Vector{Array{Float64,3}}(undef,nchu)
         Threads.@threads for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
-            grad .+= calcgradsomesrc3D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
-                                       grd,view(stdobs,igrs),view(pickobs,igrs),
-                                       extraparams )
+            grads[s] = calcgradsomesrc3D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
+                                         grd,view(stdobs,igrs),view(pickobs,igrs),
+                                         extraparams )
         end
+        grad = sum(grads)
 
         
     elseif extraparams.parallelkind==:serial

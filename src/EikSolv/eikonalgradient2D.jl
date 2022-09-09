@@ -96,13 +96,14 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         grpsrc = distribsrcs(nsrc,nth)
         nchu = size(grpsrc,1)            
         ##  do the calculations
+        grads = Vector{Array{Float64,2}}(undef,nchu)
         Threads.@threads for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
-            grad .+= calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
+            grads[s] = calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
                                        grd,view(stdobs,igrs),view(pickobs,igrs),
                                        extraparams )
         end
-        
+        grad = sum(grads)
 
 
     elseif extraparams.parallelkind==:serial
