@@ -1,6 +1,6 @@
 ## see https://gitlab.com/tkpapp/GitlabJuliaDemo.jl/-/blob/master/.gitlab-ci.yml
 
-image: julia:1.7        # image comes from Docker hub
+image: julia:1.8        # image comes from Docker hub
 
 before_script:
     - apt-get -qq update; apt-get -y install git rsync
@@ -18,19 +18,18 @@ pages:
   script:
     ## - export # show all GitLab variables
     - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
-    # - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd()))' # no instantiate...
     - julia --project=docs --color=yes docs/make.jl
-    - echo $(ls ./)
-    #- echo $(ls ../)
-    - echo $(pwd)
-    #- git branch -a
-    - mkdir tmppub ; mv .git tmppub/
-    - cd tmppub
-    - echo $(ls -a) 
-    - git fetch; git checkout gl-pages ; git pull 
-    - echo $(ls )
-    - rsync -a --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../public/
-    # - mv docs/build public # move to the directory picked up by Gitlab pages
+    # - echo $(ls ./)
+    # #- echo $(ls ../)
+    # - echo $(pwd)
+    # #- git branch -a
+    # - mkdir tmppub ; mv .git tmppub/
+    # - cd tmppub
+    # - echo $(ls -a) 
+    # - git fetch; git checkout gl-pages ; git pull 
+    # - echo $(ls )
+    # - rsync -a --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../public/
+    - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
     paths:
       - public

@@ -77,7 +77,7 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         #############################################
         #println("logpdf")
         misval = ttmisfitfunc(velnd,eikprob.dobs,eikprob.stdobs,eikprob.coordsrc,
-                              eikprob.coordrec,eikprob.grd,extraparams=extraparams) 
+                              eikprob.coordrec,eikprob.grd,extraparams=eikprob.extraparams) 
 
         return misval
         
@@ -89,12 +89,12 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         if typeof(eikprob.grd)==Grid2D
             grad = gradttime2D(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
-                               extraparams=extraparams)
+                               extraparams=eikprob.extraparams)
 
         elseif typeof(eikprob.grd)==Grid3D
             grad = gradttime3D(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
-                               extraparams=extraparams)
+                               extraparams=eikprob.extraparams)
         end
 
         if eikprob.logVel==true
