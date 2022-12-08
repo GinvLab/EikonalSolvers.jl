@@ -27,14 +27,13 @@ pages:
     - echo $(ls -1 ./)
     # - git branch -a
     ## the following lines needed to have versioned docs from Documenter.jl
-    - mkdir public
     - mkdir tmppub ; mv .git tmppub/
     - cd tmppub
     - echo $(ls -a) 
     - git fetch; git checkout gl-pages ; git pull
     - echo $(pwd) 
     - echo $(ls -1 )
-    - rsync -rv --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../public/
+    - rsync -rlv --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../public/
     - echo $(ls -1 ../public/)
     ## - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
