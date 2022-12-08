@@ -27,6 +27,7 @@ pages:
     - echo $(ls -1 ./)
     # - git branch -a
     ## the following lines needed to have versioned docs from Documenter.jl
+    - mkdir public
     - mkdir tmppub ; mv .git tmppub/
     - cd tmppub
     - echo $(ls -a) 
