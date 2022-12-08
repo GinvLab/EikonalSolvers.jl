@@ -24,7 +24,7 @@ pages:
   script:
     - julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
     - julia --project=docs --color=yes docs/make.jl
-    #- echo $(ls ./)
+    - echo $(ls -1 ./)
     # - git branch -a
     ## the following lines needed to have versioned docs from Documenter.jl
     - mkdir tmppub ; mv .git tmppub/
@@ -32,9 +32,9 @@ pages:
     - echo $(ls -a) 
     - git fetch; git checkout gl-pages ; git pull
     - echo $(pwd) 
-    - echo $(ls)
+    - echo $(ls -1 )
     - rsync -a --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../public/
-    - echo $(ls -lht ../public/)
+    - echo $(ls -1 ../public/)
     ## - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
     paths:
