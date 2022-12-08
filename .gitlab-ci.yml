@@ -30,10 +30,11 @@ pages:
     - mkdir tmppub ; mv .git tmppub/
     - cd tmppub
     - echo $(ls -a) 
-    - git fetch; git checkout gl-pages ; git pull 
-    - echo $(ls )
+    - git fetch; git checkout gl-pages ; git pull
+    - echo $(pwd) 
+    - echo $(ls)
     - rsync -a --exclude=".git" --exclude=".gitignore" ../tmppub/*  ../public/
-    - echo $(ls  docs/build/)
+    - echo $(ls -lht ../public/)
     ## - mv docs/build public # move to the directory picked up by Gitlab pages
   artifacts:
     paths:
