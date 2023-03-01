@@ -1,7 +1,7 @@
 using Documenter, EikonalSolvers 
 
 makedocs(modules = [EikonalSolvers],
-         #repo = "../../{path}",
+         repo="https://gitlab.com/JuliaGeoph/EikonalSolvers.jl/blob/{commit}{path}#{line}", 
          sitename="EikonalSolvers.jl",
          authors = "Andrea Zunino",
          format = Documenter.HTML(prettyurls=get(ENV,"CI",nothing)=="true"),
