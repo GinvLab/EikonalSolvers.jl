@@ -1,5 +1,9 @@
 
 
+```@meta
+EditURL = "https://gitlab.com/JuliaGeoph/EikonalSolvers.jl/-/tree/main/docs/src/"
+Author = "Andrea Zunino"
+```
 # Contents
 
 ```@contents
@@ -9,9 +13,6 @@ Depth = 2
 
 # EikonalSolvers's documentation
 
-```@meta
-Author = "Andrea Zunino"
-```
 A library to perform seismic traveltime computations by solving the eikonal equation in two (2D) and three dimensions (3D) with the possibility of computing the gradient of a misfit function with respect to the velocity model. The coordinate system can be either regular Cartesian or spherical. The forward algorithm is based on a fast marching (FMM) method (2nd order) with a refinement of the grid around the source location. The computation of the gradient relies on the discrete adjoint method.
 
 For historical reasons, alternative solvers are available (poorly maintained), including a first order FMM method and the fast sweeping (FS) method for global updates with different kinds of local stencils. Additionally, a continuos adjoint method to calculate the gradient is also provided.
