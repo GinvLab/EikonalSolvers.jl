@@ -319,7 +319,7 @@ function ttFMM_hiord!(fmmvars::FMMvars3D, vel::Array{Float64,3},src::AbstractVec
             ##
 
             # How many initial points to skip, considering them as "onsrc"?
-            skipnptsDxyz = 4
+            skipnptsDxyz = 8 #4
             
             ## pre-compute some of the mapping between fmm and orig order
             for i=1:naccinit
