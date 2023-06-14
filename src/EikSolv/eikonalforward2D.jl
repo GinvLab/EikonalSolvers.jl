@@ -276,6 +276,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         adjvars.fmmord.vecDy.lastrowupdated[] = 0
         adjvars.fmmord.vecDx.Nnnz[] = 0
         adjvars.fmmord.vecDy.Nnnz[] = 0
+        adjvars.fmmord.sourceptindex[:] .= false
         # for safety, zeroes the traveltime
         adjvars.fmmord.ttime[:] .= 0.0
         # for safety, zeroes the codes for derivatives
@@ -325,12 +326,19 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
 
                 if l<=skipnptsDxy
                     #################################################################
-                    # Here we store a 1 in the diagonal because we are on a source node...
-                    #  store arrival time for first points in FMM order
-                    colindsonsrc[1] = l
-                    nnzcol = 1
-                    addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
-                    addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
+                    ##  We are on a source node
+                    ###############################
+                    # add true for this point being on src
+                    adjvars.fmmord.sourceptindex[l] = true
+                    # remove one row because of point being on source!
+                    adjvars.fmmord.vecDx.Nsize[1] -= 1
+
+                    # # Here we store a 1 in the diagonal because we are on a source node...
+                    # #   store arrival time for first points in FMM order
+                    # colindsonsrc[1] = l
+                    # nnzcol = 1
+                    # addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
+                    # addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
                     #################################################################
 
                 else
@@ -340,12 +348,19 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
 
                     if idD==[0,0]
                         #################################################################
-                        # Here we store a 1 in the diagonal because we are on a source node...
-                        #  store arrival time for first points in FMM order
-                        colindsonsrc[1] = l
-                        nnzcol = 1
-                        addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
-                        addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
+                        ##  We are on a source node
+                        ###############################
+                        # add true for this point being on src
+                        adjvars.fmmord.sourceptindex[l] = true
+                        # remove one row because of point being on source!
+                        adjvars.fmmord.vecDx.Nsize[1] -= 1
+
+                        # # Here we store a 1 in the diagonal because we are on a source node...
+                        # #  store arrival time for first points in FMM order
+                        # colindsonsrc[1] = l
+                        # nnzcol = 1
+                        # addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
+                        # addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
                         #################################################################
 
                     else
@@ -374,6 +389,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         elseif simtype==:spherical
             ijsrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
         end
+        @assert size(ijsrc)=(2,4)
         ## number of accepted points       
         naccinit = size(ijsrc,2)        
 
@@ -411,16 +427,19 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                 end
 
                 #################################################################
-                # Here we store a 1 in the diagonal because we are on a source node...
-                #  store arrival time for first points in FMM order
-                #
-                colindsonsrc[1] = l
-                nnzcol = 1
-                addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
-                addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
-                # addentry!(adjvars.fmmord.vecDx,l,l,1.0)
-                # addentry!(adjvars.fmmord.vecDy,l,l,1.0)
-                #
+                ##  We are on a source node
+                ###############################
+                # add true for this point being on src
+                adjvars.fmmord.sourceptindex[l] = true
+                # remove one row because of point being on source!
+                adjvars.fmmord.vecDx.Nsize[1] -= 1
+
+                # # Here we store a 1 in the diagonal because we are on a source node...
+                # #  store arrival time for first points in FMM order
+                # colindsonsrc[1] = l
+                # nnzcol = 1
+                # addrowCSRmat!(adjvars.fmmord.vecDx,l,colindsonsrc,colvalsonsrc,nnzcol)
+                # addrowCSRmat!(adjvars.fmmord.vecDy,l,colindsonsrc,colvalsonsrc,nnzcol)
                 #################################################################
 
             end

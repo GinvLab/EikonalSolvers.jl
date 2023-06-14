@@ -153,6 +153,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
     ## pre-allocate discrete adjoint variables
     adjvars = AdjointVars2D(nx,ny)
 
+    
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
@@ -166,11 +167,14 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
         P_fmmord1 = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
 
         ###########################################
-        # discrete adjoint formulation
-        grad1 .+= discradjoint2D_FMM_SINGLESRC(adjvars,P_fmmord1,pickobs1[s],stdobs[s],vel)
+        # discrete adjoint formulation for gradient(s) with respect to velocity and/or source position
+        tmpgrad,∂χ∂xy_src = discradjoint2D_FMM_SINGLESRC(adjvars,P_fmmord1,pickobs1[s],
+                                                         stdobs[s],
+                                                         vel,xysrc[s,:],grd)
+        grad1 .+= tmpgrad
 
         ###########################################
-        ## smooth gradient around the source
+        ## smooth gradient (with respect to velocity) around the source
         smoothgradaroundsrc2D!(grad1,view(xysrc,s,:),grd,radiuspx=extrapars.radiussmoothgradsrc)
 
     end
@@ -387,7 +391,9 @@ $(TYPEDSIGNATURES)
 function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Float64},
                                       pickobs::AbstractVector{Float64},
                                       stdobs::AbstractVector{Float64},
-                                      vel2d::AbstractArray{Float64})
+                                      vel2d::AbstractArray{Float64},
+                                      xysrc::AbstractArray{Float64},
+                                      grd::GridEik2D)
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
@@ -399,12 +405,60 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     
     idxconv = adjvars.idxconv
     tt = adjvars.fmmord.ttime
-    vecDx = adjvars.fmmord.vecDx
-    vecDy = adjvars.fmmord.vecDy
-    Ni,Nj = vecDx.Nsize
 
+    # Derivative (along x) matrix, row-deficien
+    vecDx = adjvars.fmmord.vecDx
+    # Derivative (along y) matrix, row-deficien
+    vecDy = adjvars.fmmord.vecDy
+
+    # sizes of D^x, D^y
+    Ni,Nj = vecDx.Nsize
+    # number of rows of D^xr, D^yr, both row and col deficient
+    nsrcpts = count(adjvars.fmmord.sourceptindex)
+    Njr = Nj - nsrcpts
+    
+    # Derivative (along x) matrix, row- *and* column-deficient
+    ncolidx = length(adjvars.fmmord.vecDx.j) - nsrcpts
+    vecDxr = VecSPDerivMat( iptr=zeros(Int64,Ni+1), j=zeros(Int64,ncolidx),
+                            v=zeros(ncolidx), Nsize=[Ni,Njr] )
+
+    for i=1:Ni
+        l2 = vecDx.iptr[i]
+        for l=vecDx.iptr[i]:vecD.iptr[i+1]-1
+            j = vecD.j[l]    # column
+            # if we are not on a source point then copy current element
+            if sourceptsindex[j]==false
+                # add 1 to row pointer i+1
+                vecDxr.iptr[i+1] += 1
+                l2 += 1
+                vecDxr.j[l2] = j
+                vecDxr.v[l2] = vecDxr.v[l]
+                
+            end
+        end
+    end
+    
+
+    # Derivative (along x) matrix, row- *and* column-deficient
+    ncolidy = length(adjvars.fmmord.vecDy.j) - nsrcpts
+    vecDyr = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,ncolidy),
+                            v=zeros(ncolidy), Nsize=[Ni,Njr] )
+
+
+
+    
     ################################
-    ##  right hand side
+    ##  Derivative with respect to the traveltime
+    ##     at the "onsrc" points
+    ## precompute some terms
+    ################################
+    sourcerows = findall(adjvars.fmmord.sourcerows) # Bool array to indices
+    twodiagDuDh_x = calctwodiagDuDh(vecDx,tt,sourcerows)
+    twodiagDuDh_y = calctwodiagDuDh(vecDy,tt,sourcerows)
+
+   
+    ################################
+    ##  right hand side adj eq.
     ################################
     rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
 
@@ -413,11 +467,11 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     #@timeit to "calclhsterms" begin
 
     ################################
-    ##   left hand side
+    ##   left hand side adj eq.
     ################################
-    ## compute the lhs terms
-    calclhsterms!(vecDx,tt)
-    calclhsterms!(vecDy,tt)
+    ## compute the lhs terms *in place*
+    calclhsterms!(vecDx,tt)  # <= OVERWRITTEN!
+    calclhsterms!(vecDy,tt)  # <= OVERWRITTEN!
     # end 
 
     #===========================================
@@ -438,15 +492,22 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ============================================#
 
     #@timeit to "sparsify" begin
-    ## We have a CSR matrix as vectors, we need a traspose of it,
-    ##  so we construct directly a CSC by exchanging i and j indices
+    ## We have a CSR matrix as vectors, we need a *transpose* of it,
+    ##  so we construct directly a CSC by *exchanging* i and j indices
     Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
-    lhs1term = SparseMatrixCSC(Nj,Ni,vecDx.iptr,vecDx.j[1:Nxnnz],vecDx.v[1:Nxnnz])
+    # the size of iptr might be bigger than the number of rows, so pick only iptr[1:nrows+1],
+    #   where the +1 comes from the definition of CSC matrix
+    nrowsx = adjvars.fmmord.vecDx.Nsize[1]
+    lhs1term = SparseMatrixCSC(Nj,Ni,vecDx.iptr[1:nrowsx+1],vecDx.j[1:Nxnnz],vecDx.v[1:Nxnnz])
     # see remark above
     #lhs1term = copy(transpose(copy(transpose(lhs1term))))
 
+    ## We have a CSR matrix as vectors, we need a *transpose* of it,
+    ##  so we construct directly a CSC by *exchanging* i and j indices
     Nynnz = adjvars.fmmord.vecDy.Nnnz[]
-    lhs2term = SparseMatrixCSC(Nj,Ni,vecDy.iptr,vecDy.j[1:Nynnz],vecDy.v[1:Nynnz])
+    # the size of iptr might be bigger than the number of rows, so pick only iptr[1:nrows+1]
+    nrowsy = adjvars.fmmord.vecDy.Nsize[1]
+    lhs2term = SparseMatrixCSC(Nj,Ni,vecDy.iptr[1:nrowsy+1],vecDy.j[1:Nynnz],vecDy.v[1:Nynnz])
     # see remark above
     #lhs2term = copy(transpose(copy(transpose(lhs2term))))
 
@@ -473,6 +534,16 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     #@timeit to "solve lin. system" begin
     lambda_fmmord = lhs\rhs
     #end
+
+
+    ################################
+    ##  Derivative with respect to the traveltime
+    ##     at the "onsrc" points
+    ##  compute gradient
+    ################################
+    ∂χ∂xy_src = ∂misfit∂initsrcpos(twodiagDuDh_x,twodiagDuDh_y,
+                                   adjvars.idxconv,lambda_fmmord,vel2d,
+                                   sourcerows,xysrc,grd)
     
     #@timeit to "reorder lambda" begin
     ##--------------------------------------
@@ -492,7 +563,7 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
 
     #show(to)
     #println()
-    return grad2d
+    return grad2d,∂χ∂xy_src
 end
 
 #######################################################################################
@@ -522,7 +593,7 @@ function calclhsterms!(vecD::VecSPDerivMat,tt::Vector{Float64})
     #     end
     # end
 
-    # number of columns
+    # number of rows
     nrows = vecD.Nsize[1]
 
     ## CSR matrix-vector product
@@ -639,3 +710,173 @@ function derivaroundsrcfmm2D!(lseq::Integer,idxconv::MapOrderGridFMM2D,codeD::MV
 end
 
 #######################################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+Calculates the derivative of the misfit function with respect to the traveltime at the initial points around the source ("onsrc").
+"""
+function ∂misfit∂initsrcpos(twodiagDuDh_x,twodiagDuDh_y,idxconv,
+                            lambda::AbstractArray{Float64},
+                            vel2d,sourcerows,xysrc,grd)
+    #                                                                       #
+    # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
+    #                                                                       #
+    nx,ny = size(vel2d)
+
+    ###################################################################
+    ## Derivative of the misfit w.r.t. the traveltime at source nodes
+    ###################################################################
+    tmp1 = twodiagDuDh_x .+ twodiagDuDh_y
+
+    npts = size(twodiagDuDh_x,2)
+    ∂χ∂t_src = zeros(npts)
+    for p=1:npts
+        ∂χ∂t_src[p] = dot(lambda,tmp1[:,p])
+        # # element-wise product
+        # ∂χ∂t_src[p] = lambda .* tmp1[:,p]
+
+        idx = [(tmp1[:,p].!=0.0 .&& lambda.!=0.0)]
+        println()
+        @show tmp1[idx...,p]
+        @show lambda[idx...]
+        @show sum(tmp1[idx...,p] .* lambda[idx...])
+        @show ∂χ∂t_src[p]
+    end
+
+    ###################################################################
+    ## Derivative of the misfit w.r.t. the source position (chain rule)
+    ###################################################################
+    velpts = zeros(npts)
+    ijpt = zeros(Int64,2)
+    xypt = zeros(npts,2)
+    for p=1:npts
+        ifmmord = sourcerows[p]
+        iorig = idxconv.lfmm2grid[ifmmord]
+        velpts[p] = vel2d[iorig]
+
+        ## CONVERT linear to cartesian 2D to get point position
+        lin2cart2D!(iorig,nx,ijpt)
+        xypt[p,:] .= (grd.x[ijpt[1]], grd.y[ijpt[2]])
+    end
+
+    # compute the derivative 
+    ∂χ∂xy_src = derivttsrcposition2D(∂χ∂t_src,xypt,xysrc,velpts)
+    
+
+    @show extrema(∂χ∂t_src)
+    @show ∂χ∂xy_src
+
+    return ∂χ∂xy_src
+end
+
+###############################################
+
+"""
+$(TYPEDSIGNATURES)
+
+  Compute the left-hand-side term for source location
+"""
+function calctwodiagDuDh(vecD::VecSPDerivMat,tt::Vector{Float64},
+                         requestedcols::Vector{<:Integer})
+    #                                                                       #
+    # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
+    #                                                                       #
+    
+    # # get index in fmm order
+    #    jfmmord = idxconv.lgrid2fmm[iorig]
+
+    # number of rows
+    nrows = vecD.Nsize[1]
+    ncols = vecD.Nsize[2]
+    nreqcols = length(requestedcols)
+
+    #########################
+    # FIX THIS SLOW PART!!!
+    #########################
+    # create a dense D
+    Ddense = zeros(nrows,ncols)
+    for i=1:nrows
+        for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+            j = vecD.j[l]
+            Ddense[i,j] = vecD.v[l]
+        end
+    end    
+    #########################
+
+    twodiagDuDh = zeros(nrows,nreqcols)
+
+    ## CSR matrix-vector product
+    for i=1:nrows
+        # pi=pointers to column indices
+        tmp1 = 0.0
+        for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+            j = vecD.j[l]
+            # dot product
+            tmp1 += vecD.v[l]*tt[j]
+        end
+
+        ## Columns sc correspond to the grid points where the traveltime around
+        ##  the source(s) was initially computed ("onsrc").
+        
+        #########################
+        # FIX THIS SLOW PART!!!
+        #########################
+        for sc in requestedcols
+            twodiagDuDh[i,sc] = 2.0*tmp1 * Ddense[i,sc]
+        end
+
+        # ## Scale all necessary rows by 2*tmp1
+        # for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+        #     vecD.v[l] = 2.0*tmp1*vecD.v[l]
+        # end
+    end
+
+    #@show twodiagDuDh[twodiagDuDh.!=0.0]
+    return twodiagDuDh
+end
+
+###########################################################################
+
+function derivttsrcposition2D(∂χ∂t_src,xypt,xysrc,velpts)
+
+    npts = length(∂χ∂t_src)
+
+    deriv = zeros(npts,2)
+    for p=1:npts
+        ## Apply the chain rule:
+        ##   ∂χ/∂t_src * ∂t_src/∂x, etc.
+        derpos = partderivttsrcpos2D(xypt[p,:],xysrc,velpts[p])
+        deriv[p,:] .= ∂χ∂t_src[p] .* derpos
+
+        println()
+        @show ∂χ∂t_src[p]
+        @show derpos
+    end
+
+    return deriv
+end
+
+###########################################################################
+
+function partderivttsrcpos2D(xypt::Vector,xysrc::Vector,vel::Real)
+
+    xpt = xypt[1]
+    ypt = xypt[2]
+    xsrc = xysrc[1]
+    ysrc = xysrc[2]
+
+    denom = vel * sqrt((xpt - xsrc)^2 + (ypt - ysrc)^2)
+    deriv_x = -(xpt - xsrc) / denom
+    deriv_y = -(ypt - ysrc) / denom
+
+    # println()
+    # @show xpt,ypt
+    # @show xsrc,ysrc
+    # @show denom
+    # @show deriv_x,deriv_y
+
+    return deriv_x,deriv_y
+end
+
+###########################################################################

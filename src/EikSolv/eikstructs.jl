@@ -276,11 +276,14 @@ end
 
 ########################################################
 
-# structs for sparse matrices to represent derivatives (discrete adjoint)
+# structs for sparse matrices (CSR) to represent derivatives (discrete adjoint)
 
 struct VecSPDerivMat
+    "row pointer"
     iptr::Vector{Int64}
+    "column index"
     j::Vector{Int64}
+    "values"
     v::Vector{Float64}
     lastrowupdated::Base.RefValue{Int64}
     Nsize::Vector{Int64}
@@ -288,6 +291,7 @@ struct VecSPDerivMat
 
     function VecSPDerivMat(; iptr,j,v,Nsize)
         lastrowupdated = Ref(0)
+        # first row pointer must always be 1
         iptr[1] = 1
         Nnnz = Ref(0)
         @assert length(iptr)==Nsize[1]+1
@@ -299,17 +303,32 @@ end
 
 struct VarsFMMOrder2D
     ttime::Vector{Float64}
+    "Derivative (along x) matrix, row-deficient"
     vecDx::VecSPDerivMat
+    "Derivative (along y) matrix, row-deficient"
     vecDy::VecSPDerivMat
+    # "Derivative (along x) matrix, row- and column-deficient"
+    # vecDxr::VecSPDerivMat
+    # "Derivative (along y) matrix, row- and columin-deficient"
+    # vecDyr::VecSPDerivMat
+    "keep track of source points in term of index (odered according to FMM)"
+    sourceptsindex::Vector{Bool}
 
     function VarsFMMOrder2D(nx,ny)
         nxy =  nx*ny
         ttime = zeros(nxy)
+        ## nxy*3 because of the stencils in the second-order fast marching (max 3 points)
+        ## Nsize=[nxy,nxy] will be changed while the algo is running...
         vecDx = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
                                v=zeros(nxy*3), Nsize=[nxy,nxy] )
         vecDy = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
                                v=zeros(nxy*3), Nsize=[nxy,nxy] )
-        return new(ttime,vecDx,vecDy)
+        # vecDxr = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
+        #                        v=zeros(nxy*3), Nsize=[0,0] )
+        # vecDyr = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
+        #                        v=zeros(nxy*3), Nsize=[0,0] )
+        sourcerows = zeros(Bool,nxy)
+        return new(ttime,vecDx,vecDy,sourcerows)
     end
 end
 
@@ -392,6 +411,7 @@ struct FMMvars2D
     refinearoundsrc::Bool
     "brute-force fix negative saqarg"
     allowfixsqarg::Bool 
+   
 
     function FMMvars2D(n1,n2; refinearoundsrc,allowfixsqarg)
         ttime = zeros(Float64,n1,n2)

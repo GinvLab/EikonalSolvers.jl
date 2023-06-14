@@ -400,25 +400,25 @@ end
 
 ###################################################
 
-function cart2lin2D(i::Integer,j::Integer,ni::Integer)
+function cart2lin2D(i::Integer,j::Integer,ni::Integer)::Integer
     l = i + (j-1)*ni
     return l
 end
 
-function cart2lin3D(i::Integer,j::Integer,k::Integer,ni::Integer,nj::Integer)
+function cart2lin3D(i::Integer,j::Integer,k::Integer,ni::Integer,nj::Integer)::Integer
     l = i + ni*( (j-1)+nj*(k-1) )
     return l
 end
 
 ###################################################
 
-function lin2cart2D!(l::Integer,ni::Integer,point::AbstractVector) 
+function lin2cart2D!(l::Integer,ni::Integer,point::AbstractVector{<:Integer})
     point[2] = div(l-1,ni) + 1
     point[1] = l-(point[2]-1)*ni
     return 
 end
 
-function lin2cart3D!(l::Integer,ni::Integer,nj::Integer,point::AbstractVector) 
+function lin2cart3D!(l::Integer,ni::Integer,nj::Integer,point::AbstractVector{<:Integer})
     point[3] = div(l-1,ni*nj) + 1
     point[2] = div(l-1-(point[3]-1)*ni*nj, ni) + 1
     point[1] = l-(point[2]-1)*ni - (point[3]-1)*ni*nj  
