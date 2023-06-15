@@ -276,7 +276,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         adjvars.fmmord.vecDy.lastrowupdated[] = 0
         adjvars.fmmord.vecDx.Nnnz[] = 0
         adjvars.fmmord.vecDy.Nnnz[] = 0
-        adjvars.fmmord.sourceptindex[:] .= false
+        adjvars.fmmord.onsrcrows[:] .= false
         # for safety, zeroes the traveltime
         adjvars.fmmord.ttime[:] .= 0.0
         # for safety, zeroes the codes for derivatives
@@ -329,7 +329,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                     ##  We are on a source node
                     ###############################
                     # add true for this point being on src
-                    adjvars.fmmord.sourceptindex[l] = true
+                    adjvars.fmmord.onsrcrows[l] = true
                     # remove one row because of point being on source!
                     adjvars.fmmord.vecDx.Nsize[1] -= 1
 
@@ -351,7 +351,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                         ##  We are on a source node
                         ###############################
                         # add true for this point being on src
-                        adjvars.fmmord.sourceptindex[l] = true
+                        adjvars.fmmord.onsrcrows[l] = true
                         # remove one row because of point being on source!
                         adjvars.fmmord.vecDx.Nsize[1] -= 1
 
@@ -430,7 +430,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                 ##  We are on a source node
                 ###############################
                 # add true for this point being on src
-                adjvars.fmmord.sourceptindex[l] = true
+                adjvars.fmmord.onsrcrows[l] = true
                 # remove one row because of point being on source!
                 adjvars.fmmord.vecDx.Nsize[1] -= 1
 

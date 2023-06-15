@@ -398,11 +398,6 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
     
-    # Create a TimerOutput, this is the main type that keeps track of everything.
-    #to = TimerOutput()
-
-    #@timeit to "rhs" begin
-    
     idxconv = adjvars.idxconv
     tt = adjvars.fmmord.ttime
 
@@ -411,50 +406,48 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     # Derivative (along y) matrix, row-deficien
     vecDy = adjvars.fmmord.vecDy
 
-    # sizes of D^x, D^y
-    Ni,Nj = vecDx.Nsize
-    # number of rows of D^xr, D^yr, both row and col deficient
-    nsrcpts = count(adjvars.fmmord.sourceptindex)
-    Njr = Nj - nsrcpts
+    # # sizes of D^x, D^y
+    # Ni,Nj = vecDx.Nsize
+    # # number of rows of D^xr, D^yr, both row and col deficient
+    # nsrcpts = count(adjvars.fmmord.onsrcrows)
+    # Njr = Nj - nsrcpts
     
-    # Derivative (along x) matrix, row- *and* column-deficient
-    ncolidx = length(adjvars.fmmord.vecDx.j) - nsrcpts
-    vecDxr = VecSPDerivMat( iptr=zeros(Int64,Ni+1), j=zeros(Int64,ncolidx),
-                            v=zeros(ncolidx), Nsize=[Ni,Njr] )
+    # # Derivative (along x) matrix, row- *and* column-deficient
+    # ncolidx = length(adjvars.fmmord.vecDx.j) - nsrcpts
+    # vecDxr = VecSPDerivMat( iptr=zeros(Int64,Ni+1), j=zeros(Int64,ncolidx),
+    #                         v=zeros(ncolidx), Nsize=[Ni,Njr] )
 
-    for i=1:Ni
-        l2 = vecDx.iptr[i]
-        for l=vecDx.iptr[i]:vecD.iptr[i+1]-1
-            j = vecD.j[l]    # column
-            # if we are not on a source point then copy current element
-            if sourceptsindex[j]==false
-                # add 1 to row pointer i+1
-                vecDxr.iptr[i+1] += 1
-                l2 += 1
-                vecDxr.j[l2] = j
-                vecDxr.v[l2] = vecDxr.v[l]
+    # for i=1:Ni
+    #     l2 = vecDx.iptr[i]
+    #     for l=vecDx.iptr[i]:vecD.iptr[i+1]-1
+    #         j = vecD.j[l]    # column
+    #         # if we are not on a source point then copy current element
+    #         if sourceptsindex[j]==false
+    #             # add 1 to row pointer i+1
+    #             vecDxr.iptr[i+1] += 1
+    #             l2 += 1
+    #             vecDxr.j[l2] = j
+    #             vecDxr.v[l2] = vecDx.v[l]
                 
-            end
-        end
-    end
+    #         end
+    #     end
+    # end
     
 
-    # Derivative (along x) matrix, row- *and* column-deficient
-    ncolidy = length(adjvars.fmmord.vecDy.j) - nsrcpts
-    vecDyr = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,ncolidy),
-                            v=zeros(ncolidy), Nsize=[Ni,Njr] )
-
-
+    # # Derivative (along x) matrix, row- *and* column-deficient
+    # ncolidy = length(adjvars.fmmord.vecDy.j) - nsrcpts
+    # vecDyr = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,ncolidy),
+    #                         v=zeros(ncolidy), Nsize=[Ni,Njr] )
 
     
-    ################################
-    ##  Derivative with respect to the traveltime
-    ##     at the "onsrc" points
-    ## precompute some terms
-    ################################
-    sourcerows = findall(adjvars.fmmord.sourcerows) # Bool array to indices
-    twodiagDuDh_x = calctwodiagDuDh(vecDx,tt,sourcerows)
-    twodiagDuDh_y = calctwodiagDuDh(vecDy,tt,sourcerows)
+    # ################################
+    # ##  Derivative with respect to the traveltime
+    # ##     at the "onsrc" points
+    # ## precompute some terms
+    # ################################
+    # sourcerows = findall(adjvars.fmmord.sourcerows) # Bool array to indices
+    # twodiagDuDh_x = calctwodiagDuDh(vecDx,tt,sourcerows)
+    # twodiagDuDh_y = calctwodiagDuDh(vecDy,tt,sourcerows)
 
    
     ################################
@@ -462,17 +455,13 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ################################
     rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
 
-    #end
-
-    #@timeit to "calclhsterms" begin
 
     ################################
     ##   left hand side adj eq.
     ################################
-    ## compute the lhs terms *in place*
-    calclhsterms!(vecDx,tt)  # <= OVERWRITTEN!
-    calclhsterms!(vecDy,tt)  # <= OVERWRITTEN!
-    # end 
+    ## compute the lhs terms
+    vecDxDR = calcadjlhsterms(vecDx,tt,adjvars.fmmord.sourceptsindex) 
+    vecDyDR = calcadjlhsterms(vecDy,tt,adjvars.fmmord.sourceptsindex) 
 
     #===========================================
     ###  !!! REMARK from SparseArrays:  !!! ####
@@ -491,37 +480,29 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
 
     ============================================#
 
-    #@timeit to "sparsify" begin
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nxnnz = adjvars.fmmord.vecDx.Nnnz[]
-    # the size of iptr might be bigger than the number of rows, so pick only iptr[1:nrows+1],
-    #   where the +1 comes from the definition of CSC matrix
-    nrowsx = adjvars.fmmord.vecDx.Nsize[1]
-    lhs1term = SparseMatrixCSC(Nj,Ni,vecDx.iptr[1:nrowsx+1],vecDx.j[1:Nxnnz],vecDx.v[1:Nxnnz])
-    # see remark above
-    #lhs1term = copy(transpose(copy(transpose(lhs1term))))
-
+    Nxnnz = adjvars.fmmord.vecDxDR.Nnnz[]
+    Nix = adjvars.fmmord.vecDxDR.Nsize[1]
+    Njx = adjvars.fmmord.vecDxDR.Nsize[2]
+    lhs1term = SparseMatrixCSC(Njx,Nix,vecDxDR.iptr[1:Nxnnz+1],vecDxDR.j[1:Nxnnz],vecDxDR.v[1:Nxnnz])
+ 
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nynnz = adjvars.fmmord.vecDy.Nnnz[]
-    # the size of iptr might be bigger than the number of rows, so pick only iptr[1:nrows+1]
-    nrowsy = adjvars.fmmord.vecDy.Nsize[1]
-    lhs2term = SparseMatrixCSC(Nj,Ni,vecDy.iptr[1:nrowsy+1],vecDy.j[1:Nynnz],vecDy.v[1:Nynnz])
-    # see remark above
-    #lhs2term = copy(transpose(copy(transpose(lhs2term))))
+    Nynnz = adjvars.fmmord.vecDyDR.Nnnz[]
+    Niy = adjvars.fmmord.vecDyDR.Nsize[1]
+    Njy = adjvars.fmmord.vecDyDR.Nsize[2]
+    lhs2term = SparseMatrixCSC(Njy,Niy,vecDyDR.iptr[1:Nynnz+1],vecDyDR.j[1:Nynnz],vecDyDR.v[1:Nynnz])
 
-    #end
-    #@timeit to "sum terms" begin
-    
-    # they are already transposed, so only add them
+    @show Nix,Njx
+    @show Niy,Njy
+
+    # They are already transposed, so only add them
     tmplhs = lhs1term .+ lhs2term
 
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
 
-    #@show typeof(lhs)
-    #end   
     ## OLD stuff...
     # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
     # ##   the solver (\) does not use the correct sparse algo for matrix division
@@ -531,17 +512,14 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ################################
     ##  solve the linear system
     ################################
-    #@timeit to "solve lin. system" begin
     lambda_fmmord = lhs\rhs
-    #end
-
 
     ################################
     ##  Derivative with respect to the traveltime
     ##     at the "onsrc" points
     ##  compute gradient
     ################################
-    ∂χ∂xy_src = ∂misfit∂initsrcpos(twodiagDuDh_x,twodiagDuDh_y,
+    ∂χ∂xy_src = ∂misfit∂initsrcpos(vecDx,vecDy,tt,
                                    adjvars.idxconv,lambda_fmmord,vel2d,
                                    sourcerows,xysrc,grd)
     
@@ -571,15 +549,16 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Calculates the following in place, maintaining the sparse structure:
-     2 * diag(vecD * tt) * vecD
+Calculates the following maintaining the sparse structure:
+     2 * diag(D * tt) * Dr
 """
-function calclhsterms!(vecD::VecSPDerivMat,tt::Vector{Float64})
+function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
+                         sourceptsindex::Vector{Bool})
     # Remark: equivalent to CSR format 
 
     ##
     ## Calculates the following in place, maintaining the sparse structure:
-    ##   2*diag(Dx*tt)*Dx 
+    ##   2*diag(Dx*tt)*Dxr 
     ##
 
     # ## CSR matrix-vector product
@@ -593,25 +572,68 @@ function calclhsterms!(vecD::VecSPDerivMat,tt::Vector{Float64})
     #     end
     # end
 
-    # number of rows
-    nrows = vecD.Nsize[1]
+    # # number of rows
+    # nrows = vecD.Nsize[1]
+    # ## CSR matrix-vector product
+    # for i=1:nrows
+    #     # pi=pointers to column indices
+    #     tmp1 = 0.0
+    #     for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+    #         j = vecD.j[l]
+    #         # dot product
+    #         tmp1 += vecD.v[l]*tt[j]
+    #     end
+    #     ## scale all rows by 2*tmp1
+    #     for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+    #         vecD.v[l] = 2.0*tmp1*vecD.v[l]
+    #     end
+    # end
+
+    # size of D^x or D^y
+    nrows,ncols = vecD.Nsize[1],vecD.Nsize[2]
+    # number of rows of D^xr, D^yr, both row and col deficient
+    nsrcpts = count(onsrcrows)
+    ncolsR = ncols - nsrcpts
+
+    # Derivative (along x) matrix, row- *and* column-deficient
+    ncolidx = length(vecD.j) - nsrcpts
+    vecDR = VecSPDerivMat( iptr=zeros(Int64,nrows+1), j=zeros(Int64,ncolidx),
+                           v=zeros(ncolidx), Nsize=[nrows,ncolsR] )
+   
 
     ## CSR matrix-vector product
     for i=1:nrows
-        # pi=pointers to column indices
+
+        ## pre-compute Dx * tt 
         tmp1 = 0.0
         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
             j = vecD.j[l]
             # dot product
             tmp1 += vecD.v[l]*tt[j]
         end
-        ## scale all rows by 2*tmp1
+        
+        ## scale all rows by 2*tmp1 excluding certain columns
+        l2 = vecDR.iptr[i] # l2 runs on the column-reduced matrix DR
         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-            vecD.v[l] = 2.0*tmp1*vecD.v[l]
+            j = vecD.j[l]    # column index
+            # perform the calculation only if we are not on a source point
+            #   in order to remove the columns corresponding to the source
+            #   points
+            if sourceptsindex[j]==false
+                # populate the row-reduced matrix vecDR
+                vecDR.iptr[i+1] += 1
+                l2 += 1
+                vecDR.j[l2] = j
+                ## 2*diag(D*tt)*DR
+                vecDR.v[l2] = 2.0*tmp1*vecD.v[l]
+                # update pointers
+                vecDR.Nnnz[] += 1
+                vecDR.lastrowupdated[] = irow # this must stay here (this if and for loop)!
+            end
         end
     end
-   
-    return 
+
+    return vecDR
 end
 
 #######################################################################################
@@ -716,7 +738,8 @@ $(TYPEDSIGNATURES)
 
 Calculates the derivative of the misfit function with respect to the traveltime at the initial points around the source ("onsrc").
 """
-function ∂misfit∂initsrcpos(twodiagDuDh_x,twodiagDuDh_y,idxconv,
+function ∂misfit∂initsrcpos(vecDx,vecDy,tt,
+                            idxconv,
                             lambda::AbstractArray{Float64},
                             vel2d,sourcerows,xysrc,grd)
     #                                                                       #
@@ -727,9 +750,11 @@ function ∂misfit∂initsrcpos(twodiagDuDh_x,twodiagDuDh_y,idxconv,
     ###################################################################
     ## Derivative of the misfit w.r.t. the traveltime at source nodes
     ###################################################################
+    twodiagDxttDxS = calctwodiagDttDS(vecDx,tt,sourceptsindex)
+    twodiagDyttDyS = calctwodiagDttDS(vecDy,tt,sourceptsindex)
     tmp1 = twodiagDuDh_x .+ twodiagDuDh_y
-
-    npts = size(twodiagDuDh_x,2)
+    
+    npts = size(twodiagDxttDxS,2)
     ∂χ∂t_src = zeros(npts)
     for p=1:npts
         ∂χ∂t_src[p] = dot(lambda,tmp1[:,p])
@@ -777,64 +802,117 @@ $(TYPEDSIGNATURES)
 
   Compute the left-hand-side term for source location
 """
-function calctwodiagDuDh(vecD::VecSPDerivMat,tt::Vector{Float64},
-                         requestedcols::Vector{<:Integer})
+function calctwodiagDttDS(vecD::VecSPDerivMat,tt::Vector{Float64},
+                          sourceptsindex::Vector{Bool})
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
-    
-    # # get index in fmm order
-    #    jfmmord = idxconv.lgrid2fmm[iorig]
 
-    # number of rows
-    nrows = vecD.Nsize[1]
-    ncols = vecD.Nsize[2]
-    nreqcols = length(requestedcols)
+    # size of D^x or D^y
+    nrows,ncols = vecD.Nsize[1],vecD.Nsize[2]
+    # number of rows of D^xr, D^yr, both row and col deficient
+    nsrcpts = count(onsrcrows)
+    ncolsR = ncols - nsrcpts
 
-    #########################
-    # FIX THIS SLOW PART!!!
-    #########################
-    # create a dense D
-    Ddense = zeros(nrows,ncols)
-    for i=1:nrows
-        for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-            j = vecD.j[l]
-            Ddense[i,j] = vecD.v[l]
-        end
-    end    
-    #########################
-
-    twodiagDuDh = zeros(nrows,nreqcols)
+    ## 
+    DttDS = zeros(eltype(rr),nrows,nsrcpts)
+    srcptsindices = collect(1:nsrcpts)
 
     ## CSR matrix-vector product
     for i=1:nrows
-        # pi=pointers to column indices
+
+        ## pre-compute Dx * tt 
         tmp1 = 0.0
         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
             j = vecD.j[l]
             # dot product
             tmp1 += vecD.v[l]*tt[j]
         end
-
-        ## Columns sc correspond to the grid points where the traveltime around
-        ##  the source(s) was initially computed ("onsrc").
         
-        #########################
-        # FIX THIS SLOW PART!!!
-        #########################
-        for sc in requestedcols
-            twodiagDuDh[i,sc] = 2.0*tmp1 * Ddense[i,sc]
+        ## scale all rows by 2*tmp1 excluding certain columns
+        l2 = vecDR.iptr[i] # l2 runs on the column-reduced matrix DR
+        for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+            j = vecD.j[l]    # column index
+            l2 += 1
+            # perform the calculation only if we are on a source point,
+            #   i.e., considering only the relevant column
+            if onsrcrows[j]
+                # map column into the 1:nsrcpts indexing of DttDS
+                js = findfirst[srcptsindices.==j]
+                DttDS[i,js] = 2.0 * tmp1 * vecDR.v[l2]
+            end
         end
-
-        # ## Scale all necessary rows by 2*tmp1
-        # for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-        #     vecD.v[l] = 2.0*tmp1*vecD.v[l]
-        # end
     end
 
-    #@show twodiagDuDh[twodiagDuDh.!=0.0]
-    return twodiagDuDh
+    return DttDS
 end
+
+###############################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+#     # # get index in fmm order
+#     #    jfmmord = idxconv.lgrid2fmm[iorig]
+
+#     # number of rows
+#     nrows = vecD.Nsize[1]
+#     ncols = vecD.Nsize[2]
+#     nreqcols = length(requestedcols)
+
+#     #########################
+#     # FIX THIS SLOW PART!!!
+#     #########################
+#     # create a dense D
+#     Ddense = zeros(nrows,ncols)
+#     for i=1:nrows
+#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+#             j = vecD.j[l]
+#             Ddense[i,j] = vecD.v[l]
+#         end
+#     end    
+#     #########################
+
+#     twodiagDuDh = zeros(nrows,nreqcols)
+
+#     ## CSR matrix-vector product
+#     for i=1:nrows
+#         # pi=pointers to column indices
+#         tmp1 = 0.0
+#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+#             j = vecD.j[l]
+#             # dot product
+#             tmp1 += vecD.v[l]*tt[j]
+#         end
+
+#         ## Columns sc correspond to the grid points where the traveltime around
+#         ##  the source(s) was initially computed ("onsrc").
+        
+#         #########################
+#         # FIX THIS SLOW PART!!!
+#         #########################
+#         for sc in requestedcols
+#             twodiagDuDh[i,sc] = 2.0*tmp1 * Ddense[i,sc]
+#         end
+
+#         # ## Scale all necessary rows by 2*tmp1
+#         # for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+#         #     vecD.v[l] = 2.0*tmp1*vecD.v[l]
+#         # end
+#     end
+
+#     #@show twodiagDuDh[twodiagDuDh.!=0.0]
+#     return twodiagDuDh
+# end
 
 ###########################################################################
 

@@ -307,12 +307,8 @@ struct VarsFMMOrder2D
     vecDx::VecSPDerivMat
     "Derivative (along y) matrix, row-deficient"
     vecDy::VecSPDerivMat
-    # "Derivative (along x) matrix, row- and column-deficient"
-    # vecDxr::VecSPDerivMat
-    # "Derivative (along y) matrix, row- and columin-deficient"
-    # vecDyr::VecSPDerivMat
-    "keep track of source points in term of index (odered according to FMM)"
-    sourceptsindex::Vector{Bool}
+    "keep track of source points in term of row index (ordered according to FMM)"
+    onsrcrows::Vector{Bool}
 
     function VarsFMMOrder2D(nx,ny)
         nxy =  nx*ny
@@ -323,12 +319,8 @@ struct VarsFMMOrder2D
                                v=zeros(nxy*3), Nsize=[nxy,nxy] )
         vecDy = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
                                v=zeros(nxy*3), Nsize=[nxy,nxy] )
-        # vecDxr = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
-        #                        v=zeros(nxy*3), Nsize=[0,0] )
-        # vecDyr = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
-        #                        v=zeros(nxy*3), Nsize=[0,0] )
-        sourcerows = zeros(Bool,nxy)
-        return new(ttime,vecDx,vecDy,sourcerows)
+        onsrcrows = zeros(Bool,nxy)
+        return new(ttime,vecDx,vecDy,onsrcrows)
     end
 end
 
