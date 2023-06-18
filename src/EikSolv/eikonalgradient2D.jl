@@ -408,7 +408,7 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     #                                                                       #
     
     idxconv = adjvars.idxconv
-    tt = adjvars.fmmord.ttime
+    tt_fmmord = adjvars.fmmord.ttime
 
     # Derivative (along x) matrix, row-deficien
     vecDx = adjvars.fmmord.vecDx
@@ -464,7 +464,7 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ###########################################
     #rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
 
-    fact2 = ((P*tt).-pickobs)./stdobs.^2
+    fact2 = ((P*tt_fmmord).-pickobs)./stdobs.^2
     # @show typeof(fact2)
     # @show typeof(P)
     # bool vector with false for src columns
@@ -480,10 +480,10 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ## compute the lhs terms
     # println("\n\n")
     # @show "1st term"
-    vecDxDR = calcadjlhsterms(vecDx,tt,adjvars.fmmord.onsrcrows)
+    vecDxDR,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrcrows)
     # println("\n\n")
     # @show "2nd term"
-    vecDyDR = calcadjlhsterms(vecDy,tt,adjvars.fmmord.onsrcrows) 
+    vecDyDR,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,adjvars.fmmord.onsrcrows) 
 
 
     # function showD(D)
@@ -573,7 +573,7 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ##     at the "onsrc" points
     ##  compute gradient
     ################################
-    ∂χ∂xy_src = ∂misfit∂initsrcpos(vecDx,vecDy,tt,
+    ∂χ∂xy_src = ∂misfit∂initsrcpos(twoDttDSx,twoDttDSy,tt_fmmord,
                                    adjvars.idxconv,lambda_fmmord,vel2d,
                                    adjvars.fmmord.onsrcrows,xysrc,grd)
     
@@ -581,9 +581,12 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ##--------------------------------------
     # reorder lambda from fmmord to original grid!!
     N = length(lambda_fmmord)
+    nptsonsrc = count(adjvars.fmmord.onsrcrows)
     lambda = Vector{Float64}(undef,N)
+    @show size(lambda_fmmord),size(lambda)
     for p=1:N
-        iorig = idxconv.lfmm2grid[p]
+        iorig = idxconv.lfmm2grid[p-nptsonsrc]
+        @show p,iorig
         lambda[iorig] = lambda_fmmord[p]
     end
 
@@ -666,6 +669,12 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
         end
     end
     
+
+    #################################
+    ## for grad w.r.t. source loc calculations
+    twoDttDS = zeros(eltype(vecD.v),nrows,nsrcpts)
+    #################################
+
     ## CSR matrix-vector product
     for i=1:nrows
 
@@ -679,7 +688,7 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
 
         ## init the next row pointer
         two_Dtt_DR.iptr[i+1] = two_Dtt_DR.iptr[i]
-        
+       
         ## scale all rows by 2*tmp1 excluding certain columns
         l2 = two_Dtt_DR.iptr[i]-1 # l2 runs on the column-reduced matrix DR
         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
@@ -688,31 +697,41 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
             # if i<=6
             #     @show "D",i,j
             # end
-            
-            # perform the calculation only if we are not on a source point
-            #   in order to remove the columns corresponding to the source
-            #   points
+
             if onsrcrows[j]==false
-                ii = i #-nsrcpts+1
+                ############################################################### 
+                ##  Computation of 2*D*tt*DR for the adjoint variable lambda
+                ###############################################################
+                # perform the calculation only if we are not on a source point
+                #   in order to remove the columns corresponding to the source
+                #   points
+
                 # populate the row-reduced matrix two_Dtt_DR
-                two_Dtt_DR.iptr[ii+1] += 1
+                two_Dtt_DR.iptr[i+1] += 1
                 l2 += 1
                 two_Dtt_DR.j[l2] = idxrowred[j]
                 ## 2*diag(D*tt)*DR
                 two_Dtt_DR.v[l2] = 2.0*tmp1*vecD.v[l]
                 # update pointers
                 two_Dtt_DR.Nnnz[] += 1
-                two_Dtt_DR.lastrowupdated[] = ii # this must stay here (this if and for loop)!
+                two_Dtt_DR.lastrowupdated[] = i # this must stay here (this if and for loop)!
 
                 # if i<=10
                 #     @show i,ii,idxrowred[j],two_Dtt_DR.j[l2]
                 # end
 
+            elseif onsrcrows[j]
+                ################################################################### 
+                ##  Computation of 2*D*tt*DS for the grad w.r.t. source position
+                ###################################################################
+                js = count(onsrcrows[1:j])
+                twoDttDS[i,js] = 2.0 * tmp1 * vecD.v[l]
+                    
             end
         end
     end
 
-    return two_Dtt_DR
+    return two_Dtt_DR,twoDttDS
 end
 
 #######################################################################################
@@ -817,7 +836,7 @@ $(TYPEDSIGNATURES)
 
 Calculates the derivative of the misfit function with respect to the traveltime at the initial points around the source ("onsrc").
 """
-function ∂misfit∂initsrcpos(vecDx,vecDy,tt,
+function ∂misfit∂initsrcpos(twoDttDSx,twoDttDSy,tt,
                             idxconv,
                             lambda::AbstractArray{Float64},
                             vel2d,sourcerows,xysrc,grd)
@@ -829,11 +848,9 @@ function ∂misfit∂initsrcpos(vecDx,vecDy,tt,
     ###################################################################
     ## Derivative of the misfit w.r.t. the traveltime at source nodes
     ###################################################################
-    twodiagDxttDxS = calctwodiagDttDS(vecDx,tt,sourceptsindex)
-    twodiagDyttDyS = calctwodiagDttDS(vecDy,tt,sourceptsindex)
-    tmp1 = twodiagDuDh_x .+ twodiagDuDh_y
+    tmp1 = twoDttDSx .+ twoDttDSy
     
-    npts = size(twodiagDxttDxS,2)
+    npts = size(twoDttDSx,2)
     ∂χ∂t_src = zeros(npts)
     for p=1:npts
         ∂χ∂t_src[p] = dot(lambda,tmp1[:,p])
@@ -854,8 +871,8 @@ function ∂misfit∂initsrcpos(vecDx,vecDy,tt,
     velpts = zeros(npts)
     ijpt = zeros(Int64,2)
     xypt = zeros(npts,2)
-    for p=1:npts
-        ifmmord = sourcerows[p]
+    for p=1:npts 
+        ifmmord = count(sourcerows[1:p])
         iorig = idxconv.lfmm2grid[ifmmord]
         velpts[p] = vel2d[iorig]
 
