@@ -138,7 +138,7 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
         ##====================================
         ## Serial run
         ##====================
-        if returntt            
+         if returntt            
             # return both traveltime picks at receivers and at all grid points
             ttime[:,:,:],ttpicks = ttforwsomesrc2D(vel,coordsrc,coordrec,grd,extraparams,
                                                            returntt=returntt )
@@ -175,7 +175,7 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::AbstractArray{Float64,2
     end
 
     nsrc = size(coordsrc,1)
-    
+   
     ttpicksGRPSRC = Vector{Vector{Float64}}(undef,nsrc)
     for i=1:nsrc
         curnrec = size(coordrec[i],1) 
@@ -233,7 +233,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         dodiscradj=false
     else
         dodiscradj=true
-    end
+    end    
 
     ## Sizes
     if typeof(grd)==Grid2D
@@ -247,7 +247,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         n1,n2 = grd.nr,grd.nθ
     end
     n12 = n1*n2
-    
+
     ## 
     ## Time array
     ##
@@ -302,7 +302,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
             ijsrc = ttaroundsrc!(fmmvars,vel,src,grd,inittt)
         end
 
-        ## number of accepted points       
+        ## number of accepted points
         naccinit = size(ijsrc,2)
 
         ##======================================================
@@ -332,6 +332,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                     adjvars.fmmord.onsrcrows[l] = true
                     # remove one row because of point being on source!
                     adjvars.fmmord.vecDx.Nsize[1] -= 1
+                    adjvars.fmmord.vecDy.Nsize[1] -= 1
 
                     # # Here we store a 1 in the diagonal because we are on a source node...
                     # #   store arrival time for first points in FMM order
@@ -354,6 +355,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                         adjvars.fmmord.onsrcrows[l] = true
                         # remove one row because of point being on source!
                         adjvars.fmmord.vecDx.Nsize[1] -= 1
+                        adjvars.fmmord.vecDy.Nsize[1] -= 1
 
                         # # Here we store a 1 in the diagonal because we are on a source node...
                         # #  store arrival time for first points in FMM order
@@ -389,7 +391,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         elseif simtype==:spherical
             ijsrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
         end
-        @assert size(ijsrc)=(2,4)
+        @assert size(ijsrc)==(2,4)
         ## number of accepted points       
         naccinit = size(ijsrc,2)        
 
@@ -433,6 +435,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
                 adjvars.fmmord.onsrcrows[l] = true
                 # remove one row because of point being on source!
                 adjvars.fmmord.vecDx.Nsize[1] -= 1
+                adjvars.fmmord.vecDy.Nsize[1] -= 1
 
                 # # Here we store a 1 in the diagonal because we are on a source node...
                 # #  store arrival time for first points in FMM order
@@ -580,10 +583,10 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
             hgrid = grd.hgrid
             #allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
             allcoeffx = CoeffDerivCartesian( MVector(-1.0/hgrid,
-                                                       1.0/hgrid), 
-                                               MVector(-3.0/(2.0*hgrid),
-                                                       4.0/(2.0*hgrid),
-                                                       -1.0/(2.0*hgrid)) )
+                                                     1.0/hgrid), 
+                                             MVector(-3.0/(2.0*hgrid),
+                                                     4.0/(2.0*hgrid),
+                                                     -1.0/(2.0*hgrid)) )
             # coefficients along X are the same than along Y
             allcoeffy = allcoeffx
 
@@ -604,29 +607,38 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         end
 
         ##
-        ## Set the derivative operators in FMM order, from source onwards
+        ## Set the derivative operators in FMM order, skipping source points onwards
         ## 
-        ##   for from adjvars.fmmord.vecDx.lastrowupdated[]+1 onwards because some rows have already
+        ##   From adjvars.fmmord.vecDx.lastrowupdated[]+1 onwards because some rows might have already
         ##   been updated above and the CSR format used here requires to add rows in sequence to
         ##   avoid expensive re-allocations
-        startloop = adjvars.fmmord.vecDx.lastrowupdated[]+1
+        #startloop = adjvars.fmmord.vecDx.lastrowupdated[]+1
+        #startloop = count(adjvars.fmmord.onsrcrows)+1
+        nptsfixedtt = count(adjvars.fmmord.onsrcrows)
 
         colinds = MVector(0,0,0)
         colvals = MVector(0.0,0.0,0.0)
         idxperm = MVector(0,0,0)
 
-        for irow=startloop:n12
+        #for irow=startloop:n12
+        for irow=1:adjvars.fmmord.vecDx.Nsize[1]
             
+            #@show "fwd",irow
             # compute the coefficients for X  derivatives
             setcoeffderiv2D!(adjvars.fmmord.vecDx,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffx,ptij,
-                             colinds,colvals,idxperm, axis=:X,simtype=simtype)
+                             colinds,colvals,idxperm,nptsfixedtt, axis=:X,simtype=simtype)
 
             
             # compute the coefficients for Y derivatives
             setcoeffderiv2D!(adjvars.fmmord.vecDy,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffy,ptij,
-                             colinds,colvals,idxperm, axis=:Y,simtype=simtype)
+                             colinds,colvals,idxperm,nptsfixedtt, axis=:Y,simtype=simtype)
                         
         end
+
+        # @show adjvars.fmmord.vecDx.Nsize[1]
+        # @show length(adjvars.fmmord.vecDx.iptr)
+        # @assert adjvars.fmmord.vecDx.Nsize[1]==(length(adjvars.fmmord.vecDx.iptr)-1)
+        # @assert adjvars.fmmord.vecDy.Nsize[1]==(length(adjvars.fmmord.vecDy.iptr)-1)
 
     end # if dodiscradj
     ##======================================================

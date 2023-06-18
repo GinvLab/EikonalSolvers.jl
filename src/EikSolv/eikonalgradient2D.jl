@@ -4,6 +4,7 @@
 ##     Misfit of gradient using adjoint              ## 
 #######################################################
 
+
 ###############################################################################
 
 """
@@ -197,11 +198,12 @@ $(TYPEDSIGNATURES)
     """
 function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFMM2D,
                           codeDxy_orig::Array{Int64,2},allcoeff::CoeffDerivatives,ijpt::AbstractVector,
-                          colinds::AbstractVector{Int64},colvals::AbstractVector{Float64},idxperm::AbstractVector{Int64} ;
+                          colinds::AbstractVector{Int64},colvals::AbstractVector{Float64},idxperm::AbstractVector{Int64},
+                          nptsfixedtt::Integer;
                           axis::Symbol, simtype::Symbol)
     
     # get the linear index in the original grid
-    iptorig = idxconv.lfmm2grid[irow]
+    iptorig = idxconv.lfmm2grid[irow+nptsfixedtt]
     # get the (i,j) indices in the original grid
     nx = idxconv.nx
     lin2cart2D!(iptorig,nx,ijpt)
@@ -222,7 +224,6 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     whX::Int=0
     whY::Int=0
 
-   
     if axis==:X
         if codex==0
             ## no derivatives have been used, so no element will
@@ -238,12 +239,12 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
 
     elseif axis==:Y
         if codey==0
-             ## no derivatives have been used, so no element will
+            ## no derivatives have been used, so no element will
             ##  be added, but the row counter will increase...
             nnzcol = 0
             addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
             return
-        else
+        else        
             code = codey
             whX=0
             whY=1
@@ -252,7 +253,13 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     else
         error("if axis==:X ...")
     end
-    
+       
+    # we skip points on source, so there must always be derivatives
+    if code==[0,0]
+        error("code==[0,0]")
+    end
+
+
     # at this point abs(code) can only be 1 or 2
     abscode = abs(code)
     nnzcol = abscode+1
@@ -272,7 +279,7 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
             mycoeff = signcod * coeff[p]
             ##
             iorig = cart2lin2D(i,j,nx)
-            ifmmord = idxconv.lgrid2fmm[iorig]
+            ifmmord = idxconv.lgrid2fmm[iorig] 
             ##
             colinds[p] = ifmmord
             colvals[p] = mycoeff
@@ -308,7 +315,10 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     colinds[:] .= colinds[idxperm]
     colvals[:] .= colvals[idxperm]
     addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
-    
+
+    # if irow<=5
+    #     @show irow,colinds[1:nnzcol],colvals[1:nnzcol]
+    # end
     return
 end
 
@@ -382,7 +392,6 @@ end
 
 ##############################################################################
 
-
 """
 $(TYPEDSIGNATURES)
 
@@ -450,18 +459,57 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     # twodiagDuDh_y = calctwodiagDuDh(vecDy,tt,sourcerows)
 
    
-    ################################
-    ##  right hand side adj eq.
-    ################################
-    rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
+    ###########################################
+    ##  right hand side adj eq. == -adj_src^T
+    ###########################################
+    #rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
+
+    fact2 = ((P*tt).-pickobs)./stdobs.^2
+    # @show typeof(fact2)
+    # @show typeof(P)
+    # bool vector with false for src columns
+    rq = .!adjvars.fmmord.onsrcrows
+    PD = P[:,rq] # remove columns
+    # @show size(PD),size(fact2)
+    rhs = - transpose(PD) * fact2
 
 
     ################################
     ##   left hand side adj eq.
     ################################
     ## compute the lhs terms
-    vecDxDR = calcadjlhsterms(vecDx,tt,adjvars.fmmord.sourceptsindex) 
-    vecDyDR = calcadjlhsterms(vecDy,tt,adjvars.fmmord.sourceptsindex) 
+    # println("\n\n")
+    # @show "1st term"
+    vecDxDR = calcadjlhsterms(vecDx,tt,adjvars.fmmord.onsrcrows)
+    # println("\n\n")
+    # @show "2nd term"
+    vecDyDR = calcadjlhsterms(vecDy,tt,adjvars.fmmord.onsrcrows) 
+
+
+    # function showD(D)
+    #     for i=1:D.Nsize[1]
+    #         for l=D.iptr[i]:D.iptr[i+1]-1
+    #             j = D.j[l]
+    #             v = D.v[l]
+    #             #@show l,i,j
+    #             if i<=2
+    #                 @show i,j,v
+    #             end
+    #             # if i==0 || j==0
+    #             #     println(">>>>>>>> zero: i=$i, j=$j <<<<<<<<<")
+    #             #     @show D.iptr[i:i+10],D.j[l:l+2]
+    #             # end
+    #         end
+    #     end
+    #     return
+    # end
+
+    # @show "vecDxDR"
+    # showD(vecDxDR)
+    # @show "vecDyDR"
+    # showD(vecDyDR)
+
+
 
     #===========================================
     ###  !!! REMARK from SparseArrays:  !!! ####
@@ -482,23 +530,28 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
 
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nxnnz = adjvars.fmmord.vecDxDR.Nnnz[]
-    Nix = adjvars.fmmord.vecDxDR.Nsize[1]
-    Njx = adjvars.fmmord.vecDxDR.Nsize[2]
-    lhs1term = SparseMatrixCSC(Njx,Nix,vecDxDR.iptr[1:Nxnnz+1],vecDxDR.j[1:Nxnnz],vecDxDR.v[1:Nxnnz])
+    Nxnnz = vecDxDR.Nnnz[]
+    Nix = vecDxDR.Nsize[1]
+    Njx = vecDxDR.Nsize[2]
+    lhs1term = SparseMatrixCSC(Njx,Nix,vecDxDR.iptr[1:Nix+1],
+                               vecDxDR.j[1:Nxnnz],vecDxDR.v[1:Nxnnz])
  
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nynnz = adjvars.fmmord.vecDyDR.Nnnz[]
-    Niy = adjvars.fmmord.vecDyDR.Nsize[1]
-    Njy = adjvars.fmmord.vecDyDR.Nsize[2]
-    lhs2term = SparseMatrixCSC(Njy,Niy,vecDyDR.iptr[1:Nynnz+1],vecDyDR.j[1:Nynnz],vecDyDR.v[1:Nynnz])
+    Nynnz = vecDyDR.Nnnz[]
+    Niy = vecDyDR.Nsize[1]
+    Njy = vecDyDR.Nsize[2]
+    lhs2term = SparseMatrixCSC(Njy,Niy,vecDyDR.iptr[1:Niy+1],
+                               vecDyDR.j[1:Nynnz],vecDyDR.v[1:Nynnz])
 
-    @show Nix,Njx
-    @show Niy,Njy
 
     # They are already transposed, so only add them
     tmplhs = lhs1term .+ lhs2term
+
+    # display(tmplhs)
+    # @show diag(tmplhs)
+    # display( (Array(tmplhs[1:10,1:10])) )
+    # @show size(tmplhs)
 
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
@@ -514,6 +567,7 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ################################
     lambda_fmmord = lhs\rhs
 
+    @show "hello, got lambda"
     ################################
     ##  Derivative with respect to the traveltime
     ##     at the "onsrc" points
@@ -521,7 +575,7 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ################################
     ∂χ∂xy_src = ∂misfit∂initsrcpos(vecDx,vecDy,tt,
                                    adjvars.idxconv,lambda_fmmord,vel2d,
-                                   sourcerows,xysrc,grd)
+                                   adjvars.fmmord.onsrcrows,xysrc,grd)
     
     #@timeit to "reorder lambda" begin
     ##--------------------------------------
@@ -553,7 +607,7 @@ Calculates the following maintaining the sparse structure:
      2 * diag(D * tt) * Dr
 """
 function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
-                         sourceptsindex::Vector{Bool})
+                         onsrcrows::Vector{Bool})
     # Remark: equivalent to CSR format 
 
     ##
@@ -579,7 +633,7 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
     #     # pi=pointers to column indices
     #     tmp1 = 0.0
     #     for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-    #         j = vecD.j[l]
+    #         j = vecD.j[l]j
     #         # dot product
     #         tmp1 += vecD.v[l]*tt[j]
     #     end
@@ -596,11 +650,22 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
     ncolsR = ncols - nsrcpts
 
     # Derivative (along x) matrix, row- *and* column-deficient
-    ncolidx = length(vecD.j) - nsrcpts
-    vecDR = VecSPDerivMat( iptr=zeros(Int64,nrows+1), j=zeros(Int64,ncolidx),
-                           v=zeros(ncolidx), Nsize=[nrows,ncolsR] )
+    ncolidx = vecD.Nnnz[] - nsrcpts
+    two_Dtt_DR = VecSPDerivMat( iptr=zeros(Int64,nrows+1), j=zeros(Int64,ncolidx),
+                              v=zeros(ncolidx), Nsize=[nrows,ncolsR] )
    
-
+    # mapping of column number from full to column reduced
+    idxrowred = zeros(Int64,length(onsrcrows))
+    q = 0
+    for p=2:length(onsrcrows)
+        if onsrcrows[p]
+            idxrowred[p] = q
+        else
+            q+=1
+            idxrowred[p] = q
+        end
+    end
+    
     ## CSR matrix-vector product
     for i=1:nrows
 
@@ -611,29 +676,43 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
             # dot product
             tmp1 += vecD.v[l]*tt[j]
         end
+
+        ## init the next row pointer
+        two_Dtt_DR.iptr[i+1] = two_Dtt_DR.iptr[i]
         
         ## scale all rows by 2*tmp1 excluding certain columns
-        l2 = vecDR.iptr[i] # l2 runs on the column-reduced matrix DR
+        l2 = two_Dtt_DR.iptr[i]-1 # l2 runs on the column-reduced matrix DR
         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
             j = vecD.j[l]    # column index
+
+            # if i<=6
+            #     @show "D",i,j
+            # end
+            
             # perform the calculation only if we are not on a source point
             #   in order to remove the columns corresponding to the source
             #   points
-            if sourceptsindex[j]==false
-                # populate the row-reduced matrix vecDR
-                vecDR.iptr[i+1] += 1
+            if onsrcrows[j]==false
+                ii = i #-nsrcpts+1
+                # populate the row-reduced matrix two_Dtt_DR
+                two_Dtt_DR.iptr[ii+1] += 1
                 l2 += 1
-                vecDR.j[l2] = j
+                two_Dtt_DR.j[l2] = idxrowred[j]
                 ## 2*diag(D*tt)*DR
-                vecDR.v[l2] = 2.0*tmp1*vecD.v[l]
+                two_Dtt_DR.v[l2] = 2.0*tmp1*vecD.v[l]
                 # update pointers
-                vecDR.Nnnz[] += 1
-                vecDR.lastrowupdated[] = irow # this must stay here (this if and for loop)!
+                two_Dtt_DR.Nnnz[] += 1
+                two_Dtt_DR.lastrowupdated[] = ii # this must stay here (this if and for loop)!
+
+                # if i<=10
+                #     @show i,ii,idxrowred[j],two_Dtt_DR.j[l2]
+                # end
+
             end
         end
     end
 
-    return vecDR
+    return two_Dtt_DR
 end
 
 #######################################################################################
@@ -797,55 +876,55 @@ end
 
 ###############################################
 
-"""
-$(TYPEDSIGNATURES)
+# """
+# $(TYPEDSIGNATURES)
 
-  Compute the left-hand-side term for source location
-"""
-function calctwodiagDttDS(vecD::VecSPDerivMat,tt::Vector{Float64},
-                          sourceptsindex::Vector{Bool})
-    #                                                                       #
-    # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
-    #                                                                       #
+#   Compute the left-hand-side term for source location
+# """
+# function calctwodiagDttDS(vecD::VecSPDerivMat,tt::Vector{Float64},
+#                           sourceptsindex::Vector{Bool})
+#     #                                                                       #
+#     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
+#     #                                                                       #
 
-    # size of D^x or D^y
-    nrows,ncols = vecD.Nsize[1],vecD.Nsize[2]
-    # number of rows of D^xr, D^yr, both row and col deficient
-    nsrcpts = count(onsrcrows)
-    ncolsR = ncols - nsrcpts
+#     # size of D^x or D^y
+#     nrows,ncols = vecD.Nsize[1],vecD.Nsize[2]
+#     # number of rows of D^xr, D^yr, both row and col deficient
+#     nsrcpts = count(onsrcrows)
+#     ncolsR = ncols - nsrcpts
 
-    ## 
-    DttDS = zeros(eltype(rr),nrows,nsrcpts)
-    srcptsindices = collect(1:nsrcpts)
+#     ## 
+#     DttDS = zeros(eltype(rr),nrows,nsrcpts)
+#     srcptsindices = collect(1:nsrcpts)
 
-    ## CSR matrix-vector product
-    for i=1:nrows
+#     ## CSR matrix-vector product
+#     for i=1:nrows
 
-        ## pre-compute Dx * tt 
-        tmp1 = 0.0
-        for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-            j = vecD.j[l]
-            # dot product
-            tmp1 += vecD.v[l]*tt[j]
-        end
+#         ## pre-compute Dx * tt 
+#         tmp1 = 0.0
+#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+#             j = vecD.j[l]
+#             # dot product
+#             tmp1 += vecD.v[l]*tt[j]
+#         end
         
-        ## scale all rows by 2*tmp1 excluding certain columns
-        l2 = vecDR.iptr[i] # l2 runs on the column-reduced matrix DR
-        for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-            j = vecD.j[l]    # column index
-            l2 += 1
-            # perform the calculation only if we are on a source point,
-            #   i.e., considering only the relevant column
-            if onsrcrows[j]
-                # map column into the 1:nsrcpts indexing of DttDS
-                js = findfirst[srcptsindices.==j]
-                DttDS[i,js] = 2.0 * tmp1 * vecDR.v[l2]
-            end
-        end
-    end
+#         ## scale all rows by 2*tmp1 excluding certain columns
+#         l2 = two_D_DR.iptr[i] # l2 runs on the column-reduced matrix DR
+#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+#             j = vecD.j[l]    # column index
+#             l2 += 1
+#             # perform the calculation only if we are on a source point,
+#             #   i.e., considering only the relevant column
+#             if onsrcrows[j]
+#                 # map column into the 1:nsrcpts indexing of DttDS
+#                 js = findfirst[srcptsindices.==j]
+#                 DttDS[i,js] = 2.0 * tmp1 * two_D_DR.v[l2]
+#             end
+#         end
+#     end
 
-    return DttDS
-end
+#     return DttDS
+# end
 
 ###############################################
 
