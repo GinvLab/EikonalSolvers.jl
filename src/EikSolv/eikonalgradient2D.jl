@@ -567,7 +567,6 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ################################
     lambda_fmmord = lhs\rhs
 
-    @show "hello, got lambda"
     ################################
     ##  Derivative with respect to the traveltime
     ##     at the "onsrc" points
@@ -582,13 +581,38 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     # reorder lambda from fmmord to original grid!!
     N = length(lambda_fmmord)
     nptsonsrc = count(adjvars.fmmord.onsrcrows)
-    lambda = Vector{Float64}(undef,N)
-    @show size(lambda_fmmord),size(lambda)
+
+    # lambda must be zeroed here!
+    lambda = zeros(eltype(lambda_fmmord),N+nptsonsrc)
+    Nall = length(idxconv.lfmm2grid)
     for p=1:N
-        iorig = idxconv.lfmm2grid[p-nptsonsrc]
-        @show p,iorig
+        # The following two lines is a complex way to map the
+        #  "full" indices to the "reduced" set of indices
+        curnptsonsrc_fmmord = count(adjvars.fmmord.onsrcrows[1:p])
+        iorig = idxconv.lfmm2grid[p+nptsonsrc]
+        # map lambda in fmmord into lambda in the original grid
         lambda[iorig] = lambda_fmmord[p]
     end
+
+    # lambda = Vector{Float64}(undef,N)
+    # Nall = length(idxconv.lfmm2grid)
+    # onsrcrows_orig = zeros(Bool,Nall)
+    # @assert length(adjvars.fmmord.onsrcrows)==Nall
+    # # The following stuff is a complex way to map the
+    # #  "full" indices to the "reduced" set of indices
+    # onsrcrows_orig = zeros(Bool,Nall)
+    # for q=1:Nall
+    #     if adjvars.fmmord.onsrcrows[q]
+    #         iorig = idxconv.lfmm2grid[q]
+    #         onsrcrows_orig[iorig] = true
+    #     end
+    # end
+    # for p=1:N
+    #     curnptsonsrc_fmmord = count(adjvars.fmmord.onsrcrows[1:p])
+    #     iorig = idxconv.lfmm2grid[p+nptsonsrc] 
+    #     curnptsonsrc_orig = count(onsrcrows_orig[1:iorig])
+    #     lambda[iorig-curnptsonsrc_orig] = lambda_fmmord[p]
+    # end
 
     #gradvec = 2.0 .* transpose(lambda) * Diagonal(1.0./ (vec(vel2d).^2) )
     gradvec = 2.0 .* lambda ./ vec(vel2d).^3
@@ -858,11 +882,11 @@ function ∂misfit∂initsrcpos(twoDttDSx,twoDttDSy,tt,
         # ∂χ∂t_src[p] = lambda .* tmp1[:,p]
 
         idx = [(tmp1[:,p].!=0.0 .&& lambda.!=0.0)]
-        println()
-        @show tmp1[idx...,p]
-        @show lambda[idx...]
-        @show sum(tmp1[idx...,p] .* lambda[idx...])
-        @show ∂χ∂t_src[p]
+        # println()
+        # @show tmp1[idx...,p]
+        # @show lambda[idx...]
+        # @show sum(tmp1[idx...,p] .* lambda[idx...])
+        # @show ∂χ∂t_src[p]
     end
 
     ###################################################################
@@ -884,131 +908,11 @@ function ∂misfit∂initsrcpos(twoDttDSx,twoDttDSy,tt,
     # compute the derivative 
     ∂χ∂xy_src = derivttsrcposition2D(∂χ∂t_src,xypt,xysrc,velpts)
     
-
-    @show extrema(∂χ∂t_src)
-    @show ∂χ∂xy_src
+    # @show extrema(∂χ∂t_src)
+    display( ∂χ∂xy_src )
 
     return ∂χ∂xy_src
 end
-
-###############################################
-
-# """
-# $(TYPEDSIGNATURES)
-
-#   Compute the left-hand-side term for source location
-# """
-# function calctwodiagDttDS(vecD::VecSPDerivMat,tt::Vector{Float64},
-#                           sourceptsindex::Vector{Bool})
-#     #                                                                       #
-#     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
-#     #                                                                       #
-
-#     # size of D^x or D^y
-#     nrows,ncols = vecD.Nsize[1],vecD.Nsize[2]
-#     # number of rows of D^xr, D^yr, both row and col deficient
-#     nsrcpts = count(onsrcrows)
-#     ncolsR = ncols - nsrcpts
-
-#     ## 
-#     DttDS = zeros(eltype(rr),nrows,nsrcpts)
-#     srcptsindices = collect(1:nsrcpts)
-
-#     ## CSR matrix-vector product
-#     for i=1:nrows
-
-#         ## pre-compute Dx * tt 
-#         tmp1 = 0.0
-#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-#             j = vecD.j[l]
-#             # dot product
-#             tmp1 += vecD.v[l]*tt[j]
-#         end
-        
-#         ## scale all rows by 2*tmp1 excluding certain columns
-#         l2 = two_D_DR.iptr[i] # l2 runs on the column-reduced matrix DR
-#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-#             j = vecD.j[l]    # column index
-#             l2 += 1
-#             # perform the calculation only if we are on a source point,
-#             #   i.e., considering only the relevant column
-#             if onsrcrows[j]
-#                 # map column into the 1:nsrcpts indexing of DttDS
-#                 js = findfirst[srcptsindices.==j]
-#                 DttDS[i,js] = 2.0 * tmp1 * two_D_DR.v[l2]
-#             end
-#         end
-#     end
-
-#     return DttDS
-# end
-
-###############################################
-
-
-
-
-
-
-
-
-
-
-
-
-
-#     # # get index in fmm order
-#     #    jfmmord = idxconv.lgrid2fmm[iorig]
-
-#     # number of rows
-#     nrows = vecD.Nsize[1]
-#     ncols = vecD.Nsize[2]
-#     nreqcols = length(requestedcols)
-
-#     #########################
-#     # FIX THIS SLOW PART!!!
-#     #########################
-#     # create a dense D
-#     Ddense = zeros(nrows,ncols)
-#     for i=1:nrows
-#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-#             j = vecD.j[l]
-#             Ddense[i,j] = vecD.v[l]
-#         end
-#     end    
-#     #########################
-
-#     twodiagDuDh = zeros(nrows,nreqcols)
-
-#     ## CSR matrix-vector product
-#     for i=1:nrows
-#         # pi=pointers to column indices
-#         tmp1 = 0.0
-#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-#             j = vecD.j[l]
-#             # dot product
-#             tmp1 += vecD.v[l]*tt[j]
-#         end
-
-#         ## Columns sc correspond to the grid points where the traveltime around
-#         ##  the source(s) was initially computed ("onsrc").
-        
-#         #########################
-#         # FIX THIS SLOW PART!!!
-#         #########################
-#         for sc in requestedcols
-#             twodiagDuDh[i,sc] = 2.0*tmp1 * Ddense[i,sc]
-#         end
-
-#         # ## Scale all necessary rows by 2*tmp1
-#         # for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-#         #     vecD.v[l] = 2.0*tmp1*vecD.v[l]
-#         # end
-#     end
-
-#     #@show twodiagDuDh[twodiagDuDh.!=0.0]
-#     return twodiagDuDh
-# end
 
 ###########################################################################
 
@@ -1021,14 +925,18 @@ function derivttsrcposition2D(∂χ∂t_src,xypt,xysrc,velpts)
         ## Apply the chain rule:
         ##   ∂χ/∂t_src * ∂t_src/∂x, etc.
         derpos = partderivttsrcpos2D(xypt[p,:],xysrc,velpts[p])
-        deriv[p,:] .= ∂χ∂t_src[p] .* derpos
+        #deriv[p,:] .= ∂χ∂t_src[p] .* derpos
+        deriv[p,:] .= derpos
 
-        println()
-        @show ∂χ∂t_src[p]
-        @show derpos
+        #println()
+        #@show ∂χ∂t_src[p]
+        #@show derpos
     end
 
-    return deriv
+    dχdx_src = dot( ∂χ∂t_src, deriv[:,1] )
+    dχdy_src = dot( ∂χ∂t_src, deriv[:,2] )
+
+    return dχdx_src,dχdy_src
 end
 
 ###########################################################################
