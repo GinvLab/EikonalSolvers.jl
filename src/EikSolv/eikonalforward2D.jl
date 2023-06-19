@@ -1332,7 +1332,7 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
         # pre-allocate array of indices for source
         ijsrc = @MMatrix zeros(Int64,2,4)
 
-        ## eight points
+        ## four points
         if rx>=halfg
             srci = (ix,ix+1)
         else
@@ -1358,13 +1358,22 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
             ## set status = accepted == 2
             fmmvars.status[i,j] = 2
 
-            ## regular grid
+            ## regular grid, the velocity must be the same for the 4 points
             xp = grd.x[i] 
             yp = grd.y[j]
             ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
             jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
             ## set traveltime for the source
             fmmvars.ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+
+            # @show i,j,xp,yp,fmmvars.ttime[i,j]
+            # @show ii,jj,vel[ii,jj]
+            # println()
+
+            # if l==4
+            #     println("Altering the traveltime for l=$l,  i,j = ($i,$j) !!!")
+            #     fmmvars.ttime[i,j] += 0.001
+            # end
         end
     end
     

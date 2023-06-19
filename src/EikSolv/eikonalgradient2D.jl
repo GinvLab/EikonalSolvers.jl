@@ -572,9 +572,9 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ##     at the "onsrc" points
     ##  compute gradient
     ################################
-    ∂χ∂xy_src = ∂misfit∂initsrcpos(twoDttDSx,twoDttDSy,tt_fmmord,
-                                   adjvars.idxconv,lambda_fmmord,vel2d,
-                                   adjvars.fmmord.onsrcrows,xysrc,grd)
+    ∂χ∂xy_src = ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt_fmmord,
+                                     adjvars.idxconv,lambda_fmmord,vel2d,
+                                     adjvars.fmmord.onsrcrows,xysrc,grd)
     
     #@timeit to "reorder lambda" begin
     ##--------------------------------------
@@ -860,7 +860,7 @@ $(TYPEDSIGNATURES)
 
 Calculates the derivative of the misfit function with respect to the traveltime at the initial points around the source ("onsrc").
 """
-function ∂misfit∂initsrcpos(twoDttDSx,twoDttDSy,tt,
+function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
                             idxconv,
                             lambda::AbstractArray{Float64},
                             vel2d,sourcerows,xysrc,grd)
@@ -878,70 +878,68 @@ function ∂misfit∂initsrcpos(twoDttDSx,twoDttDSy,tt,
     ∂χ∂t_src = zeros(npts)
     for p=1:npts
         ∂χ∂t_src[p] = dot(lambda,tmp1[:,p])
-        # # element-wise product
-        # ∂χ∂t_src[p] = lambda .* tmp1[:,p]
-
-        idx = [(tmp1[:,p].!=0.0 .&& lambda.!=0.0)]
-        # println()
-        # @show tmp1[idx...,p]
-        # @show lambda[idx...]
-        # @show sum(tmp1[idx...,p] .* lambda[idx...])
-        # @show ∂χ∂t_src[p]
     end
 
     ###################################################################
     ## Derivative of the misfit w.r.t. the source position (chain rule)
     ###################################################################
-    velpts = zeros(npts)
-    ijpt = zeros(Int64,2)
-    xypt = zeros(npts,2)
+    ijpt = MVector(0,0)
+    xypt = MVector(0.0,0.0)
+    curijsrc = MVector(0,0)
+    derpos = zeros(npts,2)
+    
     for p=1:npts 
-        ifmmord = count(sourcerows[1:p])
-        iorig = idxconv.lfmm2grid[ifmmord]
-        velpts[p] = vel2d[iorig]
+        # ifmmord_srcpts = count(sourcerows[1:p])
+        # iorig_srcpts = idxconv.lfmm2grid[ifmmord_srcpts]
+        iorig_srcpts = idxconv.lfmm2grid[p] 
 
+        ##################################
+        ## Source velocity stuff
+        # Get the correct velocity for all 4 vertices
+        #  The velocity should be the same (same ii,jj) for all 4 points
+        #velpts[p] = vel2d[iorig_srcpts]
+        lin2cart2D!(iorig_srcpts,grd.nx,curijsrc)
+        xps = grd.x[curijsrc[1]] 
+        yps = grd.y[curijsrc[2]]
+        ii = Int(floor((xysrc[1]-grd.xinit)/grd.hgrid)) +1
+        jj = Int(floor((xysrc[2]-grd.yinit)/grd.hgrid)) +1 
+        velpt = vel2d[ii,jj]
+        
+        ##################################
+        ## Derivatives for each source point
         ## CONVERT linear to cartesian 2D to get point position
-        lin2cart2D!(iorig,nx,ijpt)
-        xypt[p,:] .= (grd.x[ijpt[1]], grd.y[ijpt[2]])
+        lin2cart2D!(iorig_srcpts,nx,ijpt)
+        xypt .= (grd.x[ijpt[1]], grd.y[ijpt[2]])
+        #@show ijpt, xypt, xysrc, velpt
+
+        derpos[p,:] .= partderivttsrcpos2D(xypt,xysrc,velpt)
     end
+
+    
+    dχdx_src = dot( ∂χ∂t_src, derpos[:,1] )
+    dχdy_src = dot( ∂χ∂t_src, derpos[:,2] )
+
+
+    println("\n∂χ∂t_src")
+    display(∂χ∂t_src)
+    println("\n∂χ/∂x")
+    display( derpos[:,1] )
+    println("\n∂χ/∂y")
+    display( derpos[:,2] )
+
 
     # compute the derivative 
-    ∂χ∂xy_src = derivttsrcposition2D(∂χ∂t_src,xypt,xysrc,velpts)
+    #∂χ∂xy_src = derivttsrcposition2D(∂χ∂t_src,xypt,xysrc,velpts)
     
     # @show extrema(∂χ∂t_src)
-    display( ∂χ∂xy_src )
-
-    return ∂χ∂xy_src
-end
-
-###########################################################################
-
-function derivttsrcposition2D(∂χ∂t_src,xypt,xysrc,velpts)
-
-    npts = length(∂χ∂t_src)
-
-    deriv = zeros(npts,2)
-    for p=1:npts
-        ## Apply the chain rule:
-        ##   ∂χ/∂t_src * ∂t_src/∂x, etc.
-        derpos = partderivttsrcpos2D(xypt[p,:],xysrc,velpts[p])
-        #deriv[p,:] .= ∂χ∂t_src[p] .* derpos
-        deriv[p,:] .= derpos
-
-        #println()
-        #@show ∂χ∂t_src[p]
-        #@show derpos
-    end
-
-    dχdx_src = dot( ∂χ∂t_src, deriv[:,1] )
-    dχdy_src = dot( ∂χ∂t_src, deriv[:,2] )
+    @show  dχdx_src,dχdy_src
 
     return dχdx_src,dχdy_src
 end
 
 ###########################################################################
 
-function partderivttsrcpos2D(xypt::Vector,xysrc::Vector,vel::Real)
+function partderivttsrcpos2D(xypt::AbstractVector,xysrc::Vector,vel::Real)
 
     xpt = xypt[1]
     ypt = xypt[2]
@@ -952,11 +950,8 @@ function partderivttsrcpos2D(xypt::Vector,xysrc::Vector,vel::Real)
     deriv_x = -(xpt - xsrc) / denom
     deriv_y = -(ypt - ysrc) / denom
 
-    # println()
-    # @show xpt,ypt
-    # @show xsrc,ysrc
-    # @show denom
-    # @show deriv_x,deriv_y
+    @show xypt,xysrc,vel
+    @show deriv_x,deriv_y
 
     return deriv_x,deriv_y
 end

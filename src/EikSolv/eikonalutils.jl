@@ -330,7 +330,7 @@ The value of the misfit functional (L2-norm), the same used to compute the gradi
 """
 function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksobs::AbstractArray,
                       stdobs::AbstractArray,coordsrc::AbstractArray,
-                      coordrec,grd::GridEik ; extraparams::Union{ExtraParams,Nothing}=nothing)
+                      coordrec,grd::GridEik ; extraparams::Union{ExtraParams,Nothing}=nothing)::Float64
     
     if extraparams==nothing
         extraparams = ExtraParams()
@@ -351,7 +351,7 @@ function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksob
     nsrc = size(coordsrc,1)
     #nrecs1 = size.(coordrec,1)
     #totlen = sum(nrec1)
-    misf = 0.0
+    misf::Float64 = 0.0
     for s=1:nsrc
         misf += sum( (ttpicks[s].-ttpicksobs[s]).^2 ./ stdobs[s].^2)
     end
