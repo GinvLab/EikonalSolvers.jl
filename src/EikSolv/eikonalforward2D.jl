@@ -284,7 +284,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
 
         # init row stuff
         colindsonsrc = MVector(0)
-        colvalsonsrc = SA[1.0]
+        #colvalsonsrc = SA[1.0]
     end    
     ##======================================================
     
@@ -394,7 +394,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         @assert size(ijsrc)==(2,4)
         ## number of accepted points       
         naccinit = size(ijsrc,2)        
-
+@show "no ref",ijsrc
         ##======================================================
         if dodiscradj
 
@@ -451,6 +451,8 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
       
     end # if refinearoundsrc
     ###################################################### 
+   println("ijsrc")
+    display(ijsrc)
 
     #-------------------------------
     ## init FMM 
@@ -955,19 +957,26 @@ function ttaroundsrc!(fmmcoarse::FMMvars2D,vel::Array{Float64,2},src::AbstractVe
     downscalefactor::Int = 0
     noderadius::Int = 0
     if dodiscradj
-        downscalefactor = 5
+        downscalefactor = 1 #5
         ## 2 instead of 5 for adjoint to avoid messing up...
-        noderadius = 2 
+        ## if noderadius is not the same for forward and adjoint,
+        ##   then troubles with comparisons with brute-force fin diff
+        ##   will occur...
+        noderadius = 1 #2 
     else
-        downscalefactor = 5
-        noderadius = 5
+        downscalefactor = 1 #5
+        ## if noderadius is not the same for forward and adjoint,
+        ##   then troubles with comparisons with brute-force fin diff
+        ##   will occur...
+        noderadius = 1 #5
     end        
 
     ## find indices of closest node to source in the "big" array
     ## ix, iy will become the center of the refined grid
     if simtype==:cartesian
         n1_coarse,n2_coarse = grdcoarse.nx,grdcoarse.ny
-        ixsrcglob,iysrcglob = findclosestnode(src[1],src[2],grdcoarse.xinit,grdcoarse.yinit,grdcoarse.hgrid) 
+        ixsrcglob,iysrcglob = findclosestnode(src[1],src[2],grdcoarse.xinit,grdcoarse.yinit,grdcoarse.hgrid)
+        @show ixsrcglob,iysrcglob
     elseif simtype==:spherical
         n1_coarse,n2_coarse = grdcoarse.nr,grdcoarse.nθ
         ixsrcglob,iysrcglob = findclosestnode_sph(src[1],src[2],grdcoarse.rinit,grdcoarse.θinit,grdcoarse.Δr,grdcoarse.Δθ) 
@@ -985,9 +994,9 @@ function ttaroundsrc!(fmmcoarse::FMMvars2D,vel::Array{Float64,2},src::AbstractVe
     outxmax = i2coarsevirtual>n1_coarse
     outymin = j1coarsevirtual<1 
     outymax = j2coarsevirtual>n2_coarse
-    outxmin ? i1coarse=1            : i1coarse=i1coarsevirtual
+    outxmin ? i1coarse=1         : i1coarse=i1coarsevirtual
     outxmax ? i2coarse=n1_coarse : i2coarse=i2coarsevirtual
-    outymin ? j1coarse=1            : j1coarse=j1coarsevirtual
+    outymin ? j1coarse=1         : j1coarse=j1coarsevirtual
     outymax ? j2coarse=n2_coarse : j2coarse=j2coarsevirtual
     
     ##
@@ -996,6 +1005,7 @@ function ttaroundsrc!(fmmcoarse::FMMvars2D,vel::Array{Float64,2},src::AbstractVe
     # fine grid size
     n1 = (i2coarse-i1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
     n2 = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
+@show i1coarse,i2coarse,j1coarse,j2coarse
 
     ##
     ## Get the vel around the source on the coarse grid

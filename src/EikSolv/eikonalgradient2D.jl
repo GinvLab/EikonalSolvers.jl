@@ -35,9 +35,11 @@ The computations are run in parallel depending on the value of `extraparams.para
 """
 function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float64,2},
                      coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
-                     stdobs::Vector{Vector{Float64}} ;
+                     stdobs::Vector{Vector{Float64}},whichgrad::Symbol=:gradvel ;
                      extraparams::Union{ExtraParams,Nothing}=nothing)
 
+    @assert (whichgrad in (:gradvel, :gradsrcloc, :gradvelandsrcloc)) "whichgrad not in (:vel, :srcloc, :velandsrcloc)"
+    
     if extraparams==nothing
         extraparams =  ExtraParams()
     end
@@ -66,7 +68,8 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
 
     nsrc = size(coordsrc,1)
     grad = zeros(n1,n2)
-    
+    ∂χ∂xysrc = zeros(nsrc,2)
+
     if extraparams.parallelkind==:distribmem
         ##====================================
         ## Distributed memory
@@ -78,13 +81,17 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         ## array of workers' ids
         wks = workers()
         ## do the calculations
+        gradgrp = Array{Float64,2}(undef,n1,n2)
         @sync begin 
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async grad .+= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
-                                                 coordsrc[igrs,:],coordrec[igrs],
-                                                 grd,stdobs[igrs],pickobs[igrs],
-                                                 extraparams )
+                @async begin
+                    gradgrp,∂χ∂xysrc[s,:] .= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
+                                                              coordsrc[igrs,:],coordrec[igrs],
+                                                              grd,stdobs[igrs],pickobs[igrs],
+                                                              whichgrad,extraparams )
+                    grad .+= gradgrp
+                end
             end
         end
 
@@ -100,9 +107,9 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         grads = Vector{Array{Float64,2}}(undef,nchu)
         Threads.@threads for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
-            grads[s] = calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
+            grads[s],∂χ∂xysrc[s,:] = calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
                                          grd,view(stdobs,igrs),view(pickobs,igrs),
-                                         extraparams )
+                                         whichgrad,extraparams )
         end
         grad = sum(grads)
 
@@ -111,8 +118,8 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         ##====================================
         ## Serial run
         ##====================
-        grad[:,:] .= calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,
-                                       pickobs,extraparams )
+        grad,∂χ∂xysrc = calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
+                                          whichgrad,extraparams )
 
     end
 
@@ -127,7 +134,7 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         #println("Triggering GC")
         GC.gc()
     end
-    return grad
+    return grad,∂χ∂xysrc
 end
 
 ###############################################################################
@@ -141,12 +148,28 @@ Calculate the gradient for some requested sources
 function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2},
                            coordrec::AbstractVector{Array{Float64,2}},grd::GridEik2D,
                            stdobs::AbstractVector{Vector{Float64}},pickobs1::AbstractVector{Vector{Float64}},
-                           extrapars::ExtraParams )
+                           whichgrad::Symbol,extrapars::ExtraParams )
                            
     nx,ny=size(vel)
     nsrc = size(xysrc,1)
-    grad1 = zeros(nx,ny)
-  
+
+    if whichgrad==:gradvel
+        gradvel1 = zeros(nx,ny)
+        gradvelall = zeros(nx,ny)
+        gradsrcpos = nothing
+
+    elseif whichgrad==:gradsrcloc
+        gradvel1 = nothing
+        gradvelall = nothing
+        gradsrcpos = zeros(eltype(vel),nsrc,2)
+        
+    elseif whichgrad==:gradvelandsrcloc
+        gradvel1 = zeros(nx,ny)
+        gradvelall = zeros(nx,ny)
+        gradsrcpos = zeros(eltype(vel),nsrc,2)
+
+    end
+
     ## pre-allocate ttime and status arrays plus the binary heap
     fmmvars = FMMvars2D(nx,ny,refinearoundsrc=extrapars.refinearoundsrc,
                         allowfixsqarg=extrapars.allowfixsqarg)
@@ -154,7 +177,6 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
     ## pre-allocate discrete adjoint variables
     adjvars = AdjointVars2D(nx,ny)
 
-    
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
     for s=1:nsrc
@@ -169,15 +191,25 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
 
         ###########################################
         # discrete adjoint formulation for gradient(s) with respect to velocity and/or source position
-        tmpgrad,∂χ∂xy_src = discradjoint2D_FMM_SINGLESRC(adjvars,P_fmmord1,pickobs1[s],
-                                                         stdobs[s],
-                                                         vel,xysrc[s,:],grd)
-        grad1 .+= tmpgrad
+        # gradvel1,gradsrcpos1[s,:] .= discradjoint2D_FMM_SINGLESRC(adjvars,P_fmmord1,pickobs1[s],
+        #                                                      stdobs[s],vel,xysrc[s,:],grd)
+        if gradsrcpos==nothing
+            tmpgradsrcpos = gradsrcpos
+        else
+            tmpgradsrcpos = view(gradsrcpos,s,:)
+        end
+        discradjoint2D_FMM_SINGLESRC!(gradvel1,tmpgradsrcpos,adjvars,P_fmmord1,
+                                      pickobs1[s],stdobs[s],vel,xysrc[s,:],grd,whichgrad)
 
-        ###########################################
-        ## smooth gradient (with respect to velocity) around the source
-        smoothgradaroundsrc2D!(grad1,view(xysrc,s,:),grd,radiuspx=extrapars.radiussmoothgradsrc)
-
+        if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
+            ###########################################
+            ## smooth gradient (with respect to velocity) around the source
+            smoothgradaroundsrc2D!(gradvel1,view(xysrc,s,:),grd,radiuspx=extrapars.radiussmoothgradsrc)
+            ##########################################
+            ## add up gradients from different sources
+            gradvelall .+= gradvel1
+        end
+        
     end
  
     if extrapars.manualGCtrigger
@@ -186,7 +218,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
         GC.gc()
     end
     
-    return grad1
+    return gradvelall,gradsrcpos
 end 
 
 ##############################################################################
@@ -397,76 +429,34 @@ $(TYPEDSIGNATURES)
 
  Solve the discrete adjoint equations and return the gradient of the misfit.
 """
-function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Float64},
-                                      pickobs::AbstractVector{Float64},
-                                      stdobs::AbstractVector{Float64},
-                                      vel2d::AbstractArray{Float64},
-                                      xysrc::AbstractArray{Float64},
-                                      grd::GridEik2D)
+function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},Nothing},
+                                       gradsrcpos1::Union{AbstractArray{Float64},Nothing},
+                                       adjvars::AdjointVars2D,P::AbstractArray{Float64},
+                                       pickobs::AbstractVector{Float64},
+                                       stdobs::AbstractVector{Float64},
+                                       vel2d::AbstractArray{Float64},
+                                       xysrc::AbstractArray{Float64},
+                                       grd::GridEik2D,whichgrad::Symbol)
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
     
     idxconv = adjvars.idxconv
     tt_fmmord = adjvars.fmmord.ttime
-
+    
+    ###########################################
     # Derivative (along x) matrix, row-deficien
     vecDx = adjvars.fmmord.vecDx
+    ###########################################
     # Derivative (along y) matrix, row-deficien
     vecDy = adjvars.fmmord.vecDy
 
-    # # sizes of D^x, D^y
-    # Ni,Nj = vecDx.Nsize
-    # # number of rows of D^xr, D^yr, both row and col deficient
-    # nsrcpts = count(adjvars.fmmord.onsrcrows)
-    # Njr = Nj - nsrcpts
-    
-    # # Derivative (along x) matrix, row- *and* column-deficient
-    # ncolidx = length(adjvars.fmmord.vecDx.j) - nsrcpts
-    # vecDxr = VecSPDerivMat( iptr=zeros(Int64,Ni+1), j=zeros(Int64,ncolidx),
-    #                         v=zeros(ncolidx), Nsize=[Ni,Njr] )
 
-    # for i=1:Ni
-    #     l2 = vecDx.iptr[i]
-    #     for l=vecDx.iptr[i]:vecD.iptr[i+1]-1
-    #         j = vecD.j[l]    # column
-    #         # if we are not on a source point then copy current element
-    #         if sourceptsindex[j]==false
-    #             # add 1 to row pointer i+1
-    #             vecDxr.iptr[i+1] += 1
-    #             l2 += 1
-    #             vecDxr.j[l2] = j
-    #             vecDxr.v[l2] = vecDx.v[l]
-                
-    #         end
-    #     end
-    # end
-    
-
-    # # Derivative (along x) matrix, row- *and* column-deficient
-    # ncolidy = length(adjvars.fmmord.vecDy.j) - nsrcpts
-    # vecDyr = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,ncolidy),
-    #                         v=zeros(ncolidy), Nsize=[Ni,Njr] )
-
-    
-    # ################################
-    # ##  Derivative with respect to the traveltime
-    # ##     at the "onsrc" points
-    # ## precompute some terms
-    # ################################
-    # sourcerows = findall(adjvars.fmmord.sourcerows) # Bool array to indices
-    # twodiagDuDh_x = calctwodiagDuDh(vecDx,tt,sourcerows)
-    # twodiagDuDh_y = calctwodiagDuDh(vecDy,tt,sourcerows)
-
-   
-    ###########################################
-    ##  right hand side adj eq. == -adj_src^T
-    ###########################################
+    #######################################################
+    ##  right hand side adj eq. == -(adjoint source)^T
+    #######################################################
     #rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
-
     fact2 = ((P*tt_fmmord).-pickobs)./stdobs.^2
-    # @show typeof(fact2)
-    # @show typeof(P)
     # bool vector with false for src columns
     rq = .!adjvars.fmmord.onsrcrows
     PD = P[:,rq] # remove columns
@@ -478,38 +468,8 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     ##   left hand side adj eq.
     ################################
     ## compute the lhs terms
-    # println("\n\n")
-    # @show "1st term"
     vecDxDR,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrcrows)
-    # println("\n\n")
-    # @show "2nd term"
     vecDyDR,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,adjvars.fmmord.onsrcrows) 
-
-
-    # function showD(D)
-    #     for i=1:D.Nsize[1]
-    #         for l=D.iptr[i]:D.iptr[i+1]-1
-    #             j = D.j[l]
-    #             v = D.v[l]
-    #             #@show l,i,j
-    #             if i<=2
-    #                 @show i,j,v
-    #             end
-    #             # if i==0 || j==0
-    #             #     println(">>>>>>>> zero: i=$i, j=$j <<<<<<<<<")
-    #             #     @show D.iptr[i:i+10],D.j[l:l+2]
-    #             # end
-    #         end
-    #     end
-    #     return
-    # end
-
-    # @show "vecDxDR"
-    # showD(vecDxDR)
-    # @show "vecDyDR"
-    # showD(vecDyDR)
-
-
 
     #===========================================
     ###  !!! REMARK from SparseArrays:  !!! ####
@@ -544,14 +504,8 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     lhs2term = SparseMatrixCSC(Njy,Niy,vecDyDR.iptr[1:Niy+1],
                                vecDyDR.j[1:Nynnz],vecDyDR.v[1:Nynnz])
 
-
     # They are already transposed, so only add them
     tmplhs = lhs1term .+ lhs2term
-
-    # display(tmplhs)
-    # @show diag(tmplhs)
-    # display( (Array(tmplhs[1:10,1:10])) )
-    # @show size(tmplhs)
 
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
@@ -562,67 +516,53 @@ function discradjoint2D_FMM_SINGLESRC(adjvars::AdjointVars2D,P::AbstractArray{Fl
     # tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) ))
     # lhs = UpperTriangular(tmplhs)
 
-    ################################
-    ##  solve the linear system
-    ################################
+    ############################################################
+    ##  solve the linear system to get the adjoint variable
+    ############################################################
     lambda_fmmord = lhs\rhs
 
-    ################################
-    ##  Derivative with respect to the traveltime
-    ##     at the "onsrc" points
-    ##  compute gradient
-    ################################
-    ∂χ∂xy_src = ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt_fmmord,
-                                     adjvars.idxconv,lambda_fmmord,vel2d,
-                                     adjvars.fmmord.onsrcrows,xysrc,grd)
     
-    #@timeit to "reorder lambda" begin
-    ##--------------------------------------
-    # reorder lambda from fmmord to original grid!!
-    N = length(lambda_fmmord)
-    nptsonsrc = count(adjvars.fmmord.onsrcrows)
+    if whichgrad==:gradsrcloc || whichgrad==:gradvelandsrcloc
+        ##############################################
+        ##  Derivative with respect to the traveltime
+        ##     at the "onsrc" points
+        ##  compute gradient
+        ##############################################
+        gradsrcpos1 .= ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt_fmmord,
+                                            adjvars.idxconv,lambda_fmmord,vel2d,
+                                            adjvars.fmmord.onsrcrows,xysrc,grd)
+    end
+    
+    if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
 
-    # lambda must be zeroed here!
-    lambda = zeros(eltype(lambda_fmmord),N+nptsonsrc)
-    Nall = length(idxconv.lfmm2grid)
-    for p=1:N
-        # The following two lines is a complex way to map the
-        #  "full" indices to the "reduced" set of indices
-        curnptsonsrc_fmmord = count(adjvars.fmmord.onsrcrows[1:p])
-        iorig = idxconv.lfmm2grid[p+nptsonsrc]
-        # map lambda in fmmord into lambda in the original grid
-        lambda[iorig] = lambda_fmmord[p]
+        ##--------------------------------------
+        # reorder lambda from fmmord to original grid!!
+        N = length(lambda_fmmord)
+        nptsonsrc = count(adjvars.fmmord.onsrcrows)
+
+        # lambda must be zeroed here!
+        lambda = zeros(eltype(lambda_fmmord),N+nptsonsrc)
+        Nall = length(idxconv.lfmm2grid)
+        for p=1:N
+            # The following two lines is a complex way to map the
+            #  "full" indices to the "reduced" set of indices
+            curnptsonsrc_fmmord = count(adjvars.fmmord.onsrcrows[1:p])
+            iorig = idxconv.lfmm2grid[p+nptsonsrc]
+            # map lambda in fmmord into lambda in the original grid
+            lambda[iorig] = lambda_fmmord[p]
+        end
+
+        ######################################
+        # Gradient with respect to velocity
+        ######################################
+        gradvec = 2.0 .* lambda ./ vec(vel2d).^3
+        gradvel1 .= reshape(gradvec,idxconv.nx,idxconv.ny)
+
     end
 
-    # lambda = Vector{Float64}(undef,N)
-    # Nall = length(idxconv.lfmm2grid)
-    # onsrcrows_orig = zeros(Bool,Nall)
-    # @assert length(adjvars.fmmord.onsrcrows)==Nall
-    # # The following stuff is a complex way to map the
-    # #  "full" indices to the "reduced" set of indices
-    # onsrcrows_orig = zeros(Bool,Nall)
-    # for q=1:Nall
-    #     if adjvars.fmmord.onsrcrows[q]
-    #         iorig = idxconv.lfmm2grid[q]
-    #         onsrcrows_orig[iorig] = true
-    #     end
-    # end
-    # for p=1:N
-    #     curnptsonsrc_fmmord = count(adjvars.fmmord.onsrcrows[1:p])
-    #     iorig = idxconv.lfmm2grid[p+nptsonsrc] 
-    #     curnptsonsrc_orig = count(onsrcrows_orig[1:iorig])
-    #     lambda[iorig-curnptsonsrc_orig] = lambda_fmmord[p]
-    # end
-
-    #gradvec = 2.0 .* transpose(lambda) * Diagonal(1.0./ (vec(vel2d).^2) )
-    gradvec = 2.0 .* lambda ./ vec(vel2d).^3
-
-    grad2d = reshape(gradvec,idxconv.nx,idxconv.ny)
-    #end
-
-    #show(to)
-    #println()
-    return grad2d,∂χ∂xy_src
+    #@show typeof(gradvel1),typeof(gradsrcpos1)
+    #@show gradsrcpos1
+    return 
 end
 
 #######################################################################################
@@ -653,23 +593,6 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
     #     end
     # end
 
-    # # number of rows
-    # nrows = vecD.Nsize[1]
-    # ## CSR matrix-vector product
-    # for i=1:nrows
-    #     # pi=pointers to column indices
-    #     tmp1 = 0.0
-    #     for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-    #         j = vecD.j[l]j
-    #         # dot product
-    #         tmp1 += vecD.v[l]*tt[j]
-    #     end
-    #     ## scale all rows by 2*tmp1
-    #     for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-    #         vecD.v[l] = 2.0*tmp1*vecD.v[l]
-    #     end
-    # end
-
     # size of D^x or D^y
     nrows,ncols = vecD.Nsize[1],vecD.Nsize[2]
     # number of rows of D^xr, D^yr, both row and col deficient
@@ -693,7 +616,6 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
         end
     end
     
-
     #################################
     ## for grad w.r.t. source loc calculations
     twoDttDS = zeros(eltype(vecD.v),nrows,nsrcpts)
@@ -718,10 +640,6 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
             j = vecD.j[l]    # column index
 
-            # if i<=6
-            #     @show "D",i,j
-            # end
-
             if onsrcrows[j]==false
                 ############################################################### 
                 ##  Computation of 2*D*tt*DR for the adjoint variable lambda
@@ -739,10 +657,6 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
                 # update pointers
                 two_Dtt_DR.Nnnz[] += 1
                 two_Dtt_DR.lastrowupdated[] = i # this must stay here (this if and for loop)!
-
-                # if i<=10
-                #     @show i,ii,idxrowred[j],two_Dtt_DR.j[l2]
-                # end
 
             elseif onsrcrows[j]
                 ################################################################### 
@@ -919,20 +833,12 @@ function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
     dχdx_src = dot( ∂χ∂t_src, derpos[:,1] )
     dχdy_src = dot( ∂χ∂t_src, derpos[:,2] )
 
-
-    println("\n∂χ∂t_src")
-    display(∂χ∂t_src)
-    println("\n∂χ/∂x")
-    display( derpos[:,1] )
-    println("\n∂χ/∂y")
-    display( derpos[:,2] )
-
-
-    # compute the derivative 
-    #∂χ∂xy_src = derivttsrcposition2D(∂χ∂t_src,xypt,xysrc,velpts)
-    
-    # @show extrema(∂χ∂t_src)
-    @show  dχdx_src,dχdy_src
+    # println("\n∂χ∂t_src")
+    # display(∂χ∂t_src)
+    # println("\n∂χ/∂x")
+    # display( derpos[:,1] )
+    # println("\n∂χ/∂y")
+    # display( derpos[:,2] )
 
     return dχdx_src,dχdy_src
 end
@@ -949,9 +855,6 @@ function partderivttsrcpos2D(xypt::AbstractVector,xysrc::Vector,vel::Real)
     denom = vel * sqrt((xpt - xsrc)^2 + (ypt - ysrc)^2)
     deriv_x = -(xpt - xsrc) / denom
     deriv_y = -(ypt - ysrc) / denom
-
-    @show xypt,xysrc,vel
-    @show deriv_x,deriv_y
 
     return deriv_x,deriv_y
 end
