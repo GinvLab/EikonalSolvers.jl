@@ -428,11 +428,13 @@ end
 ############################################################
 
 function isacoarsegridnode(i::Int,j::Int,downscalefactor::Int,i1coarse::Int,j1coarse::Int)
-    a = rem(i, downscalefactor)
-    b = rem(j, downscalefactor)
+    a = rem(i-1, downscalefactor) 
+    b = rem(j-1, downscalefactor) 
     if a==b==0
-        icoa = div(i,downscalefactor)+i1coarse
-        jcoa = div(j,downscalefactor)+j1coarse
+        icoa = div(i-1,downscalefactor)+i1coarse
+        jcoa = div(j-1,downscalefactor)+j1coarse
+        # @show i,j,downscalefactor,i1coarse,j1coarse
+        # @show icoa,jcoa
         return true,icoa,jcoa
     else
         return false,nothing,nothing
@@ -442,13 +444,13 @@ end
 
 
 function isacoarsegridnode(i::Int,j::Int,k::Int,downscalefactor::Int,i1coarse::Int,j1coarse::Int,k1coarse::Int)
-    a = rem(i, downscalefactor)
-    b = rem(j, downscalefactor)
-    c = rem(k, downscalefactor)
+    a = rem(i-1, downscalefactor)
+    b = rem(j-1, downscalefactor)
+    c = rem(k-1, downscalefactor)
     if a==b==c==0
-        icoa = div(i,downscalefactor)+i1coarse
-        jcoa = div(j,downscalefactor)+j1coarse
-        kcoa = div(k,downscalefactor)+k1coarse
+        icoa = div(i-1,downscalefactor)+i1coarse
+        jcoa = div(j-1,downscalefactor)+j1coarse
+        kcoa = div(k-1,downscalefactor)+k1coarse
         return true,icoa,jcoa,kcoa
     else
         return false,nothing,nothing,nothing

@@ -60,8 +60,8 @@ include("EikSolv/eikonalutils.jl")
 include("EikSolv/utils.jl")
 
 ## 2D stuff
-include("EikSolv/eikonalforward2D.jl")
-include("EikSolv/eikonalgradient2D.jl")
+include("EikSolv/eikonalforwardND.jl")
+include("EikSolv/eikonalgradientND.jl")
 include("EikSolv/eikonalforward2D_alternative.jl")
 include("EikSolv/eikonalgradient2D_alternative.jl")
 
