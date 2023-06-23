@@ -183,7 +183,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
 
         ###########################################
         ## calc ttime, etc.
-        ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),grd,adjvars)
+        ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),grd,adjvars,extrapars)
 
         ###########################################
         # projection operator P ordered according to FMM order
@@ -241,7 +241,6 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     lin2cart2D!(iptorig,nx,ijpt)
     igrid = ijpt[1]
     jgrid = ijpt[2]
-    #@show irow,iptorig,ijpt,nx
     # get the codes of the derivatives (+1,-2,...)
     # extract codes for X and Y
     codex,codey = codeDxy_orig[iptorig,1],codeDxy_orig[iptorig,2]
@@ -348,9 +347,6 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     colvals[:] .= colvals[idxperm]
     addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
 
-    # if irow<=5
-    #     @show irow,colinds[1:nnzcol],colvals[1:nnzcol]
-    # end
     return
 end
 
@@ -460,7 +456,6 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
     # bool vector with false for src columns
     rq = .!adjvars.fmmord.onsrcrows
     PD = P[:,rq] # remove columns
-    # @show size(PD),size(fact2)
     rhs = - transpose(PD) * fact2
 
 
@@ -560,8 +555,6 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
 
     end
 
-    #@show typeof(gradvel1),typeof(gradsrcpos1)
-    #@show gradsrcpos1
     return 
 end
 
@@ -728,8 +721,6 @@ function derivaroundsrcfmm2D!(lseq::Integer,idxconv::MapOrderGridFMM2D,codeD::MV
                 #idxne1 = findfirst(idxconv.lfmm2grid.==l)
                 idxne1 = idxconv.lgrid2fmm[l]
                 
-                #@show lseq,l,idxne1,chosenidx
-            
                 if idxne1!=nothing && idxne1<chosenidx                   
 
                     # to make sure we chose correctly the direction
@@ -824,10 +815,8 @@ function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
         ## CONVERT linear to cartesian 2D to get point position
         lin2cart2D!(iorig_srcpts,nx,ijpt)
         xypt .= (grd.x[ijpt[1]], grd.y[ijpt[2]])
-        #@show ijpt, xypt, xysrc, velpt
 
         derpos[p,:] .= partderivttsrcpos2D(xypt,xysrc,velpt)
-        @show p,xypt,xysrc,derpos[p,:]
     end
 
     
@@ -862,3 +851,10 @@ function partderivttsrcpos2D(xypt::AbstractVector,xysrc::Vector,vel::Real)
 end
 
 ###########################################################################
+
+
+
+
+
+
+
