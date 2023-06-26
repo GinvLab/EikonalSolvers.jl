@@ -308,8 +308,10 @@ struct VarsFMMOrder2D
     "Derivative (along y) matrix, row-deficient"
     vecDy::VecSPDerivMat
     "keep track of source points in term of row index (ordered according to FMM)"
-    onsrcrows::Vector{Bool}
-
+    onsrccols::Vector{Bool}
+    "keep track of points marked as source points for the coarse grid while running the refinement of the grid around the source (ordered according to FMM)"
+    onhpoints::Vector{Bool}
+    
     function VarsFMMOrder2D(nx,ny)
         nxy =  nx*ny
         ttime = zeros(nxy)
@@ -319,10 +321,12 @@ struct VarsFMMOrder2D
                                v=zeros(nxy*3), Nsize=[nxy,nxy] )
         vecDy = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
                                v=zeros(nxy*3), Nsize=[nxy,nxy] )
-        onsrcrows = zeros(Bool,nxy)
-        return new(ttime,vecDx,vecDy,onsrcrows)
+        onsrccols = zeros(Bool,nxy) # all false
+        onhpoints = zeros(Bool,nxy) # all false
+        return new(ttime,vecDx,vecDy,onsrccols,onhpoints)
     end
 end
+
 
 struct VarsFMMOrder3D
     ttime::Vector{Float64}
