@@ -455,7 +455,6 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
     # Derivative (along y) matrix, row-deficien
     vecDy = adjvars.fmmord.vecDy
 
-
     #######################################################
     ##  right hand side adj eq. == -(adjoint source)^T
     #######################################################
@@ -465,7 +464,6 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
     rq = .!adjvars.fmmord.onsrccols
     PD = P[:,rq] # remove columns
     rhs = - transpose(PD) * fact2
-
 
     ################################
     ##   left hand side adj eq.
@@ -509,6 +507,7 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
 
     # They are already transposed, so only add them
     tmplhs = lhs1term .+ lhs2term
+
 
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
@@ -810,8 +809,6 @@ function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
         # #  to be computed in the chain rule 
         # #   ∂ψ/∂u_h * ∂u_h/∂u_s * ∂u_s/∂x_s
         # ∂u_h∂u_s = calc∂u_h∂u_s_finegrid(fmmvars_fine,adjvars_coarse,xysrc,grd)
-        @show ∂u_h∂x_s
-        @show ∂χ∂t_src
         dχdx_src = dot( ∂χ∂t_src, ∂u_h∂x_s) # along x
         dχdy_src = dot( ∂χ∂t_src, ∂u_h∂x_s) # along y
 
@@ -928,9 +925,12 @@ function calc_∂u_h∂x_s_finegrid(fmmvars,adjvars,xysrc,vel2d,grd)
     # solve the linear systemS
     ∂u_h∂u_s = A \ (-B)
 
+    println("A")
     display(A)
+    println("B")
     display(B)
-display(∂u_h∂u_s)
+    println("∂u_h∂u_s")
+    display(∂u_h∂u_s)
 
     ######################################
     ## END First part: compute ∂u_h/∂u_s
@@ -984,9 +984,6 @@ display(∂u_h∂u_s)
     ######################################
     ∂u_h∂x_s = ∂u_h∂u_s * derpos
 
-    @show ∂u_h∂u_s
-    @show derpos
-
     return ∂u_h∂x_s
 end
 
@@ -1016,6 +1013,8 @@ function calcABtermsfinegrid(vecD::VecSPDerivMat,tt::Vector{Float64},
     nhpts = count(onhpoints)
 
     @show nsrcpts,nhpts
+    @show findall(onsrccols)
+    @show findall(onhpoints)
 
     #################################
     ## for grad w.r.t. source loc calculations
@@ -1040,7 +1039,7 @@ function calcABtermsfinegrid(vecD::VecSPDerivMat,tt::Vector{Float64},
             # +nsrcpts-> onhpoints runs on all columns, while rows are reduced...
             if onhpoints[j] #&& onhpoints[i+nsrcpts] 
                 ############################################################### 
-                ##  twoDttDH = 2 ( D_ij * tt_j ) * D_ih
+                ##  ∂f_h/∂u_h = twoDttDH = 2 ( D_ij * tt_j ) * D_ih
                 ###############################################################
                 # perform the calculation only if we are not on a source point
                 #   in order to remove the columns corresponding to the source
@@ -1049,21 +1048,21 @@ function calcABtermsfinegrid(vecD::VecSPDerivMat,tt::Vector{Float64},
                 ih = count(onhpoints[1:i+nsrcpts]) 
                 twoDttDH[ih,jh] = 2.0 * tmp1 * vecD.v[l]
 
-                @show i,j,ih,jh
+                #@show i,j,ih,jh
             end
 
             # +nsrcpts-> onhpoints runs on all columns, while rows are reduced...
             if onsrccols[j] #&& onhpoints[i+nsrcpts]
                 # Remark: onsrc in the fine grid
                 ################################################################### 
-                ##  twoDttDS = 2 ( D_ij * tt_j ) * D_is
+                ##  ∂f_h/∂u_s = twoDttDS = 2 ( D_ij * tt_j ) * D_is
                 ###################################################################
                 jss = count(onsrccols[1:j])
                 iss = count(onhpoints[1:i+nsrcpts])
-                @show i,j,iss,jss,onhpoints[1+nsrcpts]
-                # twoDttDS[iss,jss] = 2.0 * tmp1 * vecD.v[l]
+                #twoDttDS[iss,jss] = 2.0 * tmp1 * vecD.v[l]
+                @show i,j,iss,jss,onhpoints[i+nsrcpts]
                 # println()
-                # @show iss,jss,twoDttDS[iss,jss]
+                # @show iss,jss,
                 # println()
             end
 
@@ -1074,7 +1073,6 @@ function calcABtermsfinegrid(vecD::VecSPDerivMat,tt::Vector{Float64},
     display(twoDttDH)
     println("twoDttDS")
     display(twoDttDS)
-
 
     return twoDttDH,twoDttDS
 end

@@ -257,7 +257,11 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
     if dodiscradj
         ##
         ##  Init discrete adjoint stuff
-        ## 
+        ##
+        nxy = prod(size(vel))
+        adjvars.fmmord.vecDx.Nsize .= [nxy,nxy]
+        adjvars.fmmord.vecDy.Nsize .= [nxy,nxy]
+        ##
         adjvars.fmmord.vecDx.lastrowupdated[] = 0
         adjvars.fmmord.vecDy.lastrowupdated[] = 0
         adjvars.fmmord.vecDx.Nnnz[] = 0
