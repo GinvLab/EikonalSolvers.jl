@@ -176,7 +176,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
     fmmvars = FMMvars2D(nx,ny,refinearoundsrc=extrapars.refinearoundsrc,
                         allowfixsqarg=extrapars.allowfixsqarg)
     
-    ## pre-allocate discrete adjoint variables
+    ## pre-allocate discrete adjoint variables for coarse grid
     adjvars = AdjointVars2D(nx,ny)
 
     # looping on 1...nsrc because only already selected srcs have been
@@ -185,13 +185,25 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
 
         ###########################################
         ## calc ttime, etc.
-        ∂u_h∂x_s = ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),grd,adjvars,extrapars,
-                                whichgrad=whichgrad)
-
+        if extrapars.refinearoundsrc
+            # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
+            #  because the size of the grid may change when hitting borders, etc.
+            fmmvars_fine,adjvars_fine = ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),
+                                                     grd,adjvars,extrapars)
+        else
+            ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),grd,adjvars,extrapars)
+        end
 
         ###########################################
         # projection operator P ordered according to FMM order
-        P_fmmord1 = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
+        if extrapars.refinearoundsrc
+            # P from fine grid = 
+            H_fmmord_fine = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
+            # P from coarse grid
+            P_fmmord = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
+        else
+            P_fmmord = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
+        end
 
         ###########################################
         # discrete adjoint formulation for gradient(s) with respect to velocity and/or source position
@@ -202,10 +214,11 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
         else
             tmpgradsrcpos = view(gradsrcpos,s,:)
         end
-        discradjoint2D_FMM_SINGLESRC!(gradvel1,tmpgradsrcpos,adjvars,P_fmmord1,
+        discradjoint2D_FMM_SINGLESRC!(gradvel1,tmpgradsrcpos,adjvars,P_fmmord,
                                       pickobs1[s],stdobs[s],vel,xysrc[s,:],grd,whichgrad,
-                                      refinearoundsrc=extrapars.refinearoundsrc,∂u_h∂x_s=∂u_h∂x_s)
+                                      refinearoundsrc=extrapars.refinearoundsrc ) #,∂u_h∂x_s=∂u_h∂x_s)
 
+        
         if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
             ###########################################
             ## smooth gradient (with respect to velocity) around the source
@@ -439,8 +452,7 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
                                        vel2d::AbstractArray{Float64},
                                        xysrc::AbstractArray{Float64},
                                        grd::GridEik2D,whichgrad::Symbol;
-                                       refinearoundsrc::Bool,
-                                       ∂u_h∂x_s)
+                                       refinearoundsrc::Bool )
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
@@ -533,8 +545,8 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
         gradsrcpos1 .= ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt_fmmord,
                                             adjvars.idxconv,lambda_fmmord,vel2d,
                                             adjvars.fmmord.onsrccols,xysrc,grd,
-                                            refinearoundsrc=refinearoundsrc,
-                                            ∂u_h∂x_s=∂u_h∂x_s)
+                                            refinearoundsrc=refinearoundsrc ) #,
+                                            #∂u_h∂x_s=∂u_h∂x_s)
     end
     
     if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
@@ -782,8 +794,8 @@ function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
                               idxconv,
                               lambda::AbstractArray{Float64},
                               vel2d::Array{Float64,2},sourcerows,xysrc,grd::GridEik2D;
-                              refinearoundsrc::Bool,
-                              ∂u_h∂x_s)
+                              refinearoundsrc::Bool ) #,
+                              #∂u_h∂x_s)
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
@@ -1078,11 +1090,4 @@ function calcABtermsfinegrid(vecD::VecSPDerivMat,tt::Vector{Float64},
 end
 
 ###########################################################################
-
-
-
-
-
-
-
 

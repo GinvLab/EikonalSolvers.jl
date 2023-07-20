@@ -220,9 +220,7 @@ end
 #################################################################################
 
 function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVector{Float64},grd::GridEik2D,
-                      adjvars::Union{AdjointVars2D,Nothing},extrapars::ExtraParams ;
-                      whichgrad::Symbol=:none  )
-
+                      adjvars::Union{AdjointVars2D,Nothing},extrapars::ExtraParams )
     
     if adjvars==nothing
         dodiscradj=false
@@ -281,15 +279,10 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         ## DO refinement around the source      
         ##
         ##=========================================
-        if whichgrad==:gradsrcloc || whichgrad==:gradvelandsrcloc
-            dogradsrcpos = true
-            ijsrc,∂u_h∂x_s = runrefinementaroundsrc!(fmmvars,vel,src,grd,adjvars,extrapars,
-                                                     dogradsrcpos)
-        else
-            dogradsrcpos = false
-            ijsrc = runrefinementaroundsrc!(fmmvars,vel,src,grd,adjvars,extrapars,
-                                            dogradsrcpos)
-        end
+        # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
+        #  because the size of the grid may change when hitting borders, etc.
+        ijsrc,fmmvars_fine,adjvars_fine = runrefinementaroundsrc!(fmmvars,vel,src,grd,adjvars,extrapars)
+                                       
   
     else        
         ##=========================================
@@ -307,171 +300,37 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
     ## Run main simulation (coarse grid)
     ##
     ##=========================================
-    ttFMM_core!( fmmvars,vel,grd,ijsrc,adjvars,isthisrefinementsrc=false )
+    ttFMM_core!( fmmvars,vel,grd,ijsrc,adjvars )
 
-    if dogradsrcpos
-        return ∂u_h∂x_s
+    if fmmvars.refinearoundsrc && dodiscradj 
+        return fmmvars_fine,adjvars_fine
     end
     return
 end
 
 ###########################################################################
 
-
 function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc::AbstractVector{Float64},
-                                 grd::GridEik2D,adjvars::Union{AdjointVars2D,Nothing},extrapars::ExtraParams,
-                                 dogradsrcpos::Bool )
-
+                                 grd::GridEik2D,adjvars::Union{AdjointVars2D,Nothing},extrapars::ExtraParams)
+                                
     if adjvars==nothing
         dodiscradj=false
     else
         dodiscradj=true
     end
 
-    if typeof(grd)==Grid2D
-        simtype=:cartesian
-    elseif typeof(grd)==Grid2DSphere
-        simtype=:spherical
-    end
-    
-    ##
-    ## 2x10 nodes -> 2x50 nodes
-    ##
-    downscalefactor::Int = 0
-    noderadius::Int = 0
-    if dodiscradj
-        downscalefactor = 5
-        ## 2 instead of 5 for adjoint to avoid messing up...
-        ## if noderadius is not the same for forward and adjoint,
-        ##   then troubles with comparisons with brute-force fin diff
-        ##   will occur...
-        noderadius = 2 
-    else
-        downscalefactor = 5
-        ## if noderadius is not the same for forward and adjoint,
-        ##   then troubles with comparisons with brute-force fin diff
-        ##   will occur...
-        noderadius = 2
-    end        
-
-    @show noderadius
-
-    ## find indices of closest node to source in the "big" array
-    ## ix, iy will become the center of the refined grid
+    ##==================================================
+    grdfine,vel_fine,srcrefvars = createfinegrid(grd,xysrc,vel)
     if simtype==:cartesian
-        n1_coarse,n2_coarse = grd.nx,grd.ny
-        ixsrcglob,iysrcglob = findclosestnode(xysrc[1],xysrc[2],grd.xinit,grd.yinit,grd.hgrid)
-
-        rx = xysrc[1]-grd.x[ixsrcglob]
-        ry = xysrc[2]-grd.y[iysrcglob]
-
-        ## four points
-        ijsrcpts = @MMatrix zeros(Int64,4,2)
-        halfg = 0.0
-        if rx>=halfg
-            srci = (ixsrcglob,ixsrcglob+1)
-        else
-            srci = (ixsrcglob-1,ixsrcglob)
-        end
-        if ry>=halfg
-            srcj = (iysrcglob,iysrcglob+1)
-        else
-            srcj = (iysrcglob-1,iysrcglob)
-        end
-        
-        l=1
-        for j=1:2, i=1:2
-            ijsrcpts[l,:] .= (srci[i],srcj[j])
-            l+=1
-        end
-        
+        n1_fine,n2_fine = grdfine.nx,grdfine.ny
     elseif simtype==:spherical
-        n1_coarse,n2_coarse = grd.nr,grd.nθ
-        ixsrcglob,iysrcglob = findclosestnode_sph(xysrc[1],xysrc[2],grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
-        error(" ttaroundsrc!(): spherical coordinates still work in progress...")
-    end
-
-    
-    ##
-    ## Define chunck of coarse grid
-    ##
-    # i1coarsevirtual = ixsrcglob - noderadius
-    # i2coarsevirtual = ixsrcglob + noderadius
-    # j1coarsevirtual = iysrcglob - noderadius
-    # j2coarsevirtual = iysrcglob + noderadius
-    i1coarsevirtual = minimum(ijsrcpts[:,1]) - noderadius
-    i2coarsevirtual = maximum(ijsrcpts[:,1]) + noderadius
-    j1coarsevirtual = minimum(ijsrcpts[:,2]) - noderadius
-    j2coarsevirtual = maximum(ijsrcpts[:,2]) + noderadius
-    # if hitting borders
-    outxmin = i1coarsevirtual<1
-    outxmax = i2coarsevirtual>n1_coarse
-    outymin = j1coarsevirtual<1 
-    outymax = j2coarsevirtual>n2_coarse
-    outxmin ? i1coarse=1         : i1coarse=i1coarsevirtual
-    outxmax ? i2coarse=n1_coarse : i2coarse=i2coarsevirtual
-    outymin ? j1coarse=1         : j1coarse=j1coarsevirtual
-    outymax ? j2coarse=n2_coarse : j2coarse=j2coarsevirtual
-    
-    ##
-    ## Refined grid parameters
-    ##
-    # fine grid size
-    n1_fine = (i2coarse-i1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
-    n2_fine = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
-
-    ##
-    ## Get the vel around the source on the coarse grid
-    ##
-    velcoarsegrd = view(vel,i1coarse:i2coarse,j1coarse:j2coarse)    
-
-    ##
-    ## Nearest neighbor interpolation for velocity on finer grid
-    ## 
-    vel_fine = Array{Float64}(undef,n1_fine,n2_fine)
-    for j=1:n2_fine
-        for i=1:n1_fine
-            di=div(i-1,downscalefactor)
-            ri=i-di*downscalefactor
-            ii = ri>=downscalefactor/2+1 ? di+2 : di+1
-
-            dj=div(j-1,downscalefactor)
-            rj=j-dj*downscalefactor
-            jj = rj>=downscalefactor/2+1 ? dj+2 : dj+1
-
-            vel_fine[i,j] = velcoarsegrd[ii,jj]
-        end
-    end
-
-    if simtype==:cartesian
-        # set origin of the fine grid
-        xinit = grd.x[i1coarse]
-        yinit = grd.y[j1coarse]
-        dh = grd.hgrid/downscalefactor
-        # fine grid
-        grd_fine = Grid2D(hgrid=dh,xinit=xinit,yinit=yinit,nx=n1_fine,ny=n2_fine)
-
-    elseif simtype==:spherical
-        # set origin of the fine grid
-        rinit = grd.r[i1coarse]
-        θinit = grd.θ[j1coarse]
-        dr = grd.Δr/downscalefactor
-        dθ = grd.Δθ/downscalefactor
-        # fine grid
-        grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=n1_fine,nθ=n2_fine,rinit=rinit,θinit=θinit)
-    end
-    
-    if adjvars==nothing
-        adjvars_fine = nothing
-    else
-        ## pre-allocate discrete adjoint variables
-        adjvars_fine = AdjointVars2D(n1_fine,n2_fine)
+        n1_fine,n2_fine = grdfine.nr,grdfine.nθ
     end
     
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars_fine = FMMvars2D(n1_fine,n2_fine,refinearoundsrc=false,
-                             allowfixsqarg=extrapars.allowfixsqarg)
-    @show n1_fine,n2_fine
+    fmmvars_finegrid = FMMvars2D(n1_fine,n2_fine,refinearoundsrc=false,
+                                 allowfixsqarg=extrapars.allowfixsqarg)
+    
     ##==================================================
     # init ttime 
     inittt = 1e30
@@ -480,6 +339,8 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc:
     fmmvars_fine.status[:,:] .= 0   ## set all to far
     ##==================================================
     if dodiscradj
+        ## pre-allocate adjoint variables for the fine grid
+        adjvars_fine = AdjointVars2D(n1_fine,n2_fine)
         ##
         ##  discrete adjoint: init stuff
         ## 
@@ -500,82 +361,29 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc:
     ## REGULAR grid
     if simtype==:cartesian
         ijsrc_fine = sourceboxloctt!(fmmvars_fine,vel_fine,xysrc,grd_fine )
+       
+        
     elseif simtype==:spherical
         ijsrc_fine = sourceboxloctt_sph!(fmmvars_fine,vel_fine,xysrc,grd_fine )
+       
     end
 
-
-#     ##=========================================
-#     if dodiscradj
-#         ## number of accepted points       
-#         naccinit = size(ijsrc_fine,2)        
-#         n1,n2 = size(vel)
-
-#         # discrete adjoint: first visited points in FMM order
-#         ttfirstpts = Vector{Float64}(undef,naccinit)
-#         for l=1:naccinit
-#             i,j = ijsrc_fine[1,l],ijsrc_fine[2,l]
-#             ttij = fmmvars.ttime[i,j]
-#             # store initial points' FMM order
-#             ttfirstpts[l] = ttij
-#         end
-#         # sort according to arrival time
-#         spidx = sortperm(ttfirstpts)
-        
-#         # store the first accepted points' order
-#         node_coarse = 1
-#         for l=1:naccinit
-#             # ordered index
-#             p = spidx[l]
-#             # go from cartesian (i,j) to linear
-#             ia,ja = ijsrc_fine[1,l],ijsrc_fine[2,l]
-#             # adj stuff
-#             adjvars.idxconv.lfmm2grid[l] = cart2lin2D(ia,ja,n1)
-# @show l,ia,ja,adjvars.idxconv.lfmm2grid[l]
-
-#             ######################################
-#             # store arrival time for first points in FMM order
-#             ttgrid = fmmvars.ttime[ia,ja]
-#             ## The following to avoid a singular upper triangular matrix in the
-#             ##  adjoint equation. Otherwise there will be a row of only zeros in the LHS.
-#             if ttgrid==0.0
-#                 adjvars.fmmord.ttime[l] = 0.0 #eps()
-#                 @warn("Source is exactly on a node, spurious results may appear. Work is in progress to fix the problem.\n Set smoothgradsourceradius>0 to mitigate the issue")
-#             else
-#                 adjvars.fmmord.ttime[l] = ttgrid
-#             end
-
-#             ##======================================================
-#             ##  We are on a source node
-#             ##================================
-#             # add true for this point being on src
-#             adjvars.fmmord.onsrccols[l] = true
-#             # remove one row because of point being on source!
-#             adjvars.fmmord.vecDx.Nsize[1] -= 1
-#             adjvars.fmmord.vecDy.Nsize[1] -= 1
-
-#         end
-#     end # if dodiscradj
-#     ##======================================================
-
-    
-    ijsrc = ttFMM_core!( fmmvars_fine,vel_fine,grd_fine,ijsrc_fine,adjvars_fine,
-                         isthisrefinementsrc=true, fmmvars_coarse=fmmvars, adjvars_coarse=adjvars,
-                         downscalefactor=5,ij1coarse=[i1coarse,j1coarse],
-                         outxyminmax=[outxmin,outxmax,outymin,outymax] )
-    
     ##======================================================
 
+    ijsrc = ttFMM_core!(fmmvars_fine,vel_fine,grd_fine,ijsrc_fine,adjvars_fine,
+                        fmmvars_coarse=fmmvars, adjvars_coarse=adjvars, srcrefvars)
+                             
+    ##======================================================
 
-    if dogradsrcpos
-        ##======================================================
-        ## Derivatives w.r.t. source position.  !!!FINE GRID!!!
-        ##======================================================
-        @show extrema(adjvars_fine.fmmord.vecDx.v)
-        ∂u_h∂x_s = calc_∂u_h∂x_s_finegrid(fmmvars_fine,adjvars_fine,xysrc,vel_fine,grd_fine)
+    # if dogradsrcpos
+    #     ##======================================================
+    #     ## Derivatives w.r.t. source position.  !!!FINE GRID!!!
+    #     ##======================================================
+    #     @show extrema(adjvars_fine.fmmord.vecDx.v)
+    #     ∂u_h∂x_s = calc_∂u_h∂x_s_finegrid(fmmvars_fine,adjvars_fine,xysrc,vel_fine,grd_fine)
 
-        println("hello from runrefinementaroundsrc(): ∂u_h∂x_s = $∂u_h∂x_s")
-    end
+    #     println("hello from runrefinementaroundsrc(): ∂u_h∂x_s = $∂u_h∂x_s")
+    # end
 
     
     ##======================================================
@@ -638,7 +446,7 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc:
     ##======================================================
 
     if dogradsrcpos
-        return ijsrc,∂u_h∂x_s
+        return ijsrc,fmmvars_fine,adjvars_fine
     else
         return ijsrc
     end
@@ -669,58 +477,6 @@ function initnorefsrc(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         ijsrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
     end
 
-    # ##=========================================
-    # if dodiscradj
-    #     ## number of accepted points       
-    #     naccinit = size(ijsrc,2)        
-    #     n1,n2 = size(vel)
-
-    #     # discrete adjoint: first visited points in FMM order
-    #     ttfirstpts = Vector{Float64}(undef,naccinit)
-    #     for l=1:naccinit
-    #         i,j = ijsrc[1,l],ijsrc[2,l]
-    #         ttij = fmmvars.ttime[i,j]
-    #         # store initial points' FMM order
-    #         ttfirstpts[l] = ttij
-    #     end
-    #     # sort according to arrival time
-    #     spidx = sortperm(ttfirstpts)
-        
-    #     # store the first accepted points' order
-    #     node_coarse = 1
-    #     for l=1:naccinit
-    #         # ordered index
-    #         p = spidx[l]
-    #         # go from cartesian (i,j) to linear
-    #         ia,ja = ijsrc[1,l],ijsrc[2,l]
-    #         # adj stuff
-    #         adjvars.idxconv.lfmm2grid[l] = cart2lin2D(ia,ja,n1)
-
-    #         ######################################
-    #         # store arrival time for first points in FMM order
-    #         ttgrid = fmmvars.ttime[ia,ja]
-    #         ## The following to avoid a singular upper triangular matrix in the
-    #         ##  adjoint equation. Otherwise there will be a row of only zeros in the LHS.
-    #         if ttgrid==0.0
-    #             adjvars.fmmord.ttime[l] = 0.0 #eps()
-    #             @warn("Source is exactly on a node, spurious results may appear. Work is in progress to fix the problem.\n Set smoothgradsourceradius>0 to mitigate the issue")
-    #         else
-    #             adjvars.fmmord.ttime[l] = ttgrid
-    #         end
-
-    #         ##======================================================
-    #         ##  We are on a source node
-    #         ##================================
-    #         # add true for this point being on src
-    #         adjvars.fmmord.onsrccols[l] = true
-    #         # remove one row because of point being on source!
-    #         adjvars.fmmord.vecDx.Nsize[1] -= 1
-    #         adjvars.fmmord.vecDy.Nsize[1] -= 1
-
-    #     end
-    # end # if dodiscradj
-    # ##======================================================
-
     return ijsrc
 end
 
@@ -733,23 +489,27 @@ $(TYPEDSIGNATURES)
 """
 function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
                      ijsrc::AbstractArray{<:Integer,2},adjvars::Union{AdjointVars2D,Nothing} ;
-                     isthisrefinementsrc::Bool=false,
                      fmmvars_coarse::Union{FMMvars2D,Nothing}=nothing,
                      adjvars_coarse::Union{AdjointVars2D,Nothing}=nothing,
-                     downscalefactor::Union{Integer,Nothing}=nothing,
-                     ij1coarse::Union{Vector{<:Integer},Nothing}=nothing,
-                     outxyminmax::Union{Vector{<:Integer},Nothing}=nothing)
+                     srcrefvars::Union{SrcRefinVars2D,Nothing}=nothing)
+
+    if srcrefvars==nothing
+        isthisrefinementsrc = false
+    else
+        isthisrefinementsrc = true
+    end
                      
     if isthisrefinementsrc
         @assert fmmvars.refinearoundsrc==false "ttFMM_core!(): Inconsistency: isthisrefinementsrc and fmmvars.refinearoundsrc are both true."
     end
     if isthisrefinementsrc
-        i1coarse = ij1coarse[1]
-        j1coarse = ij1coarse[2]
-        outxmin = outxyminmax[1]
-        outxmax = outxyminmax[2]
-        outymin = outxyminmax[3]
-        outymax = outxyminmax[4]
+        downscalefactor = srcrefvars.downscalefactor
+        i1coarse = srcrefvars.ij1coarse[1]
+        j1coarse = srcrefvars.ij1coarse[2]
+        outxmin = srcrefvars.outxyminmax[1]
+        outxmax = srcrefvars.outxyminmax[2]
+        outymin = srcrefvars.outxyminmax[3]
+        outymax = srcrefvars.outxyminmax[4]
     end
 
     if adjvars==nothing
@@ -904,7 +664,6 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
 
             i = ijsrc[1,l] + neigh[ne,1]
             j = ijsrc[2,l] + neigh[ne,2]
-
             
             ## if the point is out of bounds skip this iteration
             if (i>n1) || (i<1) || (j>n2) || (j<1)
@@ -1028,7 +787,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
         end # if isthisrefinementsrc      
         ##===================================
 
-
+        ##===========================================
         ## try all neighbors of newly accepted point
         for ne=1:4 
 
@@ -1071,79 +830,12 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
 
             end
         end
-        ##-------------------------------
-    end
+
+    end # for node=naccinit+1:totnpts 
 
     ##======================================================
     if dodiscradj
-
         createsparsederivativematrices!(grd,adjvars)
-
-        # ## pre-compute the mapping between fmm and orig order
-        # for i=1:n12
-        #     ifm = adjvars.idxconv.lfmm2grid[i]
-        #     adjvars.idxconv.lgrid2fmm[ifm] = i
-        # end
-
-        # # pre-determine derivative coefficients for positive codes (0,+1,+2)
-        # if simtype==:cartesian
-        #     hgrid = grd.hgrid
-        #     #allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
-        #     allcoeffx = CoeffDerivCartesian( MVector(-1.0/hgrid,
-        #                                              1.0/hgrid), 
-        #                                      MVector(-3.0/(2.0*hgrid),
-        #                                              4.0/(2.0*hgrid),
-        #                                              -1.0/(2.0*hgrid)) )
-        #     # coefficients along X are the same than along Y
-        #     allcoeffy = allcoeffx
-
-        # elseif simtype==:spherical
-        #     Δr = grd.Δr
-        #     ## DEG to RAD !!!!
-        #     Δarc = [grd.r[i] * deg2rad(grd.Δθ) for i=1:grd.nr]
-        #     # coefficients
-        #     coe_r_1st = [-1.0/Δr  1.0/Δr]
-        #     coe_r_2nd = [-3.0/(2.0*Δr)  4.0/(2.0*Δr) -1.0/(2.0*Δr) ]
-        #     coe_θ_1st = [-1.0 ./ Δarc  1.0 ./ Δarc ]
-        #     coe_θ_2nd = [-3.0./(2.0*Δarc)  4.0./(2.0*Δarc)  -1.0./(2.0*Δarc) ]
-
-        #     allcoeffx = CoeffDerivSpherical2D( coe_r_1st, coe_r_2nd )
-        #     allcoeffy = CoeffDerivSpherical2D( coe_θ_1st, coe_θ_2nd )
-
-        # end
-
-        # ##
-        # ## Set the derivative operators in FMM order, skipping source points onwards
-        # ## 
-        # ##   From adjvars.fmmord.vecDx.lastrowupdated[]+1 onwards because some rows might have already
-        # ##   been updated above and the CSR format used here requires to add rows in sequence to
-        # ##   avoid expensive re-allocations
-        # #startloop = adjvars.fmmord.vecDx.lastrowupdated[]+1
-        # #startloop = count(adjvars.fmmord.onsrccols)+1
-        # nptsfixedtt = count(adjvars.fmmord.onsrccols)
-
-        # if isthisrefinementsrc
-        #     @show nptsfixedtt
-        # end
-
-        # colinds = MVector(0,0,0)
-        # colvals = MVector(0.0,0.0,0.0)
-        # idxperm = MVector(0,0,0)
-
-        # #for irow=startloop:n12
-        # for irow=1:adjvars.fmmord.vecDx.Nsize[1]
-            
-        #     # compute the coefficients for X  derivatives
-        #     setcoeffderiv2D!(adjvars.fmmord.vecDx,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffx,ptij,
-        #                      colinds,colvals,idxperm,nptsfixedtt, axis=:X,simtype=simtype)
-
-            
-        #     # compute the coefficients for Y derivatives
-        #     setcoeffderiv2D!(adjvars.fmmord.vecDy,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffy,ptij,
-        #                      colinds,colvals,idxperm,nptsfixedtt, axis=:Y,simtype=simtype)
-                        
-        # end
-
     end # if dodiscradj
     ##======================================================
     
@@ -1687,3 +1379,145 @@ function createsparsederivativematrices!(grd,adjvars)
 end
 
 ##########################################################################
+
+function createfinegrid(grd,xysrc,vel)
+
+    if typeof(grd)==Grid2D
+        simtype=:cartesian
+    elseif typeof(grd)==Grid2DSphere
+        simtype=:spherical
+    end
+    ##
+    ## 2x10 nodes -> 2x50 nodes
+    ##
+    downscalefactor::Int = 0
+    noderadius::Int = 0
+    if dodiscradj
+        downscalefactor = 5
+        ## 2 instead of 5 for adjoint to avoid messing up...
+        ## if noderadius is not the same for forward and adjoint,
+        ##   then troubles with comparisons with brute-force fin diff
+        ##   will occur...
+        noderadius = 2 
+    else
+        downscalefactor = 5
+        ## if noderadius is not the same for forward and adjoint,
+        ##   then troubles with comparisons with brute-force fin diff
+        ##   will occur...
+        noderadius = 2
+    end        
+
+    @show noderadius
+
+    ## find indices of closest node to source in the "big" array
+    ## ix, iy will become the center of the refined grid
+    if simtype==:cartesian
+        n1_coarse,n2_coarse = grd.nx,grd.ny
+        ixsrcglob,iysrcglob = findclosestnode(xysrc[1],xysrc[2],grd.xinit,grd.yinit,grd.hgrid)
+
+        rx = xysrc[1]-grd.x[ixsrcglob]
+        ry = xysrc[2]-grd.y[iysrcglob]
+
+        ## four points
+        ijsrcpts = @MMatrix zeros(Int64,4,2)
+        halfg = 0.0
+        if rx>=halfg
+            srci = (ixsrcglob,ixsrcglob+1)
+        else
+            srci = (ixsrcglob-1,ixsrcglob)
+        end
+        if ry>=halfg
+            srcj = (iysrcglob,iysrcglob+1)
+        else
+            srcj = (iysrcglob-1,iysrcglob)
+        end
+        
+        l=1
+        for j=1:2, i=1:2
+            ijsrcpts[l,:] .= (srci[i],srcj[j])
+            l+=1
+        end
+        
+    elseif simtype==:spherical
+        n1_coarse,n2_coarse = grd.nr,grd.nθ
+        ixsrcglob,iysrcglob = findclosestnode_sph(xysrc[1],xysrc[2],grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
+        error(" ttaroundsrc!(): spherical coordinates still work in progress...")
+    end
+
+    
+    ##
+    ## Define chunck of coarse grid
+    ##
+    # i1coarsevirtual = ixsrcglob - noderadius
+    # i2coarsevirtual = ixsrcglob + noderadius
+    # j1coarsevirtual = iysrcglob - noderadius
+    # j2coarsevirtual = iysrcglob + noderadius
+    i1coarsevirtual = minimum(ijsrcpts[:,1]) - noderadius
+    i2coarsevirtual = maximum(ijsrcpts[:,1]) + noderadius
+    j1coarsevirtual = minimum(ijsrcpts[:,2]) - noderadius
+    j2coarsevirtual = maximum(ijsrcpts[:,2]) + noderadius
+    # if hitting borders
+    outxmin = i1coarsevirtual<1
+    outxmax = i2coarsevirtual>n1_coarse
+    outymin = j1coarsevirtual<1 
+    outymax = j2coarsevirtual>n2_coarse
+    outxmin ? i1coarse=1         : i1coarse=i1coarsevirtual
+    outxmax ? i2coarse=n1_coarse : i2coarse=i2coarsevirtual
+    outymin ? j1coarse=1         : j1coarse=j1coarsevirtual
+    outymax ? j2coarse=n2_coarse : j2coarse=j2coarsevirtual
+    
+    ##
+    ## Refined grid parameters
+    ##
+    # fine grid size
+    n1_fine = (i2coarse-i1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
+    n2_fine = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
+   
+
+    ##
+    ## Get the vel around the source on the coarse grid
+    ##
+    velcoarsegrd = view(vel,i1coarse:i2coarse,j1coarse:j2coarse)    
+
+    ##
+    ## Nearest neighbor interpolation for velocity on finer grid
+    ## 
+    vel_fine = Array{Float64}(undef,n1_fine,n2_fine)
+    for j=1:n2_fine
+        for i=1:n1_fine
+            di=div(i-1,downscalefactor)
+            ri=i-di*downscalefactor
+            ii = ri>=downscalefactor/2+1 ? di+2 : di+1
+
+            dj=div(j-1,downscalefactor)
+            rj=j-dj*downscalefactor
+            jj = rj>=downscalefactor/2+1 ? dj+2 : dj+1
+
+            vel_fine[i,j] = velcoarsegrd[ii,jj]
+        end
+    end
+
+    if simtype==:cartesian
+        # set origin of the fine grid
+        xinit = grd.x[i1coarse]
+        yinit = grd.y[j1coarse]
+        dh = grd.hgrid/downscalefactor
+        # fine grid
+        grd_fine = Grid2D(hgrid=dh,xinit=xinit,yinit=yinit,nx=n1_fine,ny=n2_fine)
+
+    elseif simtype==:spherical
+        # set origin of the fine grid
+        rinit = grd.r[i1coarse]
+        θinit = grd.θ[j1coarse]
+        dr = grd.Δr/downscalefactor
+        dθ = grd.Δθ/downscalefactor
+        # fine grid
+        grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=n1_fine,nθ=n2_fine,rinit=rinit,θinit=θinit)
+    end
+
+    srcrefvars = SrcRefinVars2D(downscalefactor,(i1coarse,j1coarse),(outxmin,outxmax,outymin,outymax))
+
+    return grdfine,vel_fine,srcrefvars
+end
+
+###########################################################################
