@@ -184,39 +184,61 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
     for s=1:nsrc
 
         ###########################################
-        ## calc ttime, etc.
+        ## Get the traveltime, forward and adjoint parameters, etc.
         if extrapars.refinearoundsrc
             # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
             #  because the size of the grid may change when hitting borders, etc.
-            fmmvars_fine,adjvars_fine = ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),
-                                                     grd,adjvars,extrapars)
+            fmmvars_fine,adjvars_fine,grd_fine,vel_fine,ijhpts = ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),
+                                                                     grd,adjvars,extrapars)
         else
             ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),grd,adjvars,extrapars)
+            fmmvars_fine=nothing
+            adjvars_fine=nothing
+            grd_fine=nothing
+            vel_fine=nothing
         end
 
-        ###########################################
-        # projection operator P ordered according to FMM order
-        if extrapars.refinearoundsrc
-            # P from fine grid = 
-            H_fmmord_fine = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
-            # P from coarse grid
-            P_fmmord = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
-        else
-            P_fmmord = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
-        end
 
-        ###########################################
-        # discrete adjoint formulation for gradient(s) with respect to velocity and/or source position
-        # gradvel1,gradsrcpos1[s,:] .= discradjoint2D_FMM_SINGLESRC(adjvars,P_fmmord1,pickobs1[s],
-        #                                                      stdobs[s],vel,xysrc[s,:],grd)
+
+        ###############################################################
+        # Solve the adjoint problem(s) and get the requested gradient(s)
         if gradsrcpos==nothing
             tmpgradsrcpos = gradsrcpos
         else
             tmpgradsrcpos = view(gradsrcpos,s,:)
         end
-        discradjoint2D_FMM_SINGLESRC!(gradvel1,tmpgradsrcpos,adjvars,P_fmmord,
-                                      pickobs1[s],stdobs[s],vel,xysrc[s,:],grd,whichgrad,
-                                      refinearoundsrc=extrapars.refinearoundsrc ) #,∂u_h∂x_s=∂u_h∂x_s)
+                
+        solveadjointgetgrads_singlesrc!(gradvel1,tmpgradsrcpos,
+                                        fmmvars,adjvars,
+                                        xysrc[s,:],coordrec[s],pickobs1[s],stdobs[s],
+                                        vel,grd,whichgrad,extrapars.refinearoundsrc,
+                                        fmmvars_fine=fmmvars_fine,
+                                        adjvars_fine=adjvars_fine,
+                                        grd_fine=grd_fine,
+                                        vel_fine=vel_fine)
+
+
+        ###########################################
+        # projection operator P ordered according to FMM order        
+        # if extrapars.refinearoundsrc
+        #     # P from fine grid = 
+        #     H_fmmord_fine = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
+        # end
+        # # P from coarse grid
+        # P_fmmord = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
+
+        ###########################################
+        # discrete adjoint formulation for gradient(s) with respect to velocity and/or source position
+        # gradvel1,gradsrcpos1[s,:] .= discradjoint2D_FMM_SINGLESRC(adjvars,P_fmmord1,pickobs1[s],
+        #                                                      stdobs[s],vel,xysrc[s,:],grd)
+        # if gradsrcpos==nothing
+        #     tmpgradsrcpos = gradsrcpos
+        # else
+        #     tmpgradsrcpos = view(gradsrcpos,s,:)
+        # end
+        # discradjoint2D_FMM_SINGLESRC!(gradvel1,tmpgradsrcpos,adjvars,P_fmmord,
+        #                               pickobs1[s],stdobs[s],vel,xysrc[s,:],grd,whichgrad,
+        #                               refinearoundsrc=extrapars.refinearoundsrc ) #,∂u_h∂x_s=∂u_h∂x_s)
 
         
         if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
@@ -379,10 +401,12 @@ $(TYPEDSIGNATURES)
 function calcprojttfmmord(ttime::AbstractArray{Float64},grd::GridEik,idxconv::MapOrderGridFMM,
                           coordrec::AbstractArray{Float64})
 
-    if typeof(idxconv)==MapOrderGridFMM2D
+    if typeof(grd)==Grid2D
         simdim = :sim2D
-    elseif typeof(idxconv)==MapOrderGridFMM3D
+    elseif typeof(grd)==Grid3D
         simdim = :sim3D
+    else
+        error("calcprojttfmmord(): Wrong grd argument.")
     end
 
     # calculate the coefficients and their indices using bilinear interpolation
@@ -439,25 +463,36 @@ end
 
 ##############################################################################
 
-"""
-$(TYPEDSIGNATURES)
-
- Solve the discrete adjoint equations and return the gradient of the misfit.
-"""
-function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},Nothing},
-                                       gradsrcpos1::Union{AbstractArray{Float64},Nothing},
-                                       adjvars::AdjointVars2D,P::AbstractArray{Float64},
-                                       pickobs::AbstractVector{Float64},
-                                       stdobs::AbstractVector{Float64},
-                                       vel2d::AbstractArray{Float64},
-                                       xysrc::AbstractArray{Float64},
-                                       grd::GridEik2D,whichgrad::Symbol;
-                                       refinearoundsrc::Bool )
+function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
+                                         gradsrcpos1::Union{AbstractArray{Float64},Nothing},
+                                         fmmvars::FMMvars2D,
+                                         adjvars::AdjointVars2D,
+                                         xysrc::AbstractArray{Float64},
+                                         xyrecs::AbstractArray{Float64},
+                                         pickobs::AbstractVector{Float64},
+                                         stdobs::AbstractVector{Float64},
+                                         vel2d::AbstractArray{Float64},
+                                         grd::GridEik2D,
+                                         whichgrad::Symbol,
+                                         refinearoundsrc::Bool;
+                                         fmmvars_fine::Union{FMMvars2D,Nothing}=nothing,
+                                         adjvars_fine::Union{AdjointVars2D,Nothing}=nothing,
+                                         grd_fine::Union{GridEik2D,Nothing}=nothing,
+                                         vel_fine::Union{AbstractArray{Float64},Nothing}=nothing
+                                         )
+    
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
-    
-    idxconv = adjvars.idxconv
+    @show "START adjoint coarse grid"
+    ##======================================================
+    # Projection operator P ordered according to FMM order
+    #  The order for P is:
+    #    rows: according to coordrec, stdobs, pickobs
+    #    columns: according to the FMM order
+    P = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,xyrecs)
+                                      
+    ##==============================
     tt_fmmord = adjvars.fmmord.ttime
     
     ###########################################
@@ -506,7 +541,7 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
     Nxnnz = vecDxDR.Nnnz[]
     Nix = vecDxDR.Nsize[1]
     Njx = vecDxDR.Nsize[2]
-    lhs1term = SparseMatrixCSC(Njx,Nix,vecDxDR.iptr[1:Nix+1],
+    lhsterm1 = SparseMatrixCSC(Njx,Nix,vecDxDR.iptr[1:Nix+1],
                                vecDxDR.j[1:Nxnnz],vecDxDR.v[1:Nxnnz])
  
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
@@ -514,15 +549,19 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
     Nynnz = vecDyDR.Nnnz[]
     Niy = vecDyDR.Nsize[1]
     Njy = vecDyDR.Nsize[2]
-    lhs2term = SparseMatrixCSC(Njy,Niy,vecDyDR.iptr[1:Niy+1],
+    lhsterm2 = SparseMatrixCSC(Njy,Niy,vecDyDR.iptr[1:Niy+1],
                                vecDyDR.j[1:Nynnz],vecDyDR.v[1:Nynnz])
 
     # They are already transposed, so only add them
-    tmplhs = lhs1term .+ lhs2term
-
+    tmplhs = lhsterm1 .+ lhsterm2
 
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
+
+    @show Nix,Njx
+    @show Niy,Njy
+    @show prod(size(vel2d))
+    @show count(adjvars.fmmord.onsrccols)
 
     ## OLD stuff...
     # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
@@ -537,6 +576,11 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
 
     
     if whichgrad==:gradsrcloc || whichgrad==:gradvelandsrcloc
+        
+        if refinearoundsrc
+            error("Gradient with respect to source location with refinement of the grid currently broken... Aborting.")
+        end
+
         ##############################################
         ##  Derivative with respect to the traveltime
         ##     at the "onsrc" points
@@ -546,31 +590,37 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
                                             adjvars.idxconv,lambda_fmmord,vel2d,
                                             adjvars.fmmord.onsrccols,xysrc,grd,
                                             refinearoundsrc=refinearoundsrc ) #,
-                                            #∂u_h∂x_s=∂u_h∂x_s)
+        #∂u_h∂x_s=∂u_h∂x_s)
     end
     
     if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
 
-        if refinearoundsrc
-            error("Gradient with respect to velocity with refinement of the grid currently broken... Aborting.")
-        end
-
         ##--------------------------------------
-        # reorder lambda from fmmord to original grid!!
+        # Reorder lambda from fmmord to original grid!!
+        idxconv = adjvars.idxconv
         N = length(lambda_fmmord)
         nptsonsrc = count(adjvars.fmmord.onsrccols)
 
+        ## To simplify computations with "vel2d" here "lambda" has *full* size,
+        ##   while "lambda_fmmord" excludes the points on the source,
+        ##   so it is smaller, as required by the adjoint equation.
         # lambda must be zeroed here!
-        lambda = zeros(eltype(lambda_fmmord),N+nptsonsrc)
-        Nall = length(idxconv.lfmm2grid)
+        #lambda = zeros(eltype(lambda_fmmord),N+nptsonsrc)
+        # lambda must be zeroed here!!!!
+        lambda = zeros(eltype(lambda_fmmord),length(vel2d))
+        #Nall = length(idxconv.lfmm2grid)
         for p=1:N
             # The following two lines is a complex way to map the
             #  "full" indices to the "reduced" set of indices
-            curnptsonsrc_fmmord = count(adjvars.fmmord.onsrccols[1:p])
+            # curnptsonsrc_fmmord = count(adjvars.fmmord.onsrccols[1:p])
             iorig = idxconv.lfmm2grid[p+nptsonsrc]
             # map lambda in fmmord into lambda in the original grid
             lambda[iorig] = lambda_fmmord[p]
         end
+
+        @show size(lambda_fmmord)
+        @show size(lambda)
+        
 
         ######################################
         # Gradient with respect to velocity
@@ -578,9 +628,218 @@ function discradjoint2D_FMM_SINGLESRC!(gradvel1::Union{AbstractArray{Float64},No
         gradvec = 2.0 .* lambda ./ vec(vel2d).^3
         gradvel1 .= reshape(gradvec,idxconv.nx,idxconv.ny)
 
+        
+        if refinearoundsrc
+
+            #error("Gradient with respect to velocity with refinement of the grid currently missing a piece... Aborting.")
+            ## Solve the adjoint equation in the fine grid
+            du_h_dv_q_fine,idxlin_fine2coarse = solveadjointfinegrid!(fmmvars_fine,adjvars_fine,grd_fine,vel_fine)
+
+            @show size(pickobs)
+          
+            
+            # bool vector with trues for src columns in the coarse grid
+            rq_fine = adjvars.fmmord.onsrccols
+            @show count(rq_fine)
+            @show size(fact2)
+            @show size(P[:,rq_fine])
+            # only onsrc columns (from h points)
+            ∂ψ_∂u_h_fmmord = fact2' * P[:,rq_fine] 
+            @show size(∂ψ_∂u_h)
+
+            # Re-order ∂ψ_∂u_h_fmmord according to the grid with a linear index
+            Nuh = length(∂ψ_∂u_h_fmmord)
+            for q=1:Nuh
+                qgrid = idxconv.lfmm2grid[p+nptsonsrc]
+                ∂ψ_∂u_h[qgrid] = ∂ψ_∂u_h_fmmord[q]
+                du_h_dv_q[qgrid] = du_h_dv_q_fine[idxlin_fine2coarse[q]]
+            end
+
+            @show size(du_h_dv_q)
+            ∂ψ_∂v_q = ∂ψ_∂u_h * du_h_dv_q
+
+            #gradvel1[????] .= gradvel_fine
+        end
+
+    end
+    @show "END adjoint coarse grid"
+    return 
+end
+
+##############################################################################
+
+function solveadjointfinegrid!(fmmvars,adjvars,grd,vel2d_fine)
+
+    #                                                                       #
+    # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
+    #                                                                       #
+    @show "START adjoint fine grid"
+    ###########################################
+    lasttt = findfirst( adjvars.fmmord.ttime.==0.0)-1
+    tt_fmmord = adjvars.fmmord.ttime[1:lasttt]
+    @show size(tt_fmmord)
+
+    onHpts = adjvars.fmmord.onhpoints#[node] 
+    nmodpar = length(tt_fmmord)
+    idxonHpts = findall(onHpts) # get all "true" values
+    Nhpts = length(idxonHpts)
+    @show Nhpts
+
+    ###########################################
+    H_i = zeros(Int64,Nhpts)
+    H_j = zeros(Int64,Nhpts)
+    H_v = zeros(Float64,Nhpts)
+    ##H = ??? #idxonHpts
+
+
+    ############################################################
+    ## Define the projection operator H in the fine grid
+    ## 
+    ## Since the "receivers" are all exactly on grid points (h),
+    ##  conciding with the coarse grid, we don't need to
+    ##  perform any interpolation.
+    ############################################################
+    q::Int64=1    
+    for l=1:Nhpts
+        # The "onhpoints" are already in fmm order
+        jfmmord = idxonHpts[l]
+        # the order for P is:
+        #   rows: according to coordrec, stdobs, pickobs
+        #   columns: according to the FMM order
+        ## P[r,jfmmord] =
+        H_i[q] = l
+        H_j[q] = jfmmord
+        H_v[q] = 1
+        q+=1
+    end
+    H = sparse(H_i,H_j,H_v,Nhpts,nmodpar)
+    
+    ###########################################
+    # Derivative (along x) matrix, row-deficien
+    vecDx = adjvars.fmmord.vecDx
+    ###########################################
+    # Derivative (along y) matrix, row-deficien
+    vecDy = adjvars.fmmord.vecDy
+
+    #######################################################
+    ##  right hand side adj eq. == -(adjoint source)^T
+    #######################################################
+    @show size(H)
+    @show size(.!adjvars.fmmord.onsrccols[1:lasttt])
+    # bool vector with false for src columns
+    #    only part of the rectangular fine grid has been used, so [1:lasttt]
+    rq = .!adjvars.fmmord.onsrccols[1:lasttt]  
+    HD = H[:,rq] # remove columns
+    rhs = - transpose(HD)
+
+    ################################
+    ##   left hand side adj eq.
+    ################################
+    ## compute the lhs terms
+    vecDxDR,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrccols)
+    vecDyDR,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,adjvars.fmmord.onsrccols) 
+
+    ## We have a CSR matrix as vectors, we need a *transpose* of it,
+    ##  so we construct directly a CSC by *exchanging* i and j indices
+    Nxnnz = vecDxDR.Nnnz[]
+    Nix = vecDxDR.Nsize[1]
+    Njx = vecDxDR.Nsize[2]
+    lhsterm1 = SparseMatrixCSC(Njx,Nix,vecDxDR.iptr[1:Nix+1],
+                               vecDxDR.j[1:Nxnnz],vecDxDR.v[1:Nxnnz])
+ 
+    ## We have a CSR matrix as vectors, we need a *transpose* of it,
+    ##  so we construct directly a CSC by *exchanging* i and j indices
+    Nynnz = vecDyDR.Nnnz[]
+    Niy = vecDyDR.Nsize[1]
+    Njy = vecDyDR.Nsize[2]
+    lhsterm2 = SparseMatrixCSC(Njy,Niy,vecDyDR.iptr[1:Niy+1],
+                               vecDyDR.j[1:Nynnz],vecDyDR.v[1:Nynnz])
+
+    # They are already transposed, so only add them
+    tmplhs = lhsterm1 .+ lhsterm2
+
+    ## make sure it's recognised as upper triangular...
+    lhs = UpperTriangular(tmplhs)
+    
+    @show Nix,Njx
+    @show Niy,Njy
+    @show prod(size(vel2d_fine))
+    @show count(adjvars.fmmord.onsrccols)
+
+    ## OLD stuff...
+    # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
+    # ##   the solver (\) does not use the correct sparse algo for matrix division
+    # tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) ))
+    # lhs = UpperTriangular(tmplhs)
+
+    ############################################################
+    ##  solve the linear system to get the adjoint variable
+    ############################################################
+    @show size(lhs)
+    @show size(rhs)
+    # Remark: "lambda_fmmord" excludes the points on the source (in the fine grid)
+    lambda_fmmord = lhs\rhs  
+
+    @show size(lambda_fmmord)
+
+    # Reorder lambda from fmmord to original grid!!
+    idxconv = adjvars.idxconv
+    N = size(lambda_fmmord,1)
+    nptsonsrc = count(adjvars.fmmord.onsrccols)
+    @show nptsonsrc
+    #########################################
+    # Compute lambda in the FINE grid
+    #########################################
+    ## To simplify computations with "vel2d_fine" here "lambda" has *full* size,
+    ##   while "lambda_fmmord" excludes the points on the source,
+    ##   so it is smaller, as required by the adjoint equation.
+    # lambda must be zeroed here!!!!
+    #lambda = zeros(eltype(lambda_fmmord),N+nptsonsrc,Nhpts)
+    # lambda must be zeroed here!!!!
+    lambda_fine = zeros(eltype(lambda_fmmord),Nhpts,length(vel2d_fine))
+    #Nall = length(idxconv.lfmm2grid)
+
+    i1coarse = srcrefvars.ij1coarse[1]
+    j1coarse = srcrefvars.ij1coarse[2]
+
+    tmpv = vec(vel2d_fine).^3
+    q=0
+    for p=1:N
+
+        igrid = idxconv.lfmm2grid[p+nptsonsrc]
+
+        for h=1:Nhpts   
+            
+            if onHpts[p+nptsonsrc]
+                q +=1 
+                # du_h_dv_q is in FMM ORDER!!
+                du_h_dv_q[h,q] = 2.0 * lambda_fmmord[p,h] / tmpv[igrid]
+
+                idxlin_fine2coarse[q] = asdfasd #?????
+
+                # # The following two lines is a complex way to map the
+                # #  "full" indices to the "reduced" set of indices
+                # # curnptsonsrc_fmmord = count(adjvars.fmmord.onsrccols[1:p])
+                # iorig = idxconv.lfmm2grid[p+nptsonsrc]
+
+                # # map the i,j in the fine grid to i,j in the coarse grid
+
+                # # map the linear index (i) in the fine grid to the corresponding one (q) in the coarse grid
+                # linidx_fine2linidx_coarse[h,p] = 
+
+                # # fill du_h_dv_q for each h point and for 
+                # du_h_dv_q[h,p] = 
+
+                
+                # # map lambda in fmmord into lambda in the original grid
+                # lambda_fine[h,iorig] = lambda_fmmord[p,h]
+            end
+        end
     end
 
-    return 
+      
+    @show "END adjoint fine grid"
+    return du_h_dv_q,idxlin_fine2coarse
 end
 
 #######################################################################################

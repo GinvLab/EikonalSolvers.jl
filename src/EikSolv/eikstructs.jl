@@ -449,7 +449,7 @@ end
 struct SrcRefinVars2D
     downscalefactor::Int64
     ij1coarse::NTuple{2,Int64}
-    outxyminmax::NTuple{4,Int64}
+    outxyminmax::NTuple{4,Bool}
 end
 
 ####################################
