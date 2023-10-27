@@ -5,6 +5,13 @@
 
 Docs: <https://juliageoph.gitlab.io/EikonalSolvers.jl>
 
+---
+
+*Warning*: **A new vesion of the package with a different strategy to compute gradients is under development** (including gradients with respect to the source location)!
+
+---
+
+
 A library to perform __seismic traveltime__ computations by solving the eikonal equation in two (__2D__) and three dimensions (__3D__) with the possibility of computing the __gradient of a misfit function__ with respect to the velocity model. The coordinate system can be either regular Cartesian or spherical.
 The forward algorithm is based on a fast marching (FMM) method (2nd order) with a refinement of the grid around the source location. The computation of the gradient relies on the __discrete adjoint__ method.
 
