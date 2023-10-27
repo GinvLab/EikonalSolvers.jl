@@ -19,7 +19,7 @@ For historical reasons, alternative solvers are available (poorly maintained), i
 
 Both forward and gradient (adjoint) computations can be run in paralle using either Julia's distributed computing functions for distributed memory or threads for multicore processor. The parallelisation scheme is "by source", distributing calculations for different seismic sources to different processors.
 
-This code is part of a larger project `HMCLab` ([^ZuninoGebraadFichtner2023]) targeting probabilistic geophysical inverse problems.
+This code is part of a larger project `HMCLab` ([^ZuninoGebraadetal2023]) targeting probabilistic geophysical inverse problems.
 
 ## Installation
 
@@ -291,7 +291,7 @@ An example of a (thresholded) sensitivity kernel and contouring of traveltimes i
 
 # References
 
-[^ZuninoGebraadetal2023]: Zunino A., Gebraad, L., Ghirotto, A. and Fichtner, A., (2023). HMCLab a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo algorithm, submitted, JGR.
+[^ZuninoGebraadetal2023]: Zunino A., Gebraad, L., Ghirotto, A. and Fichtner, A., (2023). HMCLab a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo algorithm, accepted, GJI.
 
 [^LeungQian2006]: Leung, S. and Qian, J. (2006). An adjoint state method for three-dimensional transmission traveltime tomography using first-arrivals. Communications in Mathematical Sciences, 4(1), 249-266.
 
