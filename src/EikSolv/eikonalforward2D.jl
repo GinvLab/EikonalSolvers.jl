@@ -119,8 +119,8 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
             Threads.@threads for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 ttime[:,:,igrs],ttpicks[igrs] = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
-                                                                  view(coordrec,igrs),grd,extraparams,
-                                                                  returntt=returntt )
+                                                                view(coordrec,igrs),grd,extraparams,
+                                                                returntt=returntt )
             end
 
         else
@@ -138,10 +138,10 @@ function traveltime2D(vel::Array{Float64,2},grd::GridEik2D,coordsrc::Array{Float
         ##====================================
         ## Serial run
         ##====================
-         if returntt            
+        if returntt            
             # return both traveltime picks at receivers and at all grid points
             ttime[:,:,:],ttpicks = ttforwsomesrc2D(vel,coordsrc,coordrec,grd,extraparams,
-                                                           returntt=returntt )
+                                                   returntt=returntt )
         else
             # return ONLY traveltime picks at receivers
             ttpicks = ttforwsomesrc2D(vel,coordsrc,coordrec,grd,extraparams,
@@ -188,7 +188,7 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::AbstractArray{Float64,2
 
     ## pre-allocate discrete adjoint variables
     ##  No adjoint calculations
-    adjvars = nothing
+    ## adjvars = nothing
 
     if returntt
         ttGRPSRC = zeros(n1,n2,nsrc)
@@ -197,7 +197,7 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::AbstractArray{Float64,2
     ## group of pre-selected sources
     for s=1:nsrc    
         ##
-        ttFMM_hiord!(fmmvars,vel,view(coordsrc,s,:),grd,adjvars,extrapars)
+        ttFMM_hiord!(fmmvars,vel,view(coordsrc,s,:),grd,extrapars)
 
         ## interpolate at receivers positions
         for i=1:size(coordrec[s],1)
@@ -219,6 +219,11 @@ end
 
 #################################################################################
 
+# Default constructor for forward calculations (adjvars=nothing)
+ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVector{Float64},grd::GridEik2D,
+             extrapars::ExtraParams ) = ttFMM_hiord!(fmmvars,vel,src,grd,nothing,extrapars)
+
+# Fast marching computations
 function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVector{Float64},grd::GridEik2D,
                       adjvars::Union{AdjointVars2D,Nothing},extrapars::ExtraParams )
     
@@ -234,7 +239,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         simtype=:spherical
     end
     
-    dogradsrcpos = false
+    ## dogradsrcpos = false
 
     ##==================================================##
     ###
@@ -274,32 +279,33 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
 
     
     if fmmvars.refinearoundsrc && dodiscradj==false
-        ##=========================================
+        ##===================================================
         ## 
-        ## DO refinement around the source      
+        ## DO refinement around the source, NO adjoint run  
         ##
-        ##=========================================
+        ##===================================================
         # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
         #  because the size of the grid may change when hitting borders, etc.
         ijsrc = runrefinementaroundsrc!(fmmvars,vel,src,grd,adjvars,extrapars)
 
 
     elseif fmmvars.refinearoundsrc && dodiscradj
-        ##=========================================
+        ##===================================================
         ## 
-        ## DO refinement around the source      
+        ## DO refinement around the source and adjoint run    
         ##
-        ##=========================================
+        ##===================================================
         # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
-        #  because the size of the grid may change when hitting borders, etc.
-        ijsrc,fmmvars_fine,adjvars_fine,grd_fine,vel_fine = runrefinementaroundsrc!(fmmvars,vel,src,grd,adjvars,extrapars)
+        #  because the SIZE of the grid may CHANGE when hitting borders, etc.
+        ijsrc,fmmvars_fine,adjvars_fine,grd_fine,vel_fine = runrefinementaroundsrc!(fmmvars,vel,src,grd,
+                                                                                    adjvars,extrapars)
     
     else        
-        ##=========================================
+        ##================================================
         ## 
-        ## NO refinement around the source      
+        ## NO refinement around the source, init stuff      
         ##
-        ##=========================================
+        ##================================================
         ijsrc = initnorefsrc(fmmvars,vel,src,grd,adjvars)
 
     end
@@ -321,7 +327,8 @@ end
 ###########################################################################
 
 function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc::AbstractVector{Float64},
-                                 grd::GridEik2D,adjvars::Union{AdjointVars2D,Nothing},extrapars::ExtraParams)
+                                 grd::GridEik2D,adjvars::Union{AdjointVars2D,Nothing},
+                                 extrapars::ExtraParams)
                               
     if adjvars==nothing
         dodiscradj=false

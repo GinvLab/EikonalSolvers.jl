@@ -67,7 +67,7 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
     @assert all(ax2min.<=coordsrc[:,2].<=ax2max)
 
     nsrc = size(coordsrc,1)
-    grad = zeros(n1,n2)
+    ∂χ∂vel = zeros(n1,n2)
     ∂χ∂xysrc = zeros(nsrc,2)
 
     if extraparams.parallelkind==:distribmem
@@ -81,18 +81,18 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         ## array of workers' ids
         wks = workers()
         ## do the calculations
-        grads = Vector{Array{Float64,2}}(undef,nchu)
+        ∂χ∂vel_all = Vector{Array{Float64,2}}(undef,nchu)
         @sync begin 
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async begin
-                    grads[s],∂χ∂xysrc[igrs,:] .= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
-                                                              coordsrc[igrs,:],coordrec[igrs],
-                                                              grd,stdobs[igrs],pickobs[igrs],
-                                                              whichgrad,extraparams )
+                    ∂χ∂vel_all[s],∂χ∂xysrc[igrs,:] .= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
+                                                                       coordsrc[igrs,:],coordrec[igrs],
+                                                                       grd,stdobs[igrs],pickobs[igrs],
+                                                                       whichgrad,extraparams )
                 end
-                grad = sum(grads)
             end
+            ∂χ∂vel .= sum(∂χ∂vel_all)
         end
 
 
@@ -104,31 +104,30 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         grpsrc = distribsrcs(nsrc,nth)
         nchu = size(grpsrc,1)            
         ##  do the calculations
-        grads = Vector{Array{Float64,2}}(undef,nchu)
+        ∂χ∂vel_all = Vector{Array{Float64,2}}(undef,nchu)
         
         Threads.@threads for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
             @show igrs
-            grads[s],∂χ∂xysrc[igrs,:] = calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
-                                         grd,view(stdobs,igrs),view(pickobs,igrs),
-                                                          whichgrad,extraparams )
+            ∂χ∂vel_all[s],∂χ∂xysrc[igrs,:] = calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
+                                                               grd,view(stdobs,igrs),view(pickobs,igrs),
+                                                               whichgrad,extraparams )
         end
-        grad = sum(grads)
+        ∂χ∂vel = sum(∂χ∂vel_all)
 
 
     elseif extraparams.parallelkind==:serial
         ##====================================
         ## Serial run
         ##====================
-        grad,∂χ∂xysrc = calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
-                                          whichgrad,extraparams )
+        ∂χ∂vel,∂χ∂xysrc = calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
+                                            whichgrad,extraparams )
 
     end
 
-
     ## smooth gradient
     if extraparams.smoothgradkern>0
-        grad = smoothgradient(extraparams.smoothgradkern,grad)
+        ∂χ∂vel = smoothgradient(extraparams.smoothgradkern,∂χ∂vel)
     end
 
     if extraparams.manualGCtrigger
@@ -136,7 +135,7 @@ function gradttime2D(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float
         #println("Triggering GC")
         GC.gc()
     end
-    return grad,∂χ∂xysrc
+    return ∂χ∂vel,∂χ∂xysrc 
 end
 
 ###############################################################################
