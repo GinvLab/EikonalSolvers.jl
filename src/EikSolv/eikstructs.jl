@@ -237,8 +237,6 @@ struct MapOrderGridFMM2D <: MapOrderGridFMM
     lfmm2grid::Vector{Int64} # idx_fmmord
     "Linear FMM indices in grid order"
     lgrid2fmm::Vector{Int64} # idx_gridord
-    # cart2lin::LinearIndices
-    # lin2cart::CartesianIndices
     nx::Int64
     ny::Int64
 
@@ -246,9 +244,6 @@ struct MapOrderGridFMM2D <: MapOrderGridFMM
         nxy = nx*ny
         lfmm2grid = zeros(Int64,nxy)
         lgrid2fmm = zeros(Int64,nxy)
-        # cart2lin = LinearIndices((nx,ny))
-        # lin2cart = CartesianIndices((nx,ny))
-        #return new(lfmm2grid,lgrid2fmm,cart2lin,lin2cart,nx,ny)
         return new(lfmm2grid,lgrid2fmm,nx,ny)
     end
 end
@@ -259,8 +254,6 @@ struct MapOrderGridFMM3D <: MapOrderGridFMM
     lfmm2grid::Vector{Int64} # idx_fmmord
     "Linear FMM indices in grid order"
     lgrid2fmm::Vector{Int64} # idx_gridord
-    # cart2lin::LinearIndices
-    # lin2cart::CartesianIndices
     nx::Int64
     ny::Int64
     nz::Int64
@@ -277,7 +270,6 @@ end
 ########################################################
 
 # structs for sparse matrices (CSR) to represent derivatives (discrete adjoint)
-
 struct VecSPDerivMat
     "row pointer"
     iptr::Vector{Int64}
@@ -286,7 +278,7 @@ struct VecSPDerivMat
     "values"
     v::Vector{Float64}
     lastrowupdated::Base.RefValue{Int64}
-    Nsize::Vector{Int64}
+    Nsize::MVector{2,Int64} ## will change, no tuples
     Nnnz::Base.RefValue{Int64}
 
     function VecSPDerivMat(; iptr,j,v,Nsize)
@@ -397,6 +389,35 @@ struct AdjointVars3D
 end
 
 
+####################################
+
+struct SourceBoxParams2D
+    "position of the corners surrounding the source location"
+    ijsrc::MArray
+    "coefficients for the interpolation of the velocity"
+    coeff::MVector
+    "velocity at the corners surrounding the source location"
+    velcorn::MVector
+end
+
+####################################
+
+struct SourceBoxParams3D
+    "position of the corners surrounding the source location"
+    ijsrc::MArray
+    "coefficients for the interpolation of the velocity"
+    coeff::MVector
+    "velocity at the corners surrounding the source location"
+    velcorn::MVector
+end
+
+
+####################################
+
+mutable struct SourcePtsFromFineGrid
+    ijsrc::Matrix{Int64} 
+end
+
 ######################################################
 
 struct FMMvars2D
@@ -407,9 +428,9 @@ struct FMMvars2D
     refinearoundsrc::Bool
     "brute-force fix negative saqarg"
     allowfixsqarg::Bool 
-   
+    srcboxpar::Union{SourceBoxParams2D,SourcePtsFromFineGrid}
 
-    function FMMvars2D(n1,n2; refinearoundsrc,allowfixsqarg)
+    function FMMvars2D(n1,n2; amIcoarsegrid::Bool,refinearoundsrc,allowfixsqarg)
         ttime = zeros(Float64,n1,n2)
         status = zeros(UInt8,n1,n2)
         bheap = init_minheap(n1*n2)
@@ -418,9 +439,19 @@ struct FMMvars2D
                 @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
             end
         end
-        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg)
+        
+        if  amIcoarsegrid && refinearoundsrc==true
+            srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,0))
+        else
+            Ncoe = 4
+            srcboxpar = SourceBoxParams2D(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,2)),
+                                          MVector{Ncoe}(zeros(Ncoe)),
+                                          MVector{Ncoe}(zeros(Ncoe)) )
+        end
+        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
     end
 end
+
 
 struct FMMvars3D
     ttime::Array{Float64,3}
@@ -430,8 +461,9 @@ struct FMMvars3D
     refinearoundsrc::Bool
     "brute-force fix negative saqarg"
     allowfixsqarg::Bool 
-
-    function FMMvars3D(n1,n2,n3; refinearoundsrc,allowfixsqarg)
+    srcboxpar::SourceBoxParams3D
+    
+    function FMMvars3D(n1,n2,n3; amIcoarsegrid::Bool,refinearoundsrc,allowfixsqarg)
         ttime = zeros(Float64,n1,n2,n3)
         status = zeros(UInt8,n1,n2,n3)
         bheap = init_minheap(n1*n2*n3)
@@ -440,11 +472,22 @@ struct FMMvars3D
                 @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
             end
         end
-        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg)
+
+        if amIcoarsegrid && refinearoundsrc==true
+            srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,0))
+        else
+            srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,0))
+            elseNcoe = 8
+            srcboxpar = SourceBoxParams3D(zeros(Int64,Ncoe,3),
+                                          zeros(Ncoe),
+                                          zeros(Ncoe) )
+                                          
+        end
+        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
     end
 end
 
-####################################
+###################################################
 
 struct SrcRefinVars2D
     downscalefactor::Int64
@@ -452,7 +495,4 @@ struct SrcRefinVars2D
     outxyminmax::NTuple{4,Bool}
 end
 
-####################################
-
-
-
+###################################################

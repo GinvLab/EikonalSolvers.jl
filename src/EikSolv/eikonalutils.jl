@@ -90,8 +90,9 @@ $(TYPEDSIGNATURES)
 
 Bilinear interpolation.
 """
-function bilinear_interp(f::AbstractArray{Float64,2},grd::Union{Grid2D,Grid2DSphere}, xyzpt::AbstractVector{Float64};
-                         return_coeffonly::Bool=false)
+function bilinear_interp(f::AbstractArray{Float64,2},grd::Union{Grid2D,Grid2DSphere},
+                         xyzpt::AbstractVector{Float64};
+                         outputcoeff::Bool=false)
 
     xreq,yreq = xyzpt[1],xyzpt[2]
 
@@ -127,16 +128,29 @@ function bilinear_interp(f::AbstractArray{Float64,2},grd::Union{Grid2D,Grid2DSph
     xd=xh-(i-1) # indices starts from 1
     yd=yh-(j-1) # indices starts from 1
 
-    if return_coeffonly
+    if outputcoeff
+        
         coeff = @SVector[(1.0-xd)*(1.0-yd),
                          (1.0-yd)*xd, 
                          (1.0-xd)*yd,
                          xd*yd]
-        ijs = @SMatrix[i   j;
-                      i+1 j;
-                      i j+1;
-                      i+1 j+1]
-        return coeff,ijs
+        
+        fcorn = @SVector[f[i,j],
+                         f[i+1,j],
+                         f[i,j+1],
+                         f[i+1,j+1]]
+
+        ijs = @SMatrix[i j;
+                       i+1 j;
+                       i j+1;
+                       i+1 j+1]
+        
+        # intval = f[i,j]*(1.0-xd)*(1.0-yd)+f[i+1,j]*(1.0-yd)*xd +
+        #     f[i,j+1]*(1.0-xd)*yd+f[i+1,j+1]*xd*yd
+        # @show intval,dot(coeff,fcorn) 
+        # @assert intval ≈ dot(coeff,fcorn)
+
+        return coeff,fcorn,ijs
 
     else
         intval = f[i,j]*(1.0-xd)*(1.0-yd)+f[i+1,j]*(1.0-yd)*xd +

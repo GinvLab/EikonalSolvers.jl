@@ -162,17 +162,17 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
     elseif whichgrad==:gradsrcloc
         gradvel1 = nothing
         gradvelall = nothing
-        gradsrcpos = zeros(eltype(vel),nsrc,2)
+        gradsrcpos = zeros(eltype(vel),nsrc,2) # ,2)-> 2D
         
     elseif whichgrad==:gradvelandsrcloc
         gradvel1 = zeros(nx,ny)
         gradvelall = zeros(nx,ny)
-        gradsrcpos = zeros(eltype(vel),nsrc,2)
+        gradsrcpos = zeros(eltype(vel),nsrc,2) # ,2)-> 2D
 
     end
 
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars = FMMvars2D(nx,ny,refinearoundsrc=extrapars.refinearoundsrc,
+    fmmvars = FMMvars2D(nx,ny,amIcoarsegrid=true,refinearoundsrc=extrapars.refinearoundsrc,
                         allowfixsqarg=extrapars.allowfixsqarg)
     
     ## pre-allocate discrete adjoint variables for coarse grid
@@ -185,11 +185,17 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
         ###########################################
         ## Get the traveltime, forward and adjoint parameters, etc.
         if extrapars.refinearoundsrc
+            ##
+            ## Refinement around the source
+            ## 
             # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
             #  because the size of the grid may change when hitting borders, etc.
             fmmvars_fine,adjvars_fine,grd_fine,vel_fine,ijhpts = ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),
                                                                      grd,adjvars,extrapars)
         else
+            ##
+            ## NO refinement around the source
+            ## 
             ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),grd,adjvars,extrapars)
             fmmvars_fine=nothing
             adjvars_fine=nothing
@@ -204,6 +210,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
         if gradsrcpos==nothing
             tmpgradsrcpos = gradsrcpos
         else
+            # use a view so gradsrcpos gets automatically filled in this loop
             tmpgradsrcpos = view(gradsrcpos,s,:)
         end
                 
@@ -243,7 +250,8 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
         if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
             ###########################################
             ## smooth gradient (with respect to velocity) around the source
-            smoothgradaroundsrc2D!(gradvel1,view(xysrc,s,:),grd,radiuspx=extrapars.radiussmoothgradsrc)
+            smoothgradaroundsrc2D!(gradvel1,view(xysrc,s,:),grd,
+                                   radiuspx=extrapars.radiussmoothgradsrc)
             ##########################################
             ## add up gradients from different sources
             gradvelall .+= gradvel1
@@ -287,7 +295,7 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
 
     ## row stuff
     ## they must to be zeroed/filled every time!
-    tmi = typemax(eltype(colinds))
+    tmi = typemax(eltype(colinds)) # highest possible value for given type
     colinds[:] .= tmi # for permsort!() to work with only 2 out of 3 elements
     colvals[:] .= 0.0
     idxperm[:] .= 0
@@ -322,12 +330,12 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
         end
         
     else
-        error("if axis==:X ...")
+        error("setcoeffderiv2D(): if axis==:X ...")
     end
        
     # we skip points on source, so there must always be derivatives
     if code==[0,0]
-        error("code==[0,0]")
+        error("setcoeffderiv2D: code==[0,0]")
     end
 
 
@@ -380,7 +388,7 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     ##########################################
     ## Add one entire row at a time!
     ##########################################
-    ## the following is needed because in Julia the
+    ## the following is needed because in Julia's CSR format the
     ##    row indices in every column NEED to be SORTED!
     sortperm!(idxperm,colinds)
     colinds[:] .= colinds[idxperm]
@@ -411,7 +419,7 @@ function calcprojttfmmord(ttime::AbstractArray{Float64},grd::GridEik,idxconv::Ma
     # calculate the coefficients and their indices using bilinear interpolation
     nmodpar = length(ttime)
     nrec = size(coordrec,1)
-    Ncoe = 4
+    Ncoe = 4 
     P_i = zeros(Int64,nrec*Ncoe)
     P_j = zeros(Int64,nrec*Ncoe)
     P_v = zeros(nrec*Ncoe)
@@ -420,16 +428,17 @@ function calcprojttfmmord(ttime::AbstractArray{Float64},grd::GridEik,idxconv::Ma
     for r=1:nrec
 
         if simdim==:sim2D 
-            coeff,ijcoe = bilinear_interp( ttime,grd,view(coordrec,r,:),
-                                           return_coeffonly=true )
+            coeff,_,ijcoe = bilinear_interp( ttime,grd,view(coordrec,r,:),
+                                           outputcoeff=true )
 
         elseif simdim==:sim3D 
-            coeff,ijcoe = trilinear_interp( ttime,grd,view(coordrec,r,:),
-                                            return_coeffonly=true )
+            coeff,_,ijcoe = trilinear_interp( ttime,grd,view(coordrec,r,:),
+                                            outputcoeff=true )
 
         end
 
-        #@assert size(ijcoe,1)==4
+        #Ncoe = length(coeff)
+        @assert Ncoe==length(coeff)
         for l=1:Ncoe
 
             # convert (i,j) from original grid to fmmord
@@ -483,7 +492,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
-    @show "START adjoint coarse grid"
+    println("=== START adjoint coarse grid ===" )
     ##======================================================
     # Projection operator P ordered according to FMM order
     #  The order for P is:
@@ -495,21 +504,21 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     tt_fmmord = adjvars.fmmord.ttime
     
     ###########################################
-    # Derivative (along x) matrix, row-deficien
+    # Derivative (along x) matrix, row-deficient
     vecDx = adjvars.fmmord.vecDx
     ###########################################
-    # Derivative (along y) matrix, row-deficien
+    # Derivative (along y) matrix, row-deficient
     vecDy = adjvars.fmmord.vecDy
 
     #######################################################
-    ##  right hand side adj eq. == -(adjoint source)^T
+    ##  right hand side adj eq. == -(∂ψ/∂u_p)^T
     #######################################################
     #rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
     fact2 = ((P*tt_fmmord).-pickobs)./stdobs.^2
     # bool vector with false for src columns
     rq = .!adjvars.fmmord.onsrccols
-    PD = P[:,rq] # remove columns
-    rhs = - transpose(PD) * fact2
+    P_Breg = P[:,rq] # remove columns
+    rhs = - transpose(P_Breg) * fact2
 
     ################################
     ##   left hand side adj eq.
@@ -573,7 +582,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ############################################################
     lambda_fmmord = lhs\rhs
 
-    
+    ##----------------------------------------------------------
     if whichgrad==:gradsrcloc || whichgrad==:gradvelandsrcloc
         
         if refinearoundsrc
@@ -594,7 +603,11 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     
     if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
 
-        ##--------------------------------------
+
+
+        #################################################
+        # Gradient with respect to velocity, term T2v
+        #################################################
         # Reorder lambda from fmmord to original grid!!
         idxconv = adjvars.idxconv
         N = length(lambda_fmmord)
@@ -603,9 +616,8 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ## To simplify computations with "vel2d" here "lambda" has *full* size,
         ##   while "lambda_fmmord" excludes the points on the source,
         ##   so it is smaller, as required by the adjoint equation.
-        # lambda must be zeroed here!
-        #lambda = zeros(eltype(lambda_fmmord),N+nptsonsrc)
-        # lambda must be zeroed here!!!!
+
+        # !!! lambda MUST be zeroed here !!!
         lambda = zeros(eltype(lambda_fmmord),length(vel2d))
         #Nall = length(idxconv.lfmm2grid)
         for p=1:N
@@ -616,18 +628,30 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
             # map lambda in fmmord into lambda in the original grid
             lambda[iorig] = lambda_fmmord[p]
         end
-
         @show size(lambda_fmmord)
         @show size(lambda)
-        
+        # As suggested above, here lambda has full size (including source points),
+        #   however, it is zero in the A region, so no contribution to the gradient
+        gradvec_T2v = 2.0 .* lambda ./ vec(vel2d).^3
+        gradvel1 .= reshape(gradvec_T2v,idxconv.nx,idxconv.ny)
 
-        ######################################
-        # Gradient with respect to velocity
-        ######################################
-        gradvec = 2.0 .* lambda ./ vec(vel2d).^3
-        gradvel1 .= reshape(gradvec,idxconv.nx,idxconv.ny)
+        #################################################
+        # Gradient with respect to velocity, term T1v
+        #################################################
+        # T1v = ∂ψ/∂u_s
+        ## using fact2 from the calculations above!
+        ## fact2 = ((P*tt_fmmord).-pickobs)./stdobs.^2
+        # pick only columns belonging to the source region
+        P_Areg = P[:,adjvars.fmmord.onsrccols]
+        @show size(P_Areg)
+        ∂ψ_∂u_s = transpose(P_Areg) * fact2
+        ## derivative of traveltime at source nodes w.r.t. velocity in region A
+        # dus_dva = 
+        # ## add contribution to the gradient
+        # gradvel1[???,??] .= dus_dva * ∂ψ_∂u_s 
 
-        
+ 
+
         if refinearoundsrc
 
             #error("Gradient with respect to velocity with refinement of the grid currently missing a piece... Aborting.")
@@ -635,8 +659,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
             du_h_dv_q_fine,idxlin_fine2coarse = solveadjointfinegrid!(fmmvars_fine,adjvars_fine,grd_fine,vel_fine)
 
             @show size(pickobs)
-          
-            
+                      
             # bool vector with trues for src columns in the coarse grid
             rq_fine = adjvars.fmmord.onsrccols
             @show count(rq_fine)
@@ -661,7 +684,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         end
 
     end
-    @show "END adjoint coarse grid"
+    println("=== END adjoint coarse grid ===")
     return 
 end
 
@@ -672,7 +695,7 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,vel2d_fine)
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
-    @show "START adjoint fine grid"
+    println("=== START adjoint fine grid ===")
     ###########################################
     lasttt = findfirst( adjvars.fmmord.ttime.==0.0)-1
     tt_fmmord = adjvars.fmmord.ttime[1:lasttt]
@@ -835,9 +858,8 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,vel2d_fine)
             end
         end
     end
-
       
-    @show "END adjoint fine grid"
+    println("=== END adjoint fine grid ===")
     return du_h_dv_q,idxlin_fine2coarse
 end
 
@@ -950,96 +972,106 @@ end
 
 #######################################################################################
 
-"""
-$(TYPEDSIGNATURES)
+function deriv_ttonsrc_velonsrc(   )
 
- Attempt to reconstruct how derivatives have been calculated in the area of 
-  the refinement of the source. Updates the codes for derivatives used to construct
-   Dx and Dy.
-"""
-function derivaroundsrcfmm2D!(lseq::Integer,idxconv::MapOrderGridFMM2D,codeD::MVector)
-    # lipt = index in fmmord in sequential order (1,2,3,4,...)
-    
-    nx = idxconv.nx
-    ny = idxconv.ny
 
-    ijpt = MVector(0,0)
-    idxpt = idxconv.lfmm2grid[lseq]
-    lin2cart2D!(idxpt,nx,ijpt)
-    ipt,jpt = ijpt[1],ijpt[2]
-    
-    codeD[:] .= 0
-    for axis=1:2
 
-        chosenidx = lseq
-        for dir=1:2
-
-            ## map the 4 cases to an integer as in linear indexing...
-            lax = dir + 2*(axis-1)
-            if lax==1 # axis==1
-                ish = 1
-                jsh = 0
-            elseif lax==2 # axis==1
-                ish = -1
-                jsh = 0
-            elseif lax==3 # axis==2
-                ish = 0
-                jsh = 1
-            elseif lax==4 # axis==2
-                ish = 0
-                jsh = -1
-            end
-            
-            ##=========================
-            ## first order
-            i = ipt+ish
-            j = jpt+jsh
-
-            ## check if on boundaries
-            isonb1st,isonb2nd = isonbord(i,j,nx,ny)
-
-            if !isonb1st
-                ## calculate the index of the neighbor in the fmmord
-                l = cart2lin2D(i,j,nx)
-                #idxne1 = findfirst(idxconv.lfmm2grid.==l)
-                idxne1 = idxconv.lgrid2fmm[l]
-                
-                if idxne1!=nothing && idxne1<chosenidx                   
-
-                    # to make sure we chose correctly the direction
-                    chosenidx = idxne1
-                    # save derivative choices [first order]
-                    axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
-
-                    if !isonb2nd
-                        ##=========================
-                        ## second order
-                        i = ipt + 2*ish
-                        j = jpt + 2*jsh
-                        
-                        ## calculate the index of the neighbor in the fmmord
-                        l = cart2lin2D(i,j,nx)
-                        idxne2 = idxconv.lgrid2fmm[l]
-                        
-                        ##===========================================================
-                        ## WARNING! The traveltime for the second order point must
-                        ##   be smaller than the one for the first order for selecting
-                        ##   second order. Otherwise first order only.
-                        ##  Therefore we compare idxne2<idxne1 instead of idxne2<idxpt
-                        ##===========================================================
-                        if idxne2<idxne1
-                            # save derivative choices [second order]
-                            axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
-                        end
-
-                    end
-                end
-            end            
-        end
-    end
-
-    return 
 end
+
+
+
+#######################################################################################
+
+# """
+# $(TYPEDSIGNATURES)
+
+#  Attempt to reconstruct how derivatives have been calculated in the area of 
+#   the refinement of the source. Updates the codes for derivatives used to construct
+#    Dx and Dy.
+# """
+# function derivaroundsrcfmm2D!(lseq::Integer,idxconv::MapOrderGridFMM2D,codeD::MVector)
+#     # lipt = index in fmmord in sequential order (1,2,3,4,...)
+    
+#     nx = idxconv.nx
+#     ny = idxconv.ny
+
+#     ijpt = MVector(0,0)
+#     idxpt = idxconv.lfmm2grid[lseq]
+#     lin2cart2D!(idxpt,nx,ijpt)
+#     ipt,jpt = ijpt[1],ijpt[2]
+    
+#     codeD[:] .= 0
+#     for axis=1:2
+
+#         chosenidx = lseq
+#         for dir=1:2
+
+#             ## map the 4 cases to an integer as in linear indexing...
+#             lax = dir + 2*(axis-1)
+#             if lax==1 # axis==1
+#                 ish = 1
+#                 jsh = 0
+#             elseif lax==2 # axis==1
+#                 ish = -1
+#                 jsh = 0
+#             elseif lax==3 # axis==2
+#                 ish = 0
+#                 jsh = 1
+#             elseif lax==4 # axis==2
+#                 ish = 0
+#                 jsh = -1
+#             end
+            
+#             ##=========================
+#             ## first order
+#             i = ipt+ish
+#             j = jpt+jsh
+
+#             ## check if on boundaries
+#             isonb1st,isonb2nd = isonbord(i,j,nx,ny)
+
+#             if !isonb1st
+#                 ## calculate the index of the neighbor in the fmmord
+#                 l = cart2lin2D(i,j,nx)
+#                 #idxne1 = findfirst(idxconv.lfmm2grid.==l)
+#                 idxne1 = idxconv.lgrid2fmm[l]
+                
+#                 if idxne1!=nothing && idxne1<chosenidx                   
+
+#                     # to make sure we chose correctly the direction
+#                     chosenidx = idxne1
+#                     # save derivative choices [first order]
+#                     axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+
+#                     if !isonb2nd
+#                         ##=========================
+#                         ## second order
+#                         i = ipt + 2*ish
+#                         j = jpt + 2*jsh
+                        
+#                         ## calculate the index of the neighbor in the fmmord
+#                         l = cart2lin2D(i,j,nx)
+#                         idxne2 = idxconv.lgrid2fmm[l]
+                        
+#                         ##===========================================================
+#                         ## WARNING! The traveltime for the second order point must
+#                         ##   be smaller than the one for the first order for selecting
+#                         ##   second order. Otherwise first order only.
+#                         ##  Therefore we compare idxne2<idxne1 instead of idxne2<idxpt
+#                         ##===========================================================
+#                         if idxne2<idxne1
+#                             # save derivative choices [second order]
+#                             axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
+#                         end
+
+#                     end
+#                 end
+#             end            
+#         end
+#     end
+
+#     return 
+# end
 
 #######################################################################################
 

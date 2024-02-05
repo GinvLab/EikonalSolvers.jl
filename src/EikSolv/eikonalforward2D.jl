@@ -183,7 +183,7 @@ function ttforwsomesrc2D(vel::Array{Float64,2},coordsrc::AbstractArray{Float64,2
     end
 
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars = FMMvars2D(n1,n2,refinearoundsrc=extrapars.refinearoundsrc,
+    fmmvars = FMMvars2D(n1,n2,amIcoarsegrid=true, refinearoundsrc=extrapars.refinearoundsrc,
                         allowfixsqarg=extrapars.allowfixsqarg)
 
     ## pre-allocate discrete adjoint variables
@@ -239,20 +239,18 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         simtype=:spherical
     end
     
-    ## dogradsrcpos = false
-
     ##==================================================##
     ###
     ###  Init FMM arrays
     ###  
     ## Time array
     ##
-    inittt = 1e30
+    # max possible val for type of ttime
+    inittt = typemax(eltype(fmmvars.ttime)) 
     fmmvars.ttime[:,:] .= inittt
     ##
     ## Status of nodes
     ##
-    #status = Array{Int64}(undef,n1,n2)
     fmmvars.status[:,:] .= 0   ## set all to far
     ##==================================================
 
@@ -262,8 +260,11 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         ##  Init discrete adjoint stuff
         ##
         nxy = prod(size(vel))
-        adjvars.fmmord.vecDx.Nsize .= [nxy,nxy]
-        adjvars.fmmord.vecDy.Nsize .= [nxy,nxy]
+        ## Initialize size of derivative matrices as full nxy*nxy,
+        ##   then rows corresponding to "source" points will be removed
+        ##   later on
+        adjvars.fmmord.vecDx.Nsize .= MVector(nxy,nxy)
+        adjvars.fmmord.vecDy.Nsize .= MVector(nxy,nxy)
         ##
         adjvars.fmmord.vecDx.lastrowupdated[] = 0
         adjvars.fmmord.vecDy.lastrowupdated[] = 0
@@ -286,7 +287,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         ##===================================================
         # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
         #  because the size of the grid may change when hitting borders, etc.
-        ijsrc = runrefinementaroundsrc!(fmmvars,vel,src,grd,adjvars,extrapars)
+        runrefinementaroundsrc!(fmmvars,vel,src,grd,adjvars,extrapars)
 
 
     elseif fmmvars.refinearoundsrc && dodiscradj
@@ -297,8 +298,8 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         ##===================================================
         # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
         #  because the SIZE of the grid may CHANGE when hitting borders, etc.
-        ijsrc,fmmvars_fine,adjvars_fine,grd_fine,vel_fine = runrefinementaroundsrc!(fmmvars,vel,src,grd,
-                                                                                    adjvars,extrapars)
+        fmmvars_fine,adjvars_fine,grd_fine,vel_fine = runrefinementaroundsrc!(fmmvars,vel,src,grd,
+                                                                              adjvars,extrapars)
     
     else        
         ##================================================
@@ -306,7 +307,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         ## NO refinement around the source, init stuff      
         ##
         ##================================================
-        ijsrc = initnorefsrc(fmmvars,vel,src,grd,adjvars)
+        initnorefsrc(fmmvars,vel,src,grd,adjvars)
 
     end
 
@@ -315,10 +316,10 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
     ## Run main simulation (coarse grid)
     ##
     ##=========================================
-    ttFMM_core!( fmmvars,vel,grd,ijsrc,adjvars )
+    ttFMM_core!( fmmvars,vel,grd,adjvars )
 
     if fmmvars.refinearoundsrc && dodiscradj 
-        return fmmvars_fine,adjvars_fine,grd_fine,vel_fine,ijsrc
+        return fmmvars_fine,adjvars_fine,grd_fine,vel_fine #,ijsrc
     end
     
     return
@@ -351,7 +352,7 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc:
     end
     
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars_fine = FMMvars2D(n1_fine,n2_fine,refinearoundsrc=false,
+    fmmvars_fine = FMMvars2D(n1_fine,n2_fine,amIcoarsegrid=false,refinearoundsrc=false,
                              allowfixsqarg=extrapars.allowfixsqarg)
     
     ##==================================================
@@ -387,19 +388,23 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc:
     ## source location, etc.      
     ## REGULAR grid
     if simtype==:cartesian
-        ijsrc_fine = sourceboxloctt!(fmmvars_fine,vel_fine,xysrc,grd_fine )
+        #ijsrc_fine = sourceboxloctt!(fmmvars_fine,vel_fine,xysrc,grd_fine )
+        sourceboxloctt!(fmmvars_fine,vel_fine,xysrc,grd_fine )
                
     elseif simtype==:spherical
-        ijsrc_fine = sourceboxloctt_sph!(fmmvars_fine,vel_fine,xysrc,grd_fine )
+        #ijsrc_fine = sourceboxloctt_sph!(fmmvars_fine,vel_fine,xysrc,grd_fine )
+        sourceboxloctt_sph!(fmmvars_fine,vel_fine,xysrc,grd_fine )
        
     end
 
     ##==================================================================
+    ## Run forward simulation (FMM) within the fine grid
+    #ijsrc_coarse = ttFMM_core!(fmmvars_fine,vel_fine,grd_fine,ijsrc_fine,adjvars_fine,
+    ttFMM_core!(fmmvars_fine,vel_fine,grd_fine,adjvars_fine,
+                fmmvars_coarse=fmmvars, adjvars_coarse=adjvars,srcrefvars=srcrefvars)
 
-    ijsrc_coarse = ttFMM_core!(fmmvars_fine,vel_fine,grd_fine,ijsrc_fine,adjvars_fine,
-                               fmmvars_coarse=fmmvars, adjvars_coarse=adjvars,
-                               srcrefvars=srcrefvars)
 
+    
     ##==================================================================
 
     # if dogradsrcpos
@@ -421,7 +426,7 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc:
     #     # derivative codes
     #     idD = MVector(0,0)
     #     # number of source points
-    #     naccinit = size(ijsrc,2)
+    #     naccinit = size(ijsrc,1)
 
     #     # How many initial points to skip, considering them as "onsrc"?
     #     skipnptsDxy = 4
@@ -499,12 +504,14 @@ function initnorefsrc(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
     ## source location, etc.      
     ## REGULAR grid
     if simtype==:cartesian
-        ijsrc = sourceboxloctt!(fmmvars,vel,src,grd )
+        #ijsrc = sourceboxloctt!(fmmvars,vel,src,grd )
+        sourceboxloctt!(fmmvars,vel,src,grd )
     elseif simtype==:spherical
-        ijsrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
+        #ijsrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
+        sourceboxloctt_sph!(fmmvars,vel,src,grd )
     end
 
-    return ijsrc
+    return #ijsrc
 end
 
 #################################################################################
@@ -515,7 +522,8 @@ $(TYPEDSIGNATURES)
  Higher order (2nd) fast marching method in 2D using traditional stencils on regular grid. 
 """
 function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
-                     ijsrc::AbstractArray{<:Integer,2},adjvars::Union{AdjointVars2D,Nothing} ;
+                     #ijsrc::AbstractArray{<:Integer,2},
+                     adjvars::Union{AdjointVars2D,Nothing} ;
                      fmmvars_coarse::Union{FMMvars2D,Nothing}=nothing,
                      adjvars_coarse::Union{AdjointVars2D,Nothing}=nothing,
                      srcrefvars::Union{SrcRefinVars2D,Nothing}=nothing)
@@ -558,17 +566,25 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
     end
     n12 = n1*n2
 
+    ##----------------------------------------------------------------------
+    ## fmmvars.srcboxpar.ijsrc can be a field of either
+    ##  - a SrcRefinVars2D if we are in the coarse grid with no refinement,
+    ##     or in the fine grid
+    ##  - a SourcePtsFromFineGrid if we are in the coarse grid after the
+    ##     FMM has been already run in the fine grid (multiple source points)
+    ##
+    ijsrc = fmmvars.srcboxpar.ijsrc
 
     ##=========================================
     if dodiscradj
         ## number of accepted points       
-        naccinit = size(ijsrc,2)        
+        naccinit = size(ijsrc,1)        
         n1,n2 = size(vel)
 
         # discrete adjoint: first visited points in FMM order
         ttfirstpts = Vector{Float64}(undef,naccinit)
         for l=1:naccinit
-            i,j = ijsrc[1,l],ijsrc[2,l]
+            i,j = ijsrc[l,1],ijsrc[l,2]
             ttij = fmmvars.ttime[i,j]
             # store initial points' FMM order
             ttfirstpts[l] = ttij
@@ -582,7 +598,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
             # ordered index
             p = spidx[l]
             # go from cartesian (i,j) to linear
-            ia,ja = ijsrc[1,l],ijsrc[2,l]
+            ia,ja = ijsrc[l,1],ijsrc[l,2]
             # adj stuff
             adjvars.idxconv.lfmm2grid[l] = cart2lin2D(ia,ja,n1)
             
@@ -632,7 +648,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
 
     ##======================================================
     if isthisrefinementsrc
-        ijsrc_coarse = Matrix{Int64}(undef,2,n1*n2)
+        ijsrc_coarse = Matrix{Int64}(undef,n1*n2,2)
         counter_ijsrccoarse::Int64 = 1
         counter_adjcoarse::Int64 = 1
     end
@@ -646,20 +662,22 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
     ##======================================================
 
     ## number of accepted points       
-    naccinit = size(ijsrc,2)        
+    naccinit = size(ijsrc,1)        
 
     ##======================================================
+    ## Only while running in the fine grid
+    ## 
     if isthisrefinementsrc
         for l=1:naccinit
-            ia = ijsrc[1,l]
-            ja = ijsrc[2,l]
+            ia = ijsrc[l,1]
+            ja = ijsrc[l,2]
 
             oncoa,ia_coarse,ja_coarse = isacoarsegridnode(ia,ja,downscalefactor,i1coarse,j1coarse)
 
             if oncoa
                 fmmvars_coarse.ttime[ia_coarse,ja_coarse]  = fmmvars.ttime[ia,ja]
                 fmmvars_coarse.status[ia_coarse,ja_coarse] = fmmvars.status[ia,ja]
-                ijsrc_coarse[:,counter_ijsrccoarse] .= (ia_coarse,ja_coarse)
+                ijsrc_coarse[counter_ijsrccoarse,:] .= (ia_coarse,ja_coarse)
                 ## update counter
                 counter_ijsrccoarse += 1
 
@@ -689,8 +707,8 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
         
         for ne=1:4 ## four potential neighbors
 
-            i = ijsrc[1,l] + neigh[ne,1]
-            j = ijsrc[2,l] + neigh[ne,2]
+            i = ijsrc[l,1] + neigh[ne,1]
+            j = ijsrc[l,2] + neigh[ne,2]
             
             ## if the point is out of bounds skip this iteration
             if (i>n1) || (i<1) || (j>n2) || (j<1)
@@ -760,7 +778,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
             if oncoa
                 fmmvars_coarse.ttime[ia_coarse,ja_coarse]  = fmmvars.ttime[ia,ja]
                 fmmvars_coarse.status[ia_coarse,ja_coarse] = fmmvars.status[ia,ja]
-                ijsrc_coarse[:,counter_ijsrccoarse] .= (ia_coarse,ja_coarse)
+                ijsrc_coarse[counter_ijsrccoarse,:] .= (ia_coarse,ja_coarse)
                 ## update counter
                 counter_ijsrccoarse += 1
                 
@@ -808,8 +826,10 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
 
                 ## delete current narrow band to avoid problems when returned to coarse grid
                 fmmvars_coarse.status[fmmvars_coarse.status.==1] .= 0
-  
-                return ijsrc_coarse[:,1:counter_ijsrccoarse-1]
+
+                ## re-allocate srcboxpar.ijsrc of type SourcePtsFromFineGrid (mutable struct)
+                fmmvars_coarse.srcboxpar.ijsrc = ijsrc_coarse[1:counter_ijsrccoarse-1,:]
+                return #ijsrc_coarse[1:counter_ijsrccoarse-1,:]
             end
             
         end # if isthisrefinementsrc      
@@ -1172,63 +1192,42 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
     rx = xsrc-grd.x[ix]
     ry = ysrc-grd.y[iy]
  
-    halfg = 0.0 #hgrid/2.0
+    #halfg = 0.0 #hgrid/2.0
     # Euclidean distance
     dist = sqrt(rx^2+ry^2)
 
     if dist<=mindistsrc
-        ## single point
-        ijsrc = @MMatrix [ix; iy]
-        ## set status = accepted == 2
-        fmmvars.status[ix,iy] = 2
-        ## set traveltime for the source
-        fmmvars.ttime[ix,iy] = 0.0
-
         println("WARNING: Source exactly on a grid point!\n \
-                 ijsrc: $ijsrc")
-        
-    else
-        # pre-allocate array of indices for source
-        ijsrc = @MMatrix zeros(Int64,2,4)
-
-        ## four points
-        if rx>=halfg
-            srci = (ix,ix+1)
-        else
-            srci = (ix-1,ix)
-        end
-        if ry>=halfg
-            srcj = (iy,iy+1)
-        else
-            srcj = (iy-1,iy)
-        end
-       
-        l=1
-        for j=1:2, i=1:2
-            ijsrc[:,l] .= (srci[i],srcj[j])
-            l+=1
-        end
-
-        ## set ttime around source ONLY FOUR points!!!
-        for l=1:size(ijsrc,2)
-            i = ijsrc[1,l]
-            j = ijsrc[2,l]
-
-            ## set status = accepted == 2
-            fmmvars.status[i,j] = 2
-
-            ## regular grid, the velocity must be the same for the 4 points
-            xp = grd.x[i] 
-            yp = grd.y[j]
-            ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
-            jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
-            ## set traveltime for the source
-            fmmvars.ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
-
-        end
+                                      ijsrc: $ijsrc")
     end
+
+    # get the interpolated velocity
+    coeff,velcorn,ijsrc = bilinear_interp(vel,grd,srcpos,outputcoeff=true)
     
-    return ijsrc
+    ## Set srcboxpar
+    Ncorn = size(ijsrc,1)
+    fmmvars.srcboxpar.ijsrc .= ijsrc
+    fmmvars.srcboxpar.coeff .= coeff
+    fmmvars.srcboxpar.velcorn .= velcorn #[vel[ijsrc[i,1],ijsrc[i,2]] for i=1:Ncorn]
+    velsrc = dot(coeff,velcorn)
+
+    ## set ttime around source ONLY FOUR points!!!
+    for l=1:Ncorn
+        i = ijsrc[l,1]
+        j = ijsrc[l,2]
+
+        ## set status = accepted == 2
+        fmmvars.status[i,j] = 2
+
+        ## corner position 
+        xp = grd.x[i] 
+        yp = grd.y[j]
+
+        fmmvars.ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / velsrc
+
+    end
+     
+    return #ijsrc
 end 
 
 #################################################################################
@@ -1250,7 +1249,7 @@ function sourceboxloctt_sph!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Ab
     rr = rsrc-grd.r[ir]
     rθ = θsrc-grd.θ[iθ]
 
-    halfg = 0.0 #hgrid/2.0
+    #halfg = 0.0 #hgrid/2.0
     ## distance in POLAR COORDINATES
     ## sqrt(r1^+r2^2 - 2*r1*r2*cos(θ1-θ2))
     r1=rsrc
@@ -1258,60 +1257,38 @@ function sourceboxloctt_sph!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Ab
     dist = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iθ]) )  #sqrt(rr^2+grd.r[ir]^2*rθ^2)
     #@show dist,src,rr,rθ
     if dist<=mindistsrc
-        ## single point
-        ijsrc = @MMatrix [ir; iθ]
-        ## set status = accepted == 2
-        fmmvars.status[ir,iθ] = 2
-        ## set traveltime for the source
-        fmmvars.ttime[ir,iθ] =0.0
-        
-    else
-        # pre-allocate array of indices for source
-        ijsrc = @MMatrix zeros(Int64,2,4)
-
-        ## eight points
-        if rr>=halfg
-            srci = (ir,ir+1)
-        else
-            srci = (ir-1,ir)
-        end
-        if rθ>=halfg
-            srcj = (iθ,iθ+1)
-        else
-            srcj = (iθ-1,iθ)
-        end
-
-        l=1
-        for j=1:2, i=1:2
-            ijsrc[:,l] .= (srci[i],srcj[j])
-            l+=1
-        end
-
-        ## set ttime around source ONLY FOUR points!!!
-        for l=1:size(ijsrc,2)
-            i = ijsrc[1,l]
-            j = ijsrc[2,l]
-
-            ## set status = accepted == 2
-            fmmvars.status[i,j] = 2
-            
-            ## regular grid
-            # xp = (i-1)*grd.Δr+grd.rinit
-            # yp = (j-1)*grd.Δθ+grd.θinit
-            ii = Int(floor((rsrc-grd.rinit)/grd.Δr)) +1
-            jj = Int(floor((θsrc-grd.θinit)/grd.Δθ)) +1
-            ##ttime[i,j] = sqrt((rsrc-xp)^2+(θsrc-yp)^2) / vel[ii,jj]
-            ## sqrt(r1^+r2^2 -2*r1*r2*cos(θ1-θ2))
-            r1=rsrc
-            r2=grd.r[ii]
-            # distance
-            distp = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iθ]))
-            ## set traveltime for the source
-            fmmvars.ttime[i,j] = distp / vel[ii,jj]
-        end
+        println("WARNING: Source exactly on a grid point!\n \
+                 ijsrc: $ijsrc")
     end
 
-    return ijsrc
+    # get the interpolated velocity
+    coeff,velcorn,ijsrc = bilinear_interp_sph(vel,grd,srcpos,outputcoeff)
+    
+    ## Set srcboxpar
+    Ncorn = size(ijsrc,1)
+    fmmvars.srcboxpar.ijsrc .= ijsrc
+    fmmvars.srcboxpar.coeff .= coeff
+    fmmvars.srcboxpar.velcorn .= velcorn # [vel[ijsrc[i,:]] for i=1:Ncorn]
+    velsrc = dot(coeff,velcorn)
+
+    
+    ## set ttime around source ONLY FOUR points!!!
+    for l=1:Ncorn
+        i = ijsrc[1,l]
+        j = ijsrc[2,l]
+
+        ## set status = accepted == 2
+        fmmvars.status[i,j] = 2
+        
+        r1=rsrc
+        r2=grd.r[ii]
+        # distance
+        distp = sqrt(r1^2+r2^2-2.0*r1*r2*cosd(θsrc-grd.θ[iθ]))
+        ## set traveltime for the source
+        fmmvars.ttime[i,j] = distp / velsrc
+    end
+
+    return #ijsrc
 end
 
 #########################################################
@@ -1355,17 +1332,19 @@ function createsparsederivativematrices!(grd,adjvars)
 
     end
 
-  
-    ## pre-compute the mapping between fmm and orig order
+    ##--------------------------------------------------------
+    ## pre-compute the mapping between fmm and original order
     n12 = n1*n2
     nptsonsrc = count(adjvars.fmmord.onsrccols)
     #nptsonh   = count(adjvars.fmmord.onhpoints)
 
     for i=1:n12
+        # ifm = index from fast marching ordering
         ifm = adjvars.idxconv.lfmm2grid[i]
         if ifm==0
+            # ifm is zero = end of indices for fmm ordering [lfmm2grid=zeros(Int64,nxyz)]
             Nnnzsteps = i-1
-
+            # remove rows corresponding to points in the source region
             adjvars.fmmord.vecDx.Nsize[1] = Nnnzsteps - nptsonsrc
             adjvars.fmmord.vecDx.Nsize[2] = Nnnzsteps
             adjvars.fmmord.vecDy.Nsize[1] = Nnnzsteps - nptsonsrc
@@ -1470,10 +1449,10 @@ function createfinegrid(grd,xysrc,vel)
     # i2coarsevirtual = ixsrcglob + noderadius
     # j1coarsevirtual = iysrcglob - noderadius
     # j2coarsevirtual = iysrcglob + noderadius
-    i1coarsevirtual = minimum(ijsrcpts[:,1]) - noderadius
-    i2coarsevirtual = maximum(ijsrcpts[:,1]) + noderadius
-    j1coarsevirtual = minimum(ijsrcpts[:,2]) - noderadius
-    j2coarsevirtual = maximum(ijsrcpts[:,2]) + noderadius
+    i1coarsevirtual = minimum(ijsrcpts[1,:]) - noderadius
+    i2coarsevirtual = maximum(ijsrcpts[1,:]) + noderadius
+    j1coarsevirtual = minimum(ijsrcpts[2,:]) - noderadius
+    j2coarsevirtual = maximum(ijsrcpts[2,:]) + noderadius
     # if hitting borders
     outxmin = i1coarsevirtual<1
     outxmax = i2coarsevirtual>n1_coarse
