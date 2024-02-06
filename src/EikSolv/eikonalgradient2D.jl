@@ -595,6 +595,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ##  compute gradient
         ##############################################
         gradsrcpos1 .= ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt_fmmord,
+                                            fmmvars.srcboxpar,
                                             adjvars.idxconv,lambda_fmmord,vel2d,
                                             adjvars.fmmord.onsrccols,xysrc,grd,
                                             refinearoundsrc=refinearoundsrc ) #,
@@ -602,7 +603,6 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     end
     
     if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
-
 
 
         #################################################
@@ -630,10 +630,15 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         end
         @show size(lambda_fmmord)
         @show size(lambda)
-        # As suggested above, here lambda has full size (including source points),
+        # As hinted above, here lambda has full size (including source points),
         #   however, it is zero in the A region, so no contribution to the gradient
         gradvec_T2v = 2.0 .* lambda ./ vec(vel2d).^3
         gradvel1 .= reshape(gradvec_T2v,idxconv.nx,idxconv.ny)
+
+        ##-----------------------------------------
+        ## add contribution in the A region to T2v
+        ##  
+
 
         #################################################
         # Gradient with respect to velocity, term T1v
@@ -643,15 +648,39 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ## fact2 = ((P*tt_fmmord).-pickobs)./stdobs.^2
         # pick only columns belonging to the source region
         P_Areg = P[:,adjvars.fmmord.onsrccols]
-        @show size(P_Areg)
         ∂ψ_∂u_s = transpose(P_Areg) * fact2
+        @show size(P_Areg)
+        # @show size(∂ψ_∂u_s)
+        # @show transpose(P_Areg)
+        # @show fact2
+        @show ∂ψ_∂u_s
         ## derivative of traveltime at source nodes w.r.t. velocity in region A
-        # dus_dva = 
-        # ## add contribution to the gradient
-        # gradvel1[???,??] .= dus_dva * ∂ψ_∂u_s 
+        coeffvel = fmmvars.srcboxpar.coeff
+        velcorn  = fmmvars.srcboxpar.velcorn
+        distcorn = fmmvars.srcboxpar.distcorn
+        velsrc = dot(coeffvel,velcorn)
+        Lint = repeat(coeffvel',length(coeffvel))
 
- 
+        dus_dva = - (distcorn' * Lint) ./ (Lint * velcorn).^2
+        # @show distcorn
+        # @show Lint
+        # @show velcorn
+        @show size(dus_dva)
 
+        #
+        ## add contribution to the gradient
+        ijsrcreg = fmmvars.srcboxpar.ijsrc
+        tmpgr1 = ∂ψ_∂u_s' * dus_dva
+        for i=1:length(tmpgr1)
+            m,n = ijsrcreg[i,:]
+            #@show i,m,n,tmpgr1[i]
+            gradvel1[m,n] += tmpgr1[i]
+        end
+
+
+        #############################################
+        ##
+        #############################################
         if refinearoundsrc
 
             #error("Gradient with respect to velocity with refinement of the grid currently missing a piece... Aborting.")
@@ -1081,15 +1110,18 @@ $(TYPEDSIGNATURES)
 Calculates the derivative of the misfit function with respect to the traveltime at the initial points around the source ("onsrc").
 """
 function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
+                              srcboxpar,
                               idxconv,
                               lambda::AbstractArray{Float64},
-                              vel2d::Array{Float64,2},sourcerows,xysrc,grd::GridEik2D;
+                              vel2d::Array{Float64,2},
+                              sourcerows,xysrc,grd::GridEik2D;
                               refinearoundsrc::Bool ) #,
                               #∂u_h∂x_s)
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
     nx,ny = size(vel2d)
+
 
     ###################################################################
     ## Derivative of the misfit w.r.t. the traveltime at source nodes
@@ -1107,12 +1139,12 @@ function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
         ###################################################################
         ## WITH REFINEMENT of around the source
         ###################################################################
-        # # If there is refinement around the source, and extra factor needs
+        # # If there is refinement around the source, an extra factor needs
         # #  to be computed in the chain rule 
         # #   ∂ψ/∂u_h * ∂u_h/∂u_s * ∂u_s/∂x_s
         # ∂u_h∂u_s = calc∂u_h∂u_s_finegrid(fmmvars_fine,adjvars_coarse,xysrc,grd)
         dχdx_src = dot( ∂χ∂t_src, ∂u_h∂x_s) # along x
-        dχdy_src = dot( ∂χ∂t_src, ∂u_h∂x_s) # along y
+        dχdy_src = dot( ∂χ∂t_src, ∂u_h∂y_s) # along y
 
         
     else
@@ -1125,6 +1157,13 @@ function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
         curijsrc = MVector(0,0)
         derpos = zeros(npts,2)
 
+        ##
+        coeffvel = srcboxpar.coeff
+        velcorn  = srcboxpar.velcorn
+        distcorn = srcboxpar.distcorn
+        velsrc = dot(coeffvel,velcorn)
+        ijsrc = srcboxpar.ijsrc
+
         for p=1:npts 
             # ifmmord_srcpts = count(sourcerows[1:p])
             # iorig_srcpts = idxconv.lfmm2grid[ifmmord_srcpts]
@@ -1134,23 +1173,30 @@ function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
             ## Source velocity stuff
             # Get the correct velocity for all 4 vertices
             #  The velocity should be the same (same ii,jj) for all 4 points
-            #velpts[p] = vel2d[iorig_srcpts]
-            lin2cart2D!(iorig_srcpts,grd.nx,curijsrc)
-            xps = grd.x[curijsrc[1]] 
-            yps = grd.y[curijsrc[2]]
-            ii = Int(floor((xysrc[1]-grd.xinit)/grd.hgrid)) +1
-            jj = Int(floor((xysrc[2]-grd.yinit)/grd.hgrid)) +1 
-            velpt = vel2d[ii,jj]
-            
-            ##################################
-            ## Derivatives for each source point
-            ## CONVERT linear to cartesian 2D to get point position
-            lin2cart2D!(iorig_srcpts,nx,ijpt)
-            xypt .= (grd.x[ijpt[1]], grd.y[ijpt[2]])
+            # lin2cart2D!(iorig_srcpts,grd.nx,curijsrc)
+            # xps = grd.x[curijsrc[1]] 
+            # yps = grd.y[curijsrc[2]]
+            # ii = Int(floor((xysrc[1]-grd.xinit)/grd.hgrid)) +1
+            # jj = Int(floor((xysrc[2]-grd.yinit)/grd.hgrid)) +1 
+            #velpt = vel2d[curijsrc[1],curijsrc[2]]
+            #@show "adjoint",velsrc,velpt
 
-            derpos[p,:] .= partderivttsrcpos2D(xypt,xysrc,velpt)
+            # ##################################
+            # ## Derivatives for each source point
+            # ## CONVERT linear to cartesian 2D to get point position
+            # lin2cart2D!(iorig_srcpts,nx,ijpt)
+            # xypt .= (grd.x[ijpt[1]], grd.y[ijpt[2]])
+
+            # icur,jcur = ijpt
+            # @show icur,jcur
+            # @show srcboxpar.ijsrc[p,:]
+            #@show distcorn[p]
+            xypt .= (grd.x[ijsrc[p,1]],grd.y[ijsrc[p,2]])
+
+            #@show  "adjoint",velsrc#,xypt,xysrc
+            derpos[p,:] .= partderivttsrcpos2D(xypt,xysrc,velsrc)
         end
-
+        
         dχdx_src = dot( ∂χ∂t_src, derpos[:,1] ) # along x
         dχdy_src = dot( ∂χ∂t_src, derpos[:,2] ) # along y
     end

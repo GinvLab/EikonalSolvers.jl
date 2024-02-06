@@ -591,12 +591,11 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
         end
         # sort according to arrival time
         spidx = sortperm(ttfirstpts)
-        
+
         # store the first accepted points' order
-        node_coarse = 1
-        for l=1:naccinit
+        for p=1:naccinit
             # ordered index
-            p = spidx[l]
+            l = spidx[p]
             # go from cartesian (i,j) to linear
             ia,ja = ijsrc[l,1],ijsrc[l,2]
             # adj stuff
@@ -666,7 +665,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
 
     ##======================================================
     ## Only while running in the fine grid
-    ## 
+    ##======================================================
     if isthisrefinementsrc
         for l=1:naccinit
             ia = ijsrc[l,1]
@@ -771,7 +770,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
         ##======================================================
         ## Are we running a refinement around the source? If so, 
         ##    UPDATE the COARSE GRID
-        ##===================================
+        ##======================================================
         if isthisrefinementsrc
             oncoa,ia_coarse,ja_coarse = isacoarsegridnode(ia,ja,downscalefactor,i1coarse,j1coarse)
 
@@ -1187,23 +1186,11 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
     mindistsrc = 10.0*eps()
     xsrc,ysrc=srcpos[1],srcpos[2]
 
-    ## regular grid
-    ix,iy = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid) 
-    rx = xsrc-grd.x[ix]
-    ry = ysrc-grd.y[iy]
- 
-    #halfg = 0.0 #hgrid/2.0
-    # Euclidean distance
-    dist = sqrt(rx^2+ry^2)
-
-    if dist<=mindistsrc
-        println("WARNING: Source exactly on a grid point!\n \
-                                      ijsrc: $ijsrc")
-    end
-
     # get the interpolated velocity
     coeff,velcorn,ijsrc = bilinear_interp(vel,grd,srcpos,outputcoeff=true)
     
+
+
     ## Set srcboxpar
     Ncorn = size(ijsrc,1)
     fmmvars.srcboxpar.ijsrc .= ijsrc
@@ -1211,10 +1198,12 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
     fmmvars.srcboxpar.velcorn .= velcorn #[vel[ijsrc[i,1],ijsrc[i,2]] for i=1:Ncorn]
     velsrc = dot(coeff,velcorn)
 
+    #println("\nsourceboxloctt!(): velsrc = $velsrc ")
+    #@show velcorn
+
     ## set ttime around source ONLY FOUR points!!!
     for l=1:Ncorn
-        i = ijsrc[l,1]
-        j = ijsrc[l,2]
+        i,j = ijsrc[l,:]
 
         ## set status = accepted == 2
         fmmvars.status[i,j] = 2
@@ -1223,10 +1212,88 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
         xp = grd.x[i] 
         yp = grd.y[j]
 
-        fmmvars.ttime[i,j] = sqrt((xsrc-xp)^2+(ysrc-yp)^2) / velsrc
+        # set the distance from corner to origin
+        distcorn = sqrt((xsrc-xp)^2+(ysrc-yp)^2)
+        fmmvars.srcboxpar.distcorn[l] = distcorn
 
+
+        # ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
+        # jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1
+
+        # set the traveltime to corner
+        fmmvars.ttime[i,j] = distcorn / velsrc
+        #@show "sourcebox",velsrc,vel[i,j]
+        #@show "sourcebox",[xp,yp],[xsrc,ysrc]
+        #println("$l ttime from bilin. interp.: $(fmmvars.ttime[i,j]), $distcorn ")
     end
-     
+    
+    #println("ijsrc from bilin. interp.: $ijsrc ")
+    
+
+    ###########################################
+    # ## regular grid
+    # ix,iy = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid) 
+    # rx = xsrc-grd.x[ix]
+    # ry = ysrc-grd.y[iy]
+ 
+    # #halfg = 0.0 #hgrid/2.0
+    # # Euclidean distance
+    # dist = sqrt(rx^2+ry^2)
+
+    # if dist<=mindistsrc
+    #     println("WARNING: Source exactly on a grid point!\n \
+    #                                   ijsrc: $ijsrc")
+    # end
+
+    # halfg = 0.0
+
+    # # pre-allocate array of indices for source
+    # ijsrc = @MMatrix zeros(Int64,2,4)
+
+    # ## four points
+    # if rx>=halfg
+    #     srci = (ix,ix+1)
+    # else
+    #     srci = (ix-1,ix)
+    # end
+    # if ry>=halfg
+    #     srcj = (iy,iy+1)
+    # else
+    #     srcj = (iy-1,iy)
+    # end
+    
+    # l=1
+    # for j=1:2, i=1:2
+    #     ijsrc[:,l] .= (srci[i],srcj[j])
+    #     l+=1
+    # end
+    # #println("ijsrc from four points:    $(ijsrc') ")
+
+    # ## set ttime around source ONLY FOUR points!!!
+    # for l=1:size(ijsrc,2)
+    #     i = ijsrc[1,l]
+    #     j = ijsrc[2,l]
+
+    #     ## set status = accepted == 2
+    #     fmmvars.status[i,j] = 2
+    #     fmmvars.srcboxpar.ijsrc[l,:] .= (i,j)
+        
+    #     ## regular grid, the velocity must be the same for the 4 points
+    #     xp = grd.x[i] 
+    #     yp = grd.y[j]
+    #     #@show "4p",xp,yp
+    #     ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
+    #     jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1             
+    #     ## set traveltime for the source
+    #     dist = sqrt((xsrc-xp)^2+(ysrc-yp)^2)
+    #     tt = dist / vel[ii,jj]
+    #     #fmmvars.ttime[i,j] = tt ##sqrt((xsrc-xp)^2+(ysrc-yp)^2) / vel[ii,jj]
+    #     #println("$l ttime from four points   : $(tt), $dist ")
+        
+    # end
+    ###########################################
+
+    
     return #ijsrc
 end 
 

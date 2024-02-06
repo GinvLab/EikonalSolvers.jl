@@ -398,6 +398,8 @@ struct SourceBoxParams2D
     coeff::MVector
     "velocity at the corners surrounding the source location"
     velcorn::MVector
+    "distance from the corners to the source location"
+    distcorn::MVector
 end
 
 ####################################
@@ -409,6 +411,8 @@ struct SourceBoxParams3D
     coeff::MVector
     "velocity at the corners surrounding the source location"
     velcorn::MVector
+    "distance from the corners to the source location"
+    distcorn::MVector
 end
 
 
@@ -446,12 +450,14 @@ struct FMMvars2D
             Ncoe = 4
             srcboxpar = SourceBoxParams2D(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,2)),
                                           MVector{Ncoe}(zeros(Ncoe)),
+                                          MVector{Ncoe}(zeros(Ncoe)),
                                           MVector{Ncoe}(zeros(Ncoe)) )
         end
         new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
     end
 end
 
+######################################################
 
 struct FMMvars3D
     ttime::Array{Float64,3}
@@ -478,10 +484,10 @@ struct FMMvars3D
         else
             srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,0))
             elseNcoe = 8
-            srcboxpar = SourceBoxParams3D(zeros(Int64,Ncoe,3),
-                                          zeros(Ncoe),
-                                          zeros(Ncoe) )
-                                          
+            srcboxpar = SourceBoxParams3D(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,3)),
+                                          MVector{Ncoe}(zeros(Ncoe)),
+                                          MVector{Ncoe}(zeros(Ncoe)),
+                                          MVector{Ncoe}(zeros(Ncoe)) )                                          
         end
         new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
     end
