@@ -606,7 +606,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
 
 
         #################################################
-        # Gradient with respect to velocity, term T2v
+        # Gradient with respect to velocity, term T2Vb
         #################################################
         # Reorder lambda from fmmord to original grid!!
         idxconv = adjvars.idxconv
@@ -628,32 +628,22 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
             # map lambda in fmmord into lambda in the original grid
             lambda[iorig] = lambda_fmmord[p]
         end
-        @show size(lambda_fmmord)
-        @show size(lambda)
+        #@show size(lambda_fmmord)
+        #@show size(lambda)
         # As hinted above, here lambda has full size (including source points),
         #   however, it is zero in the A region, so no contribution to the gradient
         gradvec_T2v = 2.0 .* lambda ./ vec(vel2d).^3
         gradvel1 .= reshape(gradvec_T2v,idxconv.nx,idxconv.ny)
 
-        ##-----------------------------------------
-        ## add contribution in the A region to T2v
-        ##  
-
+    
 
         #################################################
-        # Gradient with respect to velocity, term T1v
+        # Gradient with respect to velocity, term T2Va
         #################################################
-        # T1v = ∂ψ/∂u_s
-        ## using fact2 from the calculations above!
-        ## fact2 = ((P*tt_fmmord).-pickobs)./stdobs.^2
-        # pick only columns belonging to the source region
-        P_Areg = P[:,adjvars.fmmord.onsrccols]
-        ∂ψ_∂u_s = transpose(P_Areg) * fact2
-        @show size(P_Areg)
-        # @show size(∂ψ_∂u_s)
-        # @show transpose(P_Areg)
-        # @show fact2
-        @show ∂ψ_∂u_s
+        # deriv. of the implicit forw. mod. w.r.t. u_s
+        ∂fi_∂us = twoDttDSx .+ twoDttDSy
+        @show size(∂fi_∂us )
+        
         ## derivative of traveltime at source nodes w.r.t. velocity in region A
         coeffvel = fmmvars.srcboxpar.coeff
         velcorn  = fmmvars.srcboxpar.velcorn
@@ -662,20 +652,50 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         Lint = repeat(coeffvel',length(coeffvel))
 
         dus_dva = - (distcorn' * Lint) ./ (Lint * velcorn).^2
+        #@show size(dus_dva)
+        #@show size(lambda)
+        #@show size(lambda_fmmord)
+
+        ## FMM ordering for ∂fi_∂us!!!
+        tmpfiva = ∂fi_∂us * dus_dva
+        ## FMM ordering for lambda_fmmord!!!
+        T2Va = lambda_fmmord' * tmpfiva
+
+        ijsrcreg = fmmvars.srcboxpar.ijsrc
+        for i=1:length(T2Va)
+            m,n = ijsrcreg[i,:]
+            gradvel1[m,n] += T2Va[i]
+        end
+
+        #################################################
+        # Gradient with respect to velocity, term T1Va
+        #################################################
+        # T1v = ∂ψ/∂u_s
+        ## using fact2 from the calculations above!
+        ## fact2 = ((P*tt_fmmord).-pickobs)./stdobs.^2
+        # pick only columns belonging to the source region
+        P_Areg = P[:,adjvars.fmmord.onsrccols]
+        ∂ψ_∂u_s = transpose(P_Areg) * fact2
+        #@show size(P_Areg)
+        # @show size(∂ψ_∂u_s)
+        # @show transpose(P_Areg)
+        # @show fact2
+        #@show ∂ψ_∂u_s
+        
         # @show distcorn
         # @show Lint
         # @show velcorn
-        @show size(dus_dva)
+        #@show size(dus_dva)
 
-        #
-        ## add contribution to the gradient
-        ijsrcreg = fmmvars.srcboxpar.ijsrc
+        ## add contribution to the gradient       
         tmpgr1 = ∂ψ_∂u_s' * dus_dva
         for i=1:length(tmpgr1)
             m,n = ijsrcreg[i,:]
             #@show i,m,n,tmpgr1[i]
             gradvel1[m,n] += tmpgr1[i]
         end
+
+        println("=== END adjoint coarse grid ===")
 
 
         #############################################
@@ -713,7 +733,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         end
 
     end
-    println("=== END adjoint coarse grid ===")
+    
     return 
 end
 
