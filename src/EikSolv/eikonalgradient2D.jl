@@ -451,7 +451,7 @@ function calcprojttfmmord(ttime::AbstractArray{Float64},grd::GridEik,idxconv::Ma
             end
 
             # get index in fmm order
-            jfmmord = idxconv.lgrid2fmm[iorig]  # jfmmord = findfirst(idxconv.lfmm2grid.==iorig)
+            jfmmord = idxconv.lgrid2fmm[iorig] 
 
             # the order for P is:
             #   rows: according to coordrec, stdobs, pickobs
@@ -466,6 +466,7 @@ function calcprojttfmmord(ttime::AbstractArray{Float64},grd::GridEik,idxconv::Ma
     end
 
     P = sparse(P_i,P_j,P_v,nrec,nmodpar)
+    
     return P
 end
 
@@ -520,6 +521,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     P_Breg = P[:,rq] # remove columns
     rhs = - transpose(P_Breg) * fact2
 
+
     ################################
     ##   left hand side adj eq.
     ################################
@@ -566,11 +568,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
 
-    @show Nix,Njx
-    @show Niy,Njy
-    @show prod(size(vel2d))
-    @show count(adjvars.fmmord.onsrccols)
-
+   
     ## OLD stuff...
     # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
     # ##   the solver (\) does not use the correct sparse algo for matrix division
@@ -617,23 +615,28 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ##   while "lambda_fmmord" excludes the points on the source,
         ##   so it is smaller, as required by the adjoint equation.
 
-        # !!! lambda MUST be zeroed here !!!
-        lambda = zeros(eltype(lambda_fmmord),length(vel2d))
+        ## !!! lambda MUST be zeroed here !!!
+        # lambda = zeros(eltype(lambda_fmmord),length(vel2d))
+        ijpt = MVector(0,0)
         #Nall = length(idxconv.lfmm2grid)
         for p=1:N
             # The following two lines is a complex way to map the
             #  "full" indices to the "reduced" set of indices
             # curnptsonsrc_fmmord = count(adjvars.fmmord.onsrccols[1:p])
-            iorig = idxconv.lfmm2grid[p+nptsonsrc]
-            # map lambda in fmmord into lambda in the original grid
-            lambda[iorig] = lambda_fmmord[p]
+            iorig = idxconv.lfmm2grid[p+nptsonsrc] # skip pts on src
+
+            # get the i,j indices for vel and grad
+            lin2cart2D!(iorig,idxconv.nx,ijpt)
+            i,j = ijpt
+            gradvel1[i,j] = 2.0 * lambda_fmmord[p] / vel2d[i,j]^3
+
+            ## map lambda in fmmord into lambda in the original grid
+            # lambda[iorig] = lambda_fmmord[p]
         end
-        #@show size(lambda_fmmord)
-        #@show size(lambda)
-        # As hinted above, here lambda has full size (including source points),
-        #   however, it is zero in the A region, so no contribution to the gradient
-        gradvec_T2v = 2.0 .* lambda ./ vec(vel2d).^3
-        gradvel1 .= reshape(gradvec_T2v,idxconv.nx,idxconv.ny)
+        ## As hinted above, here lambda has full size (including source points),
+        ##   however, it is zero in the A region, so no contribution to the gradient
+        # gradvec_T2v = 2.0 .* lambda ./ vec(vel2d).^3
+        # gradvel1 .= reshape(gradvec_T2v,idxconv.nx,idxconv.ny)
 
     
 
@@ -644,13 +647,17 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ∂fi_∂us = twoDttDSx .+ twoDttDSy
         @show size(∂fi_∂us )
         
-        ## derivative of traveltime at source nodes w.r.t. velocity in region A
+        ## source box parameters
         coeffvel = fmmvars.srcboxpar.coeff
         velcorn  = fmmvars.srcboxpar.velcorn
         distcorn = fmmvars.srcboxpar.distcorn
         velsrc = dot(coeffvel,velcorn)
-        Lint = repeat(coeffvel',length(coeffvel))
+        ijsrcreg = fmmvars.srcboxpar.ijsrc
+        #@show ijsrcreg
+    
 
+        ## derivative of traveltime at source nodes w.r.t. velocity in region A
+        Lint = repeat(coeffvel',length(coeffvel))
         dus_dva = - (distcorn' * Lint) ./ (Lint * velcorn).^2
         #@show size(dus_dva)
         #@show size(lambda)
@@ -661,7 +668,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ## FMM ordering for lambda_fmmord!!!
         T2Va = lambda_fmmord' * tmpfiva
 
-        ijsrcreg = fmmvars.srcboxpar.ijsrc
+        ## add contribution to the gradient
         for i=1:length(T2Va)
             m,n = ijsrcreg[i,:]
             gradvel1[m,n] += T2Va[i]
@@ -1006,9 +1013,9 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
                 two_Dtt_DR.lastrowupdated[] = i # this must stay here (this if and for loop)!
 
             elseif onsrccols[j]
-                ################################################################### 
+                ################################################################## 
                 ##  Computation of 2*D*tt*DS for the grad w.r.t. source position
-                ###################################################################
+                ##################################################################
                 js = count(onsrccols[1:j])
                 twoDttDS[i,js] = 2.0 * tmp1 * vecD.v[l]
                     

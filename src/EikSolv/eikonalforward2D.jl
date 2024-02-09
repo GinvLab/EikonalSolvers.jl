@@ -700,15 +700,21 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
     ## pre-allocate
     tmptt::Float64 = 0.0 
 
+    
     ##-----------------------------------------
     ## construct initial narrow band
     for l=1:naccinit ##
+
+#   ii=ijsrc[l,1]
+#   jj=ijsrc[l,2]
+# @show l,(ii,jj),fmmvars.ttime[ii,jj]
+
         
         for ne=1:4 ## four potential neighbors
 
             i = ijsrc[l,1] + neigh[ne,1]
             j = ijsrc[l,2] + neigh[ne,2]
-            
+
             ## if the point is out of bounds skip this iteration
             if (i>n1) || (i<1) || (j>n2) || (j<1)
                 continue
@@ -726,6 +732,16 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
                 # change status, add to narrow band
                 fmmvars.status[i,j]=1
 
+
+                # # @show l,(i,j),tmptt
+                # # @show l,ijsrc[l,:],fmmvars.ttime[ijsrc[l,1],ijsrc[l,2]]
+                # xsrc,ysrc = fmmvars.srcboxpar.xysrc
+                # xpt,ypt = [grd.x[i], grd.y[j]]
+                # dist = sqrt( (xsrc-xpt)^2 +(ysrc-ypt)^2 )
+                # ttanal = dist / vel[i,j]
+                # @show l,fmmvars.srcboxpar.distcorn[l],tmptt,ttanal
+                # @show l,(i,j),tmptt
+
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
                     adjvars.codeDxy[han,:] .= idD
@@ -733,6 +749,9 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
             end
         end
     end
+
+
+#error("construct initial narrow band")
 
     ######################################################
     ## main FMM loop
@@ -757,12 +776,14 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
         # set traveltime of the new accepted point
         fmmvars.ttime[ia,ja] = tmptt
 
+# @show node,(ia,ja),tmptt
+# node>30 ? error("main loop") : nothing
+
         ##===================================
         # Discrete adjoint
         if dodiscradj
             # store the linear index of FMM order
             adjvars.idxconv.lfmm2grid[node] = cart2lin2D(ia,ja,n1)
-            #@show node,adjvars.idxconv.lfmm2grid[node]
             # store arrival time for first points in FMM order
             adjvars.fmmord.ttime[node] = tmptt  
         end
@@ -920,7 +941,7 @@ $(TYPEDSIGNATURES)
    Two-dimensional Cartesian or  spherical grid depending on the type of 'grd'.
 """
 function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
-                         grd::GridEik2D,i::Int64,j::Int64,codeD::MVector{2,Int64})
+                          grd::GridEik2D,i::Int64,j::Int64,codeD::MVector{2,Int64})
     
     #######################################################
     ##  Local solver Sethian et al., Rawlison et al.  ???##
@@ -964,8 +985,8 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
     alpha = 0.0
     beta  = 0.0
     gamma = - slowcurpt^2 ## !!!!
-    HUGE = 1.0e30
-    codeD[:] .= 0.0 
+    HUGE = typemax(eltype(vel)) #1.0e30
+    codeD[:] .= 0 # integers
 
     ## 2 directions
     for axis=1:2
@@ -997,28 +1018,28 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
             ## check if on boundaries
             isonb1st,isonb2nd = isonbord(i+ish,j+jsh,n1,n2)
                                     
-            ## 1st order
+            ##==== 1st order ================
             if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
                 testval1 = fmmvars.ttime[i+ish,j+jsh]
 
                 ## pick the lowest value of the two
-                if testval1<chosenval1 ## < only
+                if testval1<chosenval1 ## < only!!!
                     chosenval1 = testval1
                     use1stord = true
 
                     # save derivative choices
                     axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
                     
-                    ## 2nd order
+                    ##==== 2nd order ================
                     ish2::Int64 = 2*ish
                     jsh2::Int64 = 2*jsh
                     if !isonb2nd && fmmvars.status[i+ish2,j+jsh2]==2 ## 2==accepted
                         testval2 = fmmvars.ttime[i+ish2,j+jsh2]
                         ## pick the lowest value of the two
-                        ## <=, compare to chosenval 1, *not* 2!!
+                        ##   compare to chosenval 1, *not* 2!!
                         ## This because the direction has already been chosen
                         ##  at the line "testval1<chosenval1"
-                        if testval2<=chosenval1 
+                        if testval2<chosenval1 ## < only!!!
                             chosenval2=testval2
                             use2ndord=true
 
@@ -1033,15 +1054,20 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
                             axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
 
                         end
-                    end
+                    end ##==== END 2nd order ================
                     
-                end
-            end
+                end 
+            end ##==== END 1st order ================
         end # end two sides
 
         ## spacing
         deltah = Δh[axis]
-                
+
+#println("====  FORCE using 1st order only ===")      
+#@warn "use2ndord=false"
+#use2ndord=false
+
+        
         if use2ndord && use1stord # second order
             tmpa2 = 1.0/3.0 * (4.0*chosenval1-chosenval2)
             ## curalpha: make sure you multiply only times the
@@ -1070,96 +1096,100 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
     ##    where tx,ty can be
     ##     t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order
     ##     t? = chosenval1  if 1st order 
-    ##  
+    ##
+
+    ##=========================================================================================
     ## If discriminant is negative (probably because of sharp contrasts in
     ##  velocity) revert to 1st order for both x and y
-    if sqarg<0.0
+    # if sqarg<0.0
 
-        begin
-            alpha = 0.0
-            beta  = 0.0
-            gamma = - slowcurpt^2 ## !!!!
+    #     begin    
+    #         codeD[:] .= 0 # integers
+    #         alpha = 0.0
+    #         beta  = 0.0
+    #         gamma = - slowcurpt^2 ## !!!!
 
-            ## 2 directions
-            for axis=1:2
+    #         ## 2 directions
+    #         for axis=1:2
                 
-                use1stord = false
-                chosenval1 = HUGE
+    #             use1stord = false
+    #             chosenval1 = HUGE
                 
-                ## two sides for each direction
-                for l=1:2
+    #             ## two sides for each direction
+    #             for l=1:2
 
-                    ## map the 4 cases to an integer as in linear indexing...
-                    lax = l + 2*(axis-1)
-                    if lax==1 # axis==1
-                        ish = 1
-                        jsh = 0
-                    elseif lax==2 # axis==1
-                        ish = -1
-                        jsh = 0
-                    elseif lax==3 # axis==2
-                        ish = 0
-                        jsh = 1
-                    elseif lax==4 # axis==2
-                        ish = 0
-                        jsh = -1
-                    end
+    #                 ## map the 4 cases to an integer as in linear indexing...
+    #                 lax = l + 2*(axis-1)
+    #                 if lax==1 # axis==1
+    #                     ish = 1
+    #                     jsh = 0
+    #                 elseif lax==2 # axis==1
+    #                     ish = -1
+    #                     jsh = 0
+    #                 elseif lax==3 # axis==2
+    #                     ish = 0
+    #                     jsh = 1
+    #                 elseif lax==4 # axis==2
+    #                     ish = 0
+    #                     jsh = -1
+    #                 end
 
-                    ## check if on boundaries
-                    isonb1st,isonb2nd = isonbord(i+ish,j+jsh,n1,n2)
+    #                 ## check if on boundaries
+    #                 isonb1st,isonb2nd = isonbord(i+ish,j+jsh,n1,n2)
                     
-                    ## 1st order
-                    if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
-                        testval1 = fmmvars.ttime[i+ish,j+jsh]
-                        ## pick the lowest value of the two
-                        if testval1<chosenval1 ## < only
-                            chosenval1 = testval1
-                            use1stord = true
+    #                 ## 1st order
+    #                 if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
+    #                     testval1 = fmmvars.ttime[i+ish,j+jsh]
+    #                     ## pick the lowest value of the two
+    #                     if testval1<chosenval1 ## < only
+    #                         chosenval1 = testval1
+    #                         use1stord = true
 
-                            # save derivative choices
-                            axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+    #                         # save derivative choices
+    #                         axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
 
-                        end
-                    end
-                end # end two sides
+    #                     end
+    #                 end
+    #             end # end two sides
 
-                ## spacing
-                deltah = Δh[axis]
+    #             ## spacing
+    #             deltah = Δh[axis]
                 
-                if use1stord # first order
-                    ## curalpha: make sure you multiply only times the
-                    ##   current alpha for beta and gamma...
-                    curalpha = 1.0/deltah^2 
-                    alpha += curalpha
-                    beta  += ( -2.0*curalpha * chosenval1 )
-                    gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
-                end
-            end
+    #             if use1stord # first order
+    #                 ## curalpha: make sure you multiply only times the
+    #                 ##   current alpha for beta and gamma...
+    #                 curalpha = 1.0/deltah^2 
+    #                 alpha += curalpha
+    #                 beta  += ( -2.0*curalpha * chosenval1 )
+    #                 gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
+    #             end
+    #         end
             
-            ## recompute sqarg
-            sqarg = beta^2-4.0*alpha*gamma
+    #         ## recompute sqarg
+    #         sqarg = beta^2-4.0*alpha*gamma
 
-        end ## begin...
+    #     end ## begin...
 
-        if sqarg<0.0
+    #     if sqarg<0.0
 
-            if fmmvars.allowfixsqarg==true
+    #         if fmmvars.allowfixsqarg==true
             
-                gamma = beta^2/(4.0*alpha)
-                sqarg = beta^2-4.0*alpha*gamma
-                println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
+    #             gamma = beta^2/(4.0*alpha)
+    #             sqarg = beta^2-4.0*alpha*gamma
+    #             println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
                 
-            else
-                println("\n To get a non-negative discriminant, need to fulfil: ")
-                println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
-                println(" where tx,ty can be")
-                println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
-                println(" t? = chosenval1  if 1st order ")
+    #         else
+    #             println("\n To get a non-negative discriminant, need to fulfil: ")
+    #             println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
+    #             println(" where tx,ty can be")
+    #             println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
+    #             println(" t? = chosenval1  if 1st order ")
                 
-                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j)")
-            end
-        end
-    end ## if sqarg<0.0
+    #             error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j)")
+    #         end
+    #     end
+    # end ## if sqarg<0.0
+    ##=========================================================================================
 
     ### roots of the quadratic equation
     tmpsq = sqrt(sqarg)
@@ -1194,6 +1224,7 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
     ## Set srcboxpar
     Ncorn = size(ijsrc,1)
     fmmvars.srcboxpar.ijsrc .= ijsrc
+    fmmvars.srcboxpar.xysrc .= srcpos
     fmmvars.srcboxpar.coeff .= coeff
     fmmvars.srcboxpar.velcorn .= velcorn #[vel[ijsrc[i,1],ijsrc[i,2]] for i=1:Ncorn]
     velsrc = dot(coeff,velcorn)
@@ -1216,17 +1247,35 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
         distcorn = sqrt((xsrc-xp)^2+(ysrc-yp)^2)
         fmmvars.srcboxpar.distcorn[l] = distcorn
 
+        # set the traveltime to corner
+        fmmvars.ttime[i,j] = distcorn / vel[i,j] #velsrc
 
+        # ##-----------
+        # ## old way
         # ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
         # jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1
+        # fmmvars.ttime[i,j] = distcorn / vel[ii,jj]
 
-        # set the traveltime to corner
-        fmmvars.ttime[i,j] = distcorn / velsrc
-        #@show "sourcebox",velsrc,vel[i,j]
-        #@show "sourcebox",[xp,yp],[xsrc,ysrc]
-        #println("$l ttime from bilin. interp.: $(fmmvars.ttime[i,j]), $distcorn ")
     end
-    
+
+    # @show fmmvars.srcboxpar.distcorn
+    # @show fmmvars.ttime[ijsrc[:,1],ijsrc[:,2]]
+
+    println("=== Messing up the ttime at the source points ===")
+    for l=1:Ncorn
+        i,j = ijsrc[l,:]
+        fmmvars.ttime[i,j] = fmmvars.ttime[ijsrc[1,1],ijsrc[1,2]]
+    end
+
+
+    # save src reg points
+    xysrcpts = [grd.x[ijsrc[i,j]] for i=1:4,j=1:2]
+    println("Saving src region points...")
+    h5open("srcpoints.h5","w") do fl
+        write(fl,"srcpts", xysrcpts)
+    end
+
+
     #println("ijsrc from bilin. interp.: $ijsrc ")
     
 

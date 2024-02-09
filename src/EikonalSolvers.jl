@@ -44,6 +44,9 @@ using SparseArrays
 using DocStringExtensions
 using StaticArrays
 
+@warn "using HDF5"
+using HDF5
+
 # using LinearAlgebra
 ## For parallelisation
 using Distributed
