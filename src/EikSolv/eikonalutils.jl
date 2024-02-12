@@ -118,12 +118,18 @@ function bilinear_interp(f::AbstractArray{Float64,2},grd::Union{Grid2D,Grid2DSph
     j=floor(Int64,yh+1) # indices starts from 1
   
     ## if at the edges of domain choose previous square...
+    #@show "1",i,j,nx,ny
     if i==nx
         i=i-1
+    elseif i>nx
+        i=i-2
     end
     if j==ny
         j=j-1
+    elseif j>ny
+        j=j-2
     end 
+    #@show "2",i,j,nx,ny
 
     xd=xh-(i-1) # indices starts from 1
     yd=yh-(j-1) # indices starts from 1
@@ -159,7 +165,7 @@ function bilinear_interp(f::AbstractArray{Float64,2},grd::Union{Grid2D,Grid2DSph
 
     end
 
-    return intval
+    return 
 end
 
 #############################################################
@@ -363,13 +369,18 @@ function ttmisfitfunc(velmod::Union{Array{Float64,2},Array{Float64,3}},ttpicksob
     end
 
     nsrc = size(coordsrc,1)
-    #nrecs1 = size.(coordrec,1)
-    #totlen = sum(nrec1)
+    ##nrecs1 = size.(coordrec,1)
+    ##totlen = sum(nrec1)
     misf::Float64 = 0.0
     for s=1:nsrc
         misf += sum( (ttpicks[s].-ttpicksobs[s]).^2 ./ stdobs[s].^2)
     end
     misf *= 0.5
+
+    # misf = 0.0
+    # for s=1:nsrc
+    #     misf = sum(ttpicks[s])
+    # end
 
     # flatten traveltime array
     # dcalc = vec(ttpicks)

@@ -230,7 +230,7 @@ function update_node_maxheap!(h::BinHeapMax,val::Float64,handle::Int64)
     h.nodes[i] = val
 
     # GO UP THE TREE: compare with parents...
-    @inbounds while (i>1) && (h.nodes[index_parent(i)]<h.nodes[i])
+    while (i>1) && (h.nodes[index_parent(i)]<h.nodes[i])
         ## swap node with parent
         swap_nodes_heap!(h,i,index_parent(i))
         i = index_parent(i)
@@ -265,7 +265,7 @@ function insert_maxheap!(h::BinHeapMax,val::Float64,handle::Int64)
     # start from bottom right leaf
     i = h.Nh[]
     # compare with parents...
-    @inbounds while (i>1) && (h.nodes[index_parent(i)]<h.nodes[i])
+    while (i>1) && (h.nodes[index_parent(i)]<h.nodes[i])
         ## swap node with parent
         swap_nodes_heap!(h,i,index_parent(i))
         i = index_parent(i)
@@ -398,7 +398,7 @@ function update_node_minheap!(h::BinHeapMin,val::Float64,handle::Int64)
     
     # ## print(" find handle, h.Nh[] = $(h.Nh[]), time ")
     # idxh = 0
-    # @inbounds for l=1:h.Nh[]
+    #  for l=1:h.Nh[]
     #     if h.handles[l]==handle
     #         idxh = l
     #         break
@@ -417,7 +417,7 @@ function update_node_minheap!(h::BinHeapMin,val::Float64,handle::Int64)
     h.nodes[i] = val
     
     # GO UP THE TREE: compare with parents...
-    @inbounds while (i>1) && (h.nodes[index_parent(i)]>h.nodes[i])
+    while (i>1) && (h.nodes[index_parent(i)]>h.nodes[i])
         ## swap node with parent
         swap_nodes_heap!(h,i,index_parent(i))
         i = index_parent(i)
@@ -452,7 +452,7 @@ function insert_minheap!(h::BinHeapMin,val::Float64,handle::Int64)
     # start from bottom right leaf
     i = h.Nh[]
     # compare with parents...
-    @inbounds while (i>1) && (h.nodes[index_parent(i)]>h.nodes[i])
+    while (i>1) && (h.nodes[index_parent(i)]>h.nodes[i])
         ## swap node with parent
         swap_nodes_heap!(h,i,index_parent(i))
         i = index_parent(i)

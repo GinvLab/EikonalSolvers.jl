@@ -692,23 +692,31 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
     ######################################################
     ## init FMM 
     ######################################################
-    neigh = SA[1  0;
-               0  1;
-              -1  0;
-               0 -1]
+    # per = [[(1, 0), (0, 1), (-1, 0), (0, -1)], [(1, 0), (0, 1), (0, -1), (-1, 0)], [(1, 0), (-1, 0), (0, 1), (0, -1)], [(1, 0), (-1, 0), (0, -1), (0, 1)], [(1, 0), (0, -1), (0, 1), (-1, 0)], [(1, 0), (0, -1), (-1, 0), (0, 1)], [(0, 1), (1, 0), (-1, 0), (0, -1)], [(0, 1), (1, 0), (0, -1), (-1, 0)], [(0, 1), (-1, 0), (1, 0), (0, -1)], [(0, 1), (-1, 0), (0, -1), (1, 0)], [(0, 1), (0, -1), (1, 0), (-1, 0)], [(0, 1), (0, -1), (-1, 0), (1, 0)], [(-1, 0), (1, 0), (0, 1), (0, -1)], [(-1, 0), (1, 0), (0, -1), (0, 1)], [(-1, 0), (0, 1), (1, 0), (0, -1)], [(-1, 0), (0, 1), (0, -1), (1, 0)], [(-1, 0), (0, -1), (1, 0), (0, 1)], [(-1, 0), (0, -1), (0, 1), (1, 0)], [(0, -1), (1, 0), (0, 1), (-1, 0)], [(0, -1), (1, 0), (-1, 0), (0, 1)], [(0, -1), (0, 1), (1, 0), (-1, 0)], [(0, -1), (0, 1), (-1, 0), (1, 0)], [(0, -1), (-1, 0), (1, 0), (0, 1)], [(0, -1), (-1, 0), (0, 1), (1, 0)]]
+
+
+    # p = 1 # 8
+    # neigh = @SMatrix [ per[p][i][j] for i=1:4,j=1:2 ]
+    
+    neigh = SA[ 0  1;
+                1  0;
+                0 -1;
+               -1  0] 
+                
+
+    ## >>> BEST so far!!! <<<
+    # neigh = SA[0  1;
+    #            1  0;
+    #            0 -1;
+    #           -1  0]
+    
 
     ## pre-allocate
-    tmptt::Float64 = 0.0 
-
+    #tmptt::Float64 = 0.0 
     
     ##-----------------------------------------
     ## construct initial narrow band
     for l=1:naccinit ##
-
-#   ii=ijsrc[l,1]
-#   jj=ijsrc[l,2]
-# @show l,(ii,jj),fmmvars.ttime[ii,jj]
-
         
         for ne=1:4 ## four potential neighbors
 
@@ -733,26 +741,35 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
                 fmmvars.status[i,j]=1
 
 
-                # # @show l,(i,j),tmptt
-                # # @show l,ijsrc[l,:],fmmvars.ttime[ijsrc[l,1],ijsrc[l,2]]
-                # xsrc,ysrc = fmmvars.srcboxpar.xysrc
-                # xpt,ypt = [grd.x[i], grd.y[j]]
-                # dist = sqrt( (xsrc-xpt)^2 +(ysrc-ypt)^2 )
-                # ttanal = dist / vel[i,j]
-                # @show l,fmmvars.srcboxpar.distcorn[l],tmptt,ttanal
-                # @show l,(i,j),tmptt
-
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
                     adjvars.codeDxy[han,:] .= idD
                 end
-            end
-        end
+               
+            # elseif fmmvars.status[i,j]==1 ## narrow band
+            #     ##======================================
+            #     ## NNNNEEEEWWWW !!!!
+            #     #@show "Hello, construct initial narrow band $i, $j"
+            #     # update the traveltime for this point
+            #     tmptt = calcttpt_2ndord!(fmmvars,vel,grd,i,j,idD)
+
+            #     # get handle
+            #     han = cart2lin2D(i,j,n1)
+            #     # update the traveltime for this point in the heap
+            #     update_node_minheap!(fmmvars.bheap,tmptt,han)
+
+            #     if dodiscradj
+            #         # codes of chosen derivatives for adjoint
+            #         adjvars.codeDxy[han,:] .= idD
+            #     end
+            #     ##======================================
+                
+            end ## if fmmvars.status[i,j]==0 ## far
+        end ## for ne=1:4
     end
 
 
-#error("construct initial narrow band")
-
+    
     ######################################################
     ## main FMM loop
     ######################################################
@@ -776,8 +793,6 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
         # set traveltime of the new accepted point
         fmmvars.ttime[ia,ja] = tmptt
 
-# @show node,(ia,ja),tmptt
-# node>30 ? error("main loop") : nothing
 
         ##===================================
         # Discrete adjoint
@@ -854,6 +869,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
             
         end # if isthisrefinementsrc      
         ##===================================
+        
 
         ##===========================================
         ## try all neighbors of newly accepted point
@@ -897,7 +913,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
                 end
 
             end
-        end
+        end # for ne=1:4
 
     end # for node=naccinit+1:totnpts 
 
@@ -988,7 +1004,7 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
     HUGE = typemax(eltype(vel)) #1.0e30
     codeD[:] .= 0 # integers
 
-    ## 2 directions
+    ## 2 axis, x and y
     for axis=1:2
         
         use1stord = false
@@ -996,23 +1012,23 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
         chosenval1 = HUGE
         chosenval2 = HUGE
         
-        ## two sides for each direction
+        ## 2 directions: forward or backward
         for l=1:2
 
             ## map the 4 cases to an integer as in linear indexing...
             lax = l + 2*(axis-1)
             if lax==1 # axis==1
-                ish = 1
-                jsh = 0
+                ish = 1 #1
+                jsh = 0 #0
             elseif lax==2 # axis==1
-                ish = -1
-                jsh = 0
+                ish = -1  #-1
+                jsh = 0  #0
             elseif lax==3 # axis==2
-                ish = 0
-                jsh = 1
+                ish = 0 #0
+                jsh = 1 #1
             elseif lax==4 # axis==2
-                ish = 0
-                jsh = -1
+                ish = 0 # 0
+                jsh = -1 #-1
             end
 
             ## check if on boundaries
@@ -1020,6 +1036,7 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
                                     
             ##==== 1st order ================
             if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
+                ## first test value
                 testval1 = fmmvars.ttime[i+ish,j+jsh]
 
                 ## pick the lowest value of the two
@@ -1034,38 +1051,37 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
                     ish2::Int64 = 2*ish
                     jsh2::Int64 = 2*jsh
                     if !isonb2nd && fmmvars.status[i+ish2,j+jsh2]==2 ## 2==accepted
+                        # second test value
                         testval2 = fmmvars.ttime[i+ish2,j+jsh2]
                         ## pick the lowest value of the two
-                        ##   compare to chosenval 1, *not* 2!!
+                        ##    compare to chosenval 1, *not* 2!!
                         ## This because the direction has already been chosen
                         ##  at the line "testval1<chosenval1"
                         if testval2<chosenval1 ## < only!!!
-                            chosenval2=testval2
-                            use2ndord=true
-
+                            chosenval2 = testval2
+                            use2ndord = true 
                             # save derivative choices
                             axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
-
                         else
                             chosenval2=HUGE
+                            # below in case first direction gets 2nd ord
+                            #   but second direction, with a smaller testval1,
+                            #   does *not* get a second order
                             use2ndord=false # this is needed!
-
                             # save derivative choices
                             axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
-
                         end
+
                     end ##==== END 2nd order ================
                     
                 end 
             end ##==== END 1st order ================
+
+
         end # end two sides
 
         ## spacing
         deltah = Δh[axis]
-
-#println("====  FORCE using 1st order only ===")      
-#@warn "use2ndord=false"
-#use2ndord=false
 
         
         if use2ndord && use1stord # second order
@@ -1075,7 +1091,7 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
             curalpha = 9.0/(4.0 * deltah^2)
             alpha += curalpha
             beta  += ( -2.0*curalpha * tmpa2 )
-            gamma += curalpha * tmpa2^2
+            gamma += curalpha * tmpa2^2 ## see init of gamma : - slowcurpt^2
 
         elseif use1stord # first order
             ## curalpha: make sure you multiply only times the
@@ -1086,7 +1102,7 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
             gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
         end
 
-    end
+    end ## for axis=1:2
 
     ## compute discriminant 
     sqarg = beta^2-4.0*alpha*gamma
@@ -1170,24 +1186,24 @@ function calcttpt_2ndord!(fmmvars::FMMvars2D,vel::Array{Float64,2},
 
     #     end ## begin...
 
-    #     if sqarg<0.0
+        if sqarg<0.0
 
-    #         if fmmvars.allowfixsqarg==true
+            if fmmvars.allowfixsqarg==true
             
-    #             gamma = beta^2/(4.0*alpha)
-    #             sqarg = beta^2-4.0*alpha*gamma
-    #             println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
+                gamma = beta^2/(4.0*alpha)
+                sqarg = beta^2-4.0*alpha*gamma
+                println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
                 
-    #         else
-    #             println("\n To get a non-negative discriminant, need to fulfil: ")
-    #             println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
-    #             println(" where tx,ty can be")
-    #             println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
-    #             println(" t? = chosenval1  if 1st order ")
+            else
+                println("\n To get a non-negative discriminant, need to fulfil: ")
+                println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
+                println(" where tx,ty can be")
+                println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
+                println(" t? = chosenval1  if 1st order ")
                 
-    #             error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j)")
-    #         end
-    #     end
+                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j)")
+            end
+         end
     # end ## if sqarg<0.0
     ##=========================================================================================
 
@@ -1216,21 +1232,15 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
     mindistsrc = 10.0*eps()
     xsrc,ysrc=srcpos[1],srcpos[2]
 
-    # get the interpolated velocity
-    coeff,velcorn,ijsrc = bilinear_interp(vel,grd,srcpos,outputcoeff=true)
+    # get the position and velocity of corners around source
+    _,velcorn,ijsrc = bilinear_interp(vel,grd,srcpos,outputcoeff=true)
     
-
 
     ## Set srcboxpar
     Ncorn = size(ijsrc,1)
     fmmvars.srcboxpar.ijsrc .= ijsrc
     fmmvars.srcboxpar.xysrc .= srcpos
-    fmmvars.srcboxpar.coeff .= coeff
-    fmmvars.srcboxpar.velcorn .= velcorn #[vel[ijsrc[i,1],ijsrc[i,2]] for i=1:Ncorn]
-    velsrc = dot(coeff,velcorn)
-
-    #println("\nsourceboxloctt!(): velsrc = $velsrc ")
-    #@show velcorn
+    fmmvars.srcboxpar.velcorn .= velcorn
 
     ## set ttime around source ONLY FOUR points!!!
     for l=1:Ncorn
@@ -1250,6 +1260,7 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
         # set the traveltime to corner
         fmmvars.ttime[i,j] = distcorn / vel[i,j] #velsrc
 
+
         # ##-----------
         # ## old way
         # ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
@@ -1261,19 +1272,18 @@ function sourceboxloctt!(fmmvars::FMMvars2D,vel::Array{Float64,2},srcpos::Abstra
     # @show fmmvars.srcboxpar.distcorn
     # @show fmmvars.ttime[ijsrc[:,1],ijsrc[:,2]]
 
-    println("=== Messing up the ttime at the source points ===")
-    for l=1:Ncorn
-        i,j = ijsrc[l,:]
-        fmmvars.ttime[i,j] = fmmvars.ttime[ijsrc[1,1],ijsrc[1,2]]
-    end
-
+    # println("=== Messing up the ttime at the source points ===")
+    # for l=1:Ncorn
+    #     i,j = ijsrc[l,:]
+    #     fmmvars.ttime[i,j] = fmmvars.ttime[ijsrc[2,1],ijsrc[2,2]]
+    # end
 
     # save src reg points
-    xysrcpts = [grd.x[ijsrc[i,j]] for i=1:4,j=1:2]
-    println("Saving src region points...")
-    h5open("srcpoints.h5","w") do fl
-        write(fl,"srcpts", xysrcpts)
-    end
+    # xysrcpts = [grd.x[ijsrc[i,j]] for i=1:4,j=1:2]
+    # println("Saving src region points...")
+    # h5open("srcpoints.h5","w") do fl
+    #     write(fl,"srcpts", xysrcpts)
+    # end
 
 
     #println("ijsrc from bilin. interp.: $ijsrc ")

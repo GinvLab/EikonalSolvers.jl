@@ -521,7 +521,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     P_Breg = P[:,rq] # remove columns
     rhs = - transpose(P_Breg) * fact2
 
-
+       
     ################################
     ##   left hand side adj eq.
     ################################
@@ -639,34 +639,25 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         # gradvel1 .= reshape(gradvec_T2v,idxconv.nx,idxconv.ny)
 
     
-
         #################################################
         # Gradient with respect to velocity, term T2Va
         #################################################
         # deriv. of the implicit forw. mod. w.r.t. u_s
         ∂fi_∂us = twoDttDSx .+ twoDttDSy
-        @show size(∂fi_∂us )
-        
+
         ## source box parameters
-        coeffvel = fmmvars.srcboxpar.coeff
         velcorn  = fmmvars.srcboxpar.velcorn
         distcorn = fmmvars.srcboxpar.distcorn
-        velsrc = dot(coeffvel,velcorn)
         ijsrcreg = fmmvars.srcboxpar.ijsrc
-        #@show ijsrcreg
-    
 
         ## derivative of traveltime at source nodes w.r.t. velocity in region A
-        Lint = repeat(coeffvel',length(coeffvel))
-        dus_dva = - (distcorn' * Lint) ./ (Lint * velcorn).^2
-        #@show size(dus_dva)
-        #@show size(lambda)
-        #@show size(lambda_fmmord)
+        dus_dva = - diagm(distcorn) * 1.0 ./ velcorn.^2
 
         ## FMM ordering for ∂fi_∂us!!!
-        tmpfiva = ∂fi_∂us * dus_dva
+        tmpdfidva = ∂fi_∂us * dus_dva
+        
         ## FMM ordering for lambda_fmmord!!!
-        T2Va = lambda_fmmord' * tmpfiva
+        T2Va = transpose(lambda_fmmord) * tmpdfidva
 
         ## add contribution to the gradient
         for i=1:length(T2Va)
@@ -683,17 +674,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         # pick only columns belonging to the source region
         P_Areg = P[:,adjvars.fmmord.onsrccols]
         ∂ψ_∂u_s = transpose(P_Areg) * fact2
-        #@show size(P_Areg)
-        # @show size(∂ψ_∂u_s)
-        # @show transpose(P_Areg)
-        # @show fact2
-        #@show ∂ψ_∂u_s
-        
-        # @show distcorn
-        # @show Lint
-        # @show velcorn
-        #@show size(dus_dva)
-
+     
         ## add contribution to the gradient       
         tmpgr1 = ∂ψ_∂u_s' * dus_dva
         for i=1:length(tmpgr1)
@@ -991,6 +972,7 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
        
         ## scale all rows by 2*tmp1 excluding certain columns
         l2 = two_Dtt_DR.iptr[i]-1 # l2 runs on the column-reduced matrix DR
+
         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
             j = vecD.j[l]    # column index
 
@@ -1007,7 +989,7 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
                 l2 += 1
                 two_Dtt_DR.j[l2] = idxrowred[j]
                 ## 2*diag(D*tt)*DR
-                two_Dtt_DR.v[l2] = 2.0*tmp1*vecD.v[l]
+                two_Dtt_DR.v[l2] = 2.0 * tmp1 * vecD.v[l]
                 # update pointers
                 two_Dtt_DR.Nnnz[] += 1
                 two_Dtt_DR.lastrowupdated[] = i # this must stay here (this if and for loop)!
@@ -1027,13 +1009,6 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
 end
 
 #######################################################################################
-
-function deriv_ttonsrc_velonsrc(   )
-
-
-
-end
-
 
 
 #######################################################################################
@@ -1185,56 +1160,22 @@ function ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt,
         derpos = zeros(npts,2)
 
         ##
-        coeffvel = srcboxpar.coeff
         velcorn  = srcboxpar.velcorn
         distcorn = srcboxpar.distcorn
-        velsrc = dot(coeffvel,velcorn)
         ijsrc = srcboxpar.ijsrc
 
         for p=1:npts 
-            # ifmmord_srcpts = count(sourcerows[1:p])
-            # iorig_srcpts = idxconv.lfmm2grid[ifmmord_srcpts]
-            iorig_srcpts = idxconv.lfmm2grid[p] 
-
-            ##################################
-            ## Source velocity stuff
-            # Get the correct velocity for all 4 vertices
-            #  The velocity should be the same (same ii,jj) for all 4 points
-            # lin2cart2D!(iorig_srcpts,grd.nx,curijsrc)
-            # xps = grd.x[curijsrc[1]] 
-            # yps = grd.y[curijsrc[2]]
-            # ii = Int(floor((xysrc[1]-grd.xinit)/grd.hgrid)) +1
-            # jj = Int(floor((xysrc[2]-grd.yinit)/grd.hgrid)) +1 
-            #velpt = vel2d[curijsrc[1],curijsrc[2]]
-            #@show "adjoint",velsrc,velpt
-
-            # ##################################
-            # ## Derivatives for each source point
-            # ## CONVERT linear to cartesian 2D to get point position
-            # lin2cart2D!(iorig_srcpts,nx,ijpt)
-            # xypt .= (grd.x[ijpt[1]], grd.y[ijpt[2]])
-
-            # icur,jcur = ijpt
-            # @show icur,jcur
-            # @show srcboxpar.ijsrc[p,:]
-            #@show distcorn[p]
+            ## coordinates of point
             xypt .= (grd.x[ijsrc[p,1]],grd.y[ijsrc[p,2]])
-
-            #@show  "adjoint",velsrc#,xypt,xysrc
+            ## velocity associated with the above point
+            velsrc = vel2d[ijsrc[p,1],ijsrc[p,2]]
+            ## get the derivative
             derpos[p,:] .= partderivttsrcpos2D(xypt,xysrc,velsrc)
         end
         
         dχdx_src = dot( ∂χ∂t_src, derpos[:,1] ) # along x
         dχdy_src = dot( ∂χ∂t_src, derpos[:,2] ) # along y
     end
-
-    
-    # println("\n∂χ∂t_src")
-    # display(∂χ∂t_src)
-    # println("\n∂χ/∂x")
-    # display( derpos[:,1] )
-    # println("\n∂χ/∂y")
-    # display( derpos[:,2] )
 
     return dχdx_src,dχdy_src
 end

@@ -397,9 +397,7 @@ struct SourceBoxParams2D
     ijsrc::MArray
     "(x,y) position of the source"
     xysrc::MVector
-    "coefficients for the interpolation of the velocity"
-    coeff::MVector
-    "velocity at the corners surrounding the source location"
+    "coefficient matrix for the interpolation of the velocity"
     velcorn::MVector
     "distance from the corners to the source location"
     distcorn::MVector
@@ -412,9 +410,7 @@ struct SourceBoxParams3D
     ijksrc::MArray
      "(x,y,z) position of the source"
     xyzsrc::MVector
-    "coefficients for the interpolation of the velocity"
-    coeff::MVector
-    "velocity at the corners surrounding the source location"
+    "coefficient matrix for the interpolation of the velocity"
     velcorn::MVector
     "distance from the corners to the source location"
     distcorn::MVector
@@ -456,7 +452,6 @@ struct FMMvars2D
             srcboxpar = SourceBoxParams2D(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,2)),
                                           MVector{2}(zeros(2)),
                                           MVector{Ncoe}(zeros(Ncoe)),
-                                          MVector{Ncoe}(zeros(Ncoe)),
                                           MVector{Ncoe}(zeros(Ncoe)) )
         end
         new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
@@ -492,7 +487,6 @@ struct FMMvars3D
             Ncoe = 8
             srcboxpar = SourceBoxParams3D(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,3)),
                                           MVector{3}(zeros(3)),
-                                          MVector{Ncoe}(zeros(Ncoe)),
                                           MVector{Ncoe}(zeros(Ncoe)),
                                           MVector{Ncoe}(zeros(Ncoe)) )                                          
         end
