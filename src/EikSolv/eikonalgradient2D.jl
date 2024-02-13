@@ -524,8 +524,8 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ##   left hand side adj eq.
     ################################
     ## compute the lhs terms
-    vecDxDR,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrccols)
-    vecDyDR,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,adjvars.fmmord.onsrccols) 
+    twoDttDRx,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrccols)
+    twoDttDRy,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,adjvars.fmmord.onsrccols) 
 
     #===========================================
     ###  !!! REMARK from SparseArrays:  !!! ####
@@ -546,19 +546,19 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
 
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nxnnz = vecDxDR.Nnnz[]
-    Nix = vecDxDR.Nsize[1]
-    Njx = vecDxDR.Nsize[2]
-    lhsterm1 = SparseMatrixCSC(Njx,Nix,vecDxDR.iptr[1:Nix+1],
-                               vecDxDR.j[1:Nxnnz],vecDxDR.v[1:Nxnnz])
+    Nxnnz = twoDttDRx.Nnnz[]
+    Nix = twoDttDRx.Nsize[1]
+    Njx = twoDttDRx.Nsize[2]
+    lhsterm1 = SparseMatrixCSC(Njx,Nix,twoDttDRx.iptr[1:Nix+1],
+                               twoDttDRx.j[1:Nxnnz],twoDttDRx.v[1:Nxnnz])
  
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nynnz = vecDyDR.Nnnz[]
-    Niy = vecDyDR.Nsize[1]
-    Njy = vecDyDR.Nsize[2]
-    lhsterm2 = SparseMatrixCSC(Njy,Niy,vecDyDR.iptr[1:Niy+1],
-                               vecDyDR.j[1:Nynnz],vecDyDR.v[1:Nynnz])
+    Nynnz = twoDttDRy.Nnnz[]
+    Niy = twoDttDRy.Nsize[1]
+    Njy = twoDttDRy.Nsize[2]
+    lhsterm2 = SparseMatrixCSC(Njy,Niy,twoDttDRy.iptr[1:Niy+1],
+                               twoDttDRy.j[1:Nynnz],twoDttDRy.v[1:Nynnz])
 
     # They are already transposed, so only add them
     tmplhs = lhsterm1 .+ lhsterm2
@@ -578,6 +578,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ############################################################
     lambda_fmmord = lhs\rhs
 
+    
     ##----------------------------------------------------------
     if whichgrad==:gradsrcloc || whichgrad==:gradvelandsrcloc
         
@@ -600,6 +601,14 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     
     if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
 
+        ##------------------------------------
+        ## source box parameters
+        velcorn  = fmmvars.srcboxpar.velcorn
+        distcorn = fmmvars.srcboxpar.distcorn
+        ijsrcreg = fmmvars.srcboxpar.ijsrc
+
+        ## derivative of traveltime at source nodes w.r.t. velocity in region A
+        dus_dva = - diagm(distcorn) * 1.0 ./ velcorn.^2
 
         #################################################
         # Gradient with respect to velocity, term T2Vb
@@ -627,21 +636,10 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         #################################################
         # deriv. of the implicit forw. mod. w.r.t. u_s
         ∂fi_∂us = twoDttDSx .+ twoDttDSy
-
-        ## source box parameters
-        velcorn  = fmmvars.srcboxpar.velcorn
-        distcorn = fmmvars.srcboxpar.distcorn
-        ijsrcreg = fmmvars.srcboxpar.ijsrc
-
-        ## derivative of traveltime at source nodes w.r.t. velocity in region A
-        dus_dva = - diagm(distcorn) * 1.0 ./ velcorn.^2
-
         ## FMM ordering for ∂fi_∂us!!!
-        tmpdfidva = ∂fi_∂us * dus_dva
-        
+        tmpdfidva = ∂fi_∂us * dus_dva        
         ## FMM ordering for lambda_fmmord!!!
         T2Va = transpose(lambda_fmmord) * tmpdfidva
-
         ## add contribution to the gradient
         for i=1:length(T2Va)
             m,n = ijsrcreg[i,:]
@@ -782,24 +780,24 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,vel2d_fine)
     ##   left hand side adj eq.
     ################################
     ## compute the lhs terms
-    vecDxDR,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrccols)
-    vecDyDR,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,adjvars.fmmord.onsrccols) 
+    twoDttDRx,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrccols)
+    twoDttDRy,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,adjvars.fmmord.onsrccols) 
 
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nxnnz = vecDxDR.Nnnz[]
-    Nix = vecDxDR.Nsize[1]
-    Njx = vecDxDR.Nsize[2]
-    lhsterm1 = SparseMatrixCSC(Njx,Nix,vecDxDR.iptr[1:Nix+1],
-                               vecDxDR.j[1:Nxnnz],vecDxDR.v[1:Nxnnz])
+    Nxnnz = twoDttDRx.Nnnz[]
+    Nix = twoDttDRx.Nsize[1]
+    Njx = twoDttDRx.Nsize[2]
+    lhsterm1 = SparseMatrixCSC(Njx,Nix,twoDttDRx.iptr[1:Nix+1],
+                               twoDttDRx.j[1:Nxnnz],twoDttDRx.v[1:Nxnnz])
  
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nynnz = vecDyDR.Nnnz[]
-    Niy = vecDyDR.Nsize[1]
-    Njy = vecDyDR.Nsize[2]
-    lhsterm2 = SparseMatrixCSC(Njy,Niy,vecDyDR.iptr[1:Niy+1],
-                               vecDyDR.j[1:Nynnz],vecDyDR.v[1:Nynnz])
+    Nynnz = twoDttDRy.Nnnz[]
+    Niy = twoDttDRy.Nsize[1]
+    Njy = twoDttDRy.Nsize[2]
+    lhsterm2 = SparseMatrixCSC(Njy,Niy,twoDttDRy.iptr[1:Niy+1],
+                               twoDttDRy.j[1:Nynnz],twoDttDRy.v[1:Nynnz])
 
     # They are already transposed, so only add them
     tmplhs = lhsterm1 .+ lhsterm2
@@ -921,11 +919,14 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
     nsrcpts = count(onsrccols)
     ncolsR = ncols - nsrcpts
 
+    #############################################
+    ## for grad w.r.t. velocity
     # Derivative (along x) matrix, row- *and* column-deficient
     ncolidx = vecD.Nnnz[] - nsrcpts
     two_Dtt_DR = VecSPDerivMat( iptr=zeros(Int64,nrows+1), j=zeros(Int64,ncolidx),
                                 v=zeros(ncolidx), Nsize=[nrows,ncolsR] )
-   
+    #############################################
+    
     # mapping of column number from full to column reduced
     idxrowred = zeros(Int64,length(onsrccols))
     q = 0
@@ -938,13 +939,17 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
         end
     end
     
-    #################################
+    #############################################
     ## for grad w.r.t. source loc calculations
-    twoDttDS = zeros(eltype(vecD.v),nrows,nsrcpts)
-    #################################
+    #twoDttDS = zeros(eltype(vecD.v),nrows,nsrcpts)
+    DS_i = Vector{Int64}(undef,ncolidx)
+    DS_j = Vector{Int64}(undef,ncolidx)
+    DS_val = Vector{Float64}(undef,ncolidx)
+    #############################################
 
+    l3=0
     ## CSR matrix-vector product
-    for i=1:nrows
+    for i=1:nrows  # rows
 
         ## pre-compute Dx * tt 
         tmp1 = 0.0
@@ -957,12 +962,13 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
         ## init the next row pointer
         two_Dtt_DR.iptr[i+1] = two_Dtt_DR.iptr[i]
        
-        ## scale all rows by 2*tmp1 excluding certain columns
-        l2 = two_Dtt_DR.iptr[i]-1 # l2 runs on the column-reduced matrix DR
+        ## l2 runs on the column-reduced matrix DR
+        l2 = two_Dtt_DR.iptr[i]-1 
 
-        for l=vecD.iptr[i]:vecD.iptr[i+1]-1
+        for l=vecD.iptr[i]:vecD.iptr[i+1]-1 # columns
             j = vecD.j[l]    # column index
 
+            ## scale all rows by 2*tmp1 excluding certain columns
             if onsrccols[j]==false
                 ############################################################### 
                 ##  Computation of 2*D*tt*DR for the adjoint variable lambda
@@ -986,14 +992,20 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
                 ##  Computation of 2*D*tt*DS for the grad w.r.t. source position
                 ##################################################################
                 js = count(onsrccols[1:j])
-                twoDttDS[i,js] = 2.0 * tmp1 * vecD.v[l]
-                    
+                ## old way, dense matrix
+                #twoDttDS[i,js] = 2.0 * tmp1 * vecD.v[l]
+                ## create a sparse matrix
+                l3 += 1
+                DS_i[l3] = i
+                DS_j[l3] = js
+                DS_val[l3] = 2.0 * tmp1 * vecD.v[l]
             end
         end
     end
 
-    
-    
+    ## create the sparse matrix
+    twoDttDS = sparse(DS_i[1:l3],DS_j[1:l3],DS_val[1:l3],nrows,nsrcpts)
+
     return two_Dtt_DR,twoDttDS
 end
 
