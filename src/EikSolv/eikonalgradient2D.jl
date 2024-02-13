@@ -430,11 +430,9 @@ function calcprojttfmmord(ttime::AbstractArray{Float64},grd::GridEik,idxconv::Ma
         if simdim==:sim2D 
             coeff,_,ijcoe = bilinear_interp( ttime,grd,view(coordrec,r,:),
                                            outputcoeff=true )
-
         elseif simdim==:sim3D 
             coeff,_,ijcoe = trilinear_interp( ttime,grd,view(coordrec,r,:),
                                             outputcoeff=true )
-
         end
 
         #Ncoe = length(coeff)
@@ -493,7 +491,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
-    println("=== START adjoint coarse grid ===" )
+    println("=== START gradient coarse grid ===" )
     ##======================================================
     # Projection operator P ordered according to FMM order
     #  The order for P is:
@@ -515,11 +513,11 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ##  right hand side adj eq. == -(∂ψ/∂u_p)^T
     #######################################################
     #rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
-    fact2 = ((P*tt_fmmord).-pickobs)./stdobs.^2
+    fact2∂ψ∂u = ((P*tt_fmmord).-pickobs)./stdobs.^2
     # bool vector with false for src columns
     rq = .!adjvars.fmmord.onsrccols
     P_Breg = P[:,rq] # remove columns
-    rhs = - transpose(P_Breg) * fact2
+    rhs = - transpose(P_Breg) * fact2∂ψ∂u
 
        
     ################################
@@ -596,7 +594,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
                                             fmmvars.srcboxpar,
                                             adjvars.idxconv,lambda_fmmord,vel2d,
                                             adjvars.fmmord.onsrccols,xysrc,grd,
-                                            refinearoundsrc=refinearoundsrc ) #,
+                                            refinearoundsrc=refinearoundsrc ) 
         #∂u_h∂x_s=∂u_h∂x_s)
     end
     
@@ -611,34 +609,19 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         N = length(lambda_fmmord)
         nptsonsrc = count(adjvars.fmmord.onsrccols)
 
-        ## To simplify computations with "vel2d" here "lambda" has *full* size,
-        ##   while "lambda_fmmord" excludes the points on the source,
-        ##   so it is smaller, as required by the adjoint equation.
-
-        ## !!! lambda MUST be zeroed here !!!
-        # lambda = zeros(eltype(lambda_fmmord),length(vel2d))
         ijpt = MVector(0,0)
         #Nall = length(idxconv.lfmm2grid)
         for p=1:N
-            # The following two lines is a complex way to map the
-            #  "full" indices to the "reduced" set of indices
-            # curnptsonsrc_fmmord = count(adjvars.fmmord.onsrccols[1:p])
+            # The following two lines (p+nptsonsrc) is a way to map the
+            #  "full" indices to the "reduced" set of indices (no source region)
             iorig = idxconv.lfmm2grid[p+nptsonsrc] # skip pts on src
-
             # get the i,j indices for vel and grad
             lin2cart2D!(iorig,idxconv.nx,ijpt)
             i,j = ijpt
+            # get the contribution of T2Vb to the gradient
             gradvel1[i,j] = 2.0 * lambda_fmmord[p] / vel2d[i,j]^3
-
-            ## map lambda in fmmord into lambda in the original grid
-            # lambda[iorig] = lambda_fmmord[p]
         end
-        ## As hinted above, here lambda has full size (including source points),
-        ##   however, it is zero in the A region, so no contribution to the gradient
-        # gradvec_T2v = 2.0 .* lambda ./ vec(vel2d).^3
-        # gradvel1 .= reshape(gradvec_T2v,idxconv.nx,idxconv.ny)
-
-    
+       
         #################################################
         # Gradient with respect to velocity, term T2Va
         #################################################
@@ -666,30 +649,32 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         end
 
         #################################################
-        # Gradient with respect to velocity, term T1Va
+        # Gradient with respect to velocity, term T1Va 
         #################################################
         # T1v = ∂ψ/∂u_s
-        ## using fact2 from the calculations above!
-        ## fact2 = ((P*tt_fmmord).-pickobs)./stdobs.^2
+        ## using fact2∂ψ∂u from the calculations above!
+        ## fact2∂ψ∂u = ((P*tt_fmmord).-pickobs)./stdobs.^2
         # pick only columns belonging to the source region
         P_Areg = P[:,adjvars.fmmord.onsrccols]
-        ∂ψ_∂u_s = transpose(P_Areg) * fact2
-     
+        ∂ψ_∂u_s = transpose(P_Areg) * fact2∂ψ∂u
+
         ## add contribution to the gradient       
-        tmpgr1 = ∂ψ_∂u_s' * dus_dva
-        for i=1:length(tmpgr1)
+        tmpT1Va = transpose(∂ψ_∂u_s) * dus_dva
+        for i=1:length(tmpT1Va)
             m,n = ijsrcreg[i,:]
             #@show i,m,n,tmpgr1[i]
-            gradvel1[m,n] += tmpgr1[i]
+            gradvel1[m,n] += tmpT1Va[i]
         end
 
-        println("=== END adjoint coarse grid ===")
+        println("=== END gradient coarse grid ===")
 
 
         #############################################
         ##
         #############################################
         if refinearoundsrc
+
+            println("=== START gradient fine grid ===" )
 
             #error("Gradient with respect to velocity with refinement of the grid currently missing a piece... Aborting.")
             ## Solve the adjoint equation in the fine grid
@@ -700,10 +685,10 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
             # bool vector with trues for src columns in the coarse grid
             rq_fine = adjvars.fmmord.onsrccols
             @show count(rq_fine)
-            @show size(fact2)
+            @show size(fact2∂ψ∂u)
             @show size(P[:,rq_fine])
             # only onsrc columns (from h points)
-            ∂ψ_∂u_h_fmmord = fact2' * P[:,rq_fine] 
+            ∂ψ_∂u_h_fmmord = fact2∂ψ∂u' * P[:,rq_fine] 
             @show size(∂ψ_∂u_h)
 
             # Re-order ∂ψ_∂u_h_fmmord according to the grid with a linear index
@@ -718,6 +703,8 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
             ∂ψ_∂v_q = ∂ψ_∂u_h * du_h_dv_q
 
             #gradvel1[????] .= gradvel_fine
+
+            println("=== END gradient fine grid ===")
         end
 
     end
@@ -937,7 +924,7 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
     # Derivative (along x) matrix, row- *and* column-deficient
     ncolidx = vecD.Nnnz[] - nsrcpts
     two_Dtt_DR = VecSPDerivMat( iptr=zeros(Int64,nrows+1), j=zeros(Int64,ncolidx),
-                              v=zeros(ncolidx), Nsize=[nrows,ncolsR] )
+                                v=zeros(ncolidx), Nsize=[nrows,ncolsR] )
    
     # mapping of column number from full to column reduced
     idxrowred = zeros(Int64,length(onsrccols))
@@ -1005,6 +992,8 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
         end
     end
 
+    
+    
     return two_Dtt_DR,twoDttDS
 end
 

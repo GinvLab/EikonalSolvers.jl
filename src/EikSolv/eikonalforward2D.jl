@@ -246,8 +246,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
     ## Time array
     ##
     # max possible val for type of ttime
-    inittt = typemax(eltype(fmmvars.ttime)) 
-    fmmvars.ttime[:,:] .= inittt
+    fmmvars.ttime[:,:] .= typemax(eltype(fmmvars.ttime)) 
     ##
     ## Status of nodes
     ##
@@ -357,7 +356,7 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc:
     
     ##==================================================
     # init ttime 
-    inittt = 1e30
+    inittt = typemax(eltype(fmmvars_fine.ttime))
     fmmvars_fine.ttime[:,:] .= inittt
     # Status of nodes
     fmmvars_fine.status[:,:] .= 0   ## set all to far
