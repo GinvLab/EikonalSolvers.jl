@@ -446,8 +446,10 @@ struct FMMvars2D
         end
         
         if  amIcoarsegrid && refinearoundsrc==true
-            srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,0))
+            ## there is refinement
+            srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,2))
         else
+            ## there is NO refinement
             Ncoe = 4
             srcboxpar = SourceBoxParams2D(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,2)),
                                           MVector{2}(zeros(2)),
@@ -481,9 +483,8 @@ struct FMMvars3D
         end
 
         if amIcoarsegrid && refinearoundsrc==true
-            srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,0))
+            srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,3))
         else
-            srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,0))
             Ncoe = 8
             srcboxpar = SourceBoxParams3D(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,3)),
                                           MVector{3}(zeros(3)),
@@ -498,8 +499,12 @@ end
 
 struct SrcRefinVars2D
     downscalefactor::Int64
-    ij1coarse::NTuple{2,Int64}
+    ijcoarse::NTuple{4,Int64}
+    nxny_window_coarse::NTuple{2,Int64}
     outxyminmax::NTuple{4,Bool}
+    nearneigh_oper::SparseMatrixCSC{Float64,Int64}
+    nearneigh_idxcoarse::Vector{Int64}
+    vel2d_fine::Array{Float64,2}
 end
 
 ###################################################
