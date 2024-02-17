@@ -188,6 +188,13 @@ struct Grid3DSphere <: GridEik3D
     end
 end
 
+###############################################################
+
+Base.@kwdef struct GridRefinementPars
+    downscalefactor::Int64
+    noderadius::Int64
+end
+
 ##################################################################
 
 """
@@ -210,24 +217,26 @@ struct ExtraParams
     radiussmoothgradsrc::UInt64
     "Smooth the gradient with a kernel of size (in pixels). Zero means no smoothing."
     smoothgradkern::UInt64
-
+    "Downscaling factor and node radius for refined grid creation"
+    grdrefpars::GridRefinementPars
 
     function ExtraParams(; allowfixsqarg::Bool=false,
                          refinearoundsrc::Bool=true,
                          manualGCtrigger::Bool=false,
                          parallelkind::Symbol=:sharedmem,
                          radiussmoothgradsrc::Integer=3,
-                         smoothgradkern::Integer=0 )
+                         smoothgradkern::Integer=0,
+                         grdrefpars::GridRefinementPars=GridRefinementPars(downscalefactor=3,noderadius=3) )
         
         if !(parallelkind in [:serial,:sharedmem,:distribmem])
             error("ExtraParams(): 'parallelkind' must be one of :serial, :sharedmem or :distribmem")
         end
         return new(allowfixsqarg,refinearoundsrc,manualGCtrigger,
-                   parallelkind,radiussmoothgradsrc,smoothgradkern)
+                   parallelkind,radiussmoothgradsrc,smoothgradkern,
+                   grdrefpars)
     end    
 end
 
-###############################################################
 ###############################################################
 
 abstract type MapOrderGridFMM end

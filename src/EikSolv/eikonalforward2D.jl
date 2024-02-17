@@ -348,7 +348,8 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},
     
     ##==================================================
     ## create the refined grid
-    grd_fine,srcrefvars = createfinegrid(grd,xysrc,vel)
+    grd_fine,srcrefvars = createfinegrid(grd,xysrc,vel,
+                                         extrapars.grdrefpars)
     # @show grd_fine
     # @show srcrefvars.ijcoarse
     # @show srcrefvars.outxyminmax
@@ -415,6 +416,7 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},
     ttFMM_core!(fmmvars_fine,srcrefvars.vel2d_fine,grd_fine,adjvars_fine,
                 fmmvars_coarse=fmmvars, adjvars_coarse=adjvars,
                 srcrefvars=srcrefvars)
+         
 
     ##==================================================================
 
@@ -475,6 +477,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
                      fmmvars_coarse::Union{FMMvars2D,Nothing}=nothing,
                      adjvars_coarse::Union{AdjointVars2D,Nothing}=nothing,
                      srcrefvars::Union{SrcRefinVars2D,Nothing}=nothing)
+                   
 
     if srcrefvars==nothing
         isthisrefinementsrc = false
@@ -1436,26 +1439,21 @@ end
 
 ##########################################################################
 
-function createfinegrid(grd,xysrc,vel)
+function createfinegrid(grd,xysrc,vel,grdrefpars)
 
     if typeof(grd)==Grid2D
         simtype=:cartesian
     elseif typeof(grd)==Grid2DSphere
         simtype=:spherical
     end
-    ##
-    ## 2x10 nodes -> 2x50 nodes
-    ##
-    downscalefactor::Int = 0
-    noderadius::Int = 0
+    # downscalefactor::Int = 0
+    # noderadius::Int = 0
     
-    downscalefactor = 1 #5
-    @show downscalefactor 
+    downscalefactor = grdrefpars.downscalefactor # 3 #5
     ## if noderadius is not the same for forward and adjoint,
     ##   then troubles with comparisons with brute-force fin diff
     ##   will occur...
-    noderadius = 1 #2
-    @show noderadius
+    noderadius = grdrefpars.noderadius #2 #2
 
     ## find indices of closest node to source in the "big" array
     ## ix, iy will become the center of the refined grid
@@ -1524,7 +1522,7 @@ function createfinegrid(grd,xysrc,vel)
     ## Get the vel around the source on the coarse grid
     ##
     velcoarsegrd = view(vel,i1coarse:i2coarse,j1coarse:j2coarse)    
-@show size(velcoarsegrd)
+
     ##
     ## Nearest neighbor interpolation for velocity on finer grid
     ##
@@ -1539,7 +1537,7 @@ function createfinegrid(grd,xysrc,vel)
     # @show size(velcoarsegrd)
 
     nearneigh_oper = spzeros(n1_fine*n2_fine, n1_window_coarse*n2_window_coarse)
-    vel_fine = Array{Float64}(undef,n1_fine,n2_fine)
+    #vel_fine = Array{Float64}(undef,n1_fine,n2_fine)
     nearneigh_idxcoarse = zeros(Int64,size(nearneigh_oper,1))
 
     for j=1:n2_fine
@@ -1552,7 +1550,7 @@ function createfinegrid(grd,xysrc,vel)
             rj=j-dj*downscalefactor
             jj = rj>=downscalefactor/2+1 ? dj+2 : dj+1
 
-            vel_fine[i,j] = velcoarsegrd[ii,jj]
+            # vel_fine[i,j] = velcoarsegrd[ii,jj]
 
             # compute the matrix acting as nearest-neighbor operator (for gradient calculations)
             f = i  + (j-1)*n1_fine
@@ -1564,7 +1562,15 @@ function createfinegrid(grd,xysrc,vel)
             nearneigh_idxcoarse[f] = c
         end
     end
-    
+
+    ##--------------------------------------------------
+    ## get the interpolated velocity for the fine grid
+    tmp_vel_fine = nearneigh_oper * vec(velcoarsegrd)
+    vel_fine = reshape(tmp_vel_fine,n1_fine,n2_fine)
+    # @show size(nearneigh_oper)
+    # @show size(vel_fine)
+
+
     if simtype==:cartesian
         # set origin of the fine grid
         xinit = grd.x[i1coarse]
@@ -1583,12 +1589,13 @@ function createfinegrid(grd,xysrc,vel)
         grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=n1_fine,nθ=n2_fine,rinit=rinit,θinit=θinit)
     end
 
-    srcrefvars = SrcRefinVars2D(downscalefactor,(i1coarse,j1coarse,i2coarse,j2coarse),
+    srcrefvars = SrcRefinVars2D(downscalefactor,
+                                (i1coarse,j1coarse,i2coarse,j2coarse),
                                 (n1_window_coarse,n2_window_coarse),
                                 (outxmin,outxmax,outymin,outymax),
                                 nearneigh_oper,nearneigh_idxcoarse,vel_fine)
-    @show grdfine.nx,grdfine.ny
-    @show size(nearneigh_oper)
+    # @show grdfine.nx,grdfine.ny
+    # @show size(nearneigh_oper)
     return grdfine,srcrefvars
 end
 

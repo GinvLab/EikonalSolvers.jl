@@ -648,8 +648,8 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
             ## Solve the adjoint equation in the fine grid
             ##   dus_dva must be in FMM order to agree with ∂fi_∂us
             dus_dva = solveadjointfinegrid!(fmmvars_fine,adjvars_fine,
-                                            grd_fine,srcrefvars,
-                                            fmmvars.srcboxpar.ijsrc)
+                                            grd_fine,srcrefvars)
+                                            #fmmvars.srcboxpar.ijsrc)
         end
 
 
@@ -698,7 +698,7 @@ end
 
 ##############################################################################
 
-function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
+function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
 
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
@@ -723,9 +723,9 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
     Nhpts = length(idxonHpts)
     #@show Nhpts
 
-@show grd.nx,grd.ny,grd.nx*grd.ny
-@show Naccpts,Nhpts,count(onsrccols)
-#@show onHpts
+    # @show grd.nx,grd.ny,grd.nx*grd.ny
+    # @show Naccpts,Nhpts,count(onsrccols)
+    #@show onHpts
 
 
     ###########################################
@@ -824,16 +824,15 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
     @assert size(lambda_fmmord,1)==Nptsoffsrc
     @assert size(lambda_fmmord,2)==Nhpts
 
-
-    @show size(lambda_fmmord)
-    @show extrema(lambda_fmmord)
+    # @show size(lambda_fmmord)
+    # @show extrema(lambda_fmmord)
     #@show Array(lambda_fmmord)
     # println("\n lambda_fmmord:")
     # display(lambda_fmmord)
-    for h=1:Nhpts
-        nnz_lambda_h = count(abs.(lambda_fmmord[:,h]).>0.0)
-        @show h,nnz_lambda_h
-    end
+    # for h=1:Nhpts
+    #     nnz_lambda_h = count(abs.(lambda_fmmord[:,h]).>0.0)
+    #     @show h,nnz_lambda_h
+    # end
 
     ##========================================
     ##  Compute the T2Vd term
@@ -844,7 +843,7 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
     ##    entries, not a 2D array)
     #duh_dwq = zeros(Nhpts,grd.nx*grd.ny)
     duh_dwq = zeros(Nhpts,Naccpts)
-    @show size(duh_dwq),prod(size(duh_dwq))
+    #@show size(duh_dwq),prod(size(duh_dwq))
 
     # To reorder lambda from fmmord to original grid...
     idxconv = adjvars.idxconv
@@ -863,10 +862,9 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
         end
     end
 
-    println("\n duh_dwq [T2Vd] ")
-    display(duh_dwq)
-    @show count(abs.(duh_dwq).>0.0)
-
+    # println("\n duh_dwq [T2Vd] ")
+    # display(duh_dwq)
+    # @show count(abs.(duh_dwq).>0.0)
 
     #@show N,Nhpts
     #@show size(T2Vd)
@@ -883,9 +881,9 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
     ## derivative of \tau_s w.r.t. w_a
     dtaus_dwa = - diagm(distcorn) .* (1.0./velcorn.^2) # Hadamard product!
 
-    println("dtaus_dwa")
-    display(dtaus_dwa)
-    #display(diagm(distcorn))
+    # println("dtaus_dwa")
+    # display(dtaus_dwa)
+    # #display(diagm(distcorn))
 
 
     ##========================================
@@ -898,13 +896,13 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
     ## FMM ordering for lambda_fmmord!!!
     T2Vc = transpose(lambda_fmmord) * tmpdgidwa
 
-    println("\n ∂gi_∂taus ")
-    display(∂gi_∂taus)    
-    println("\n tmpdgidwa ")
-    display(tmpdgidwa)
+    # println("\n ∂gi_∂taus ")
+    # display(∂gi_∂taus)    
+    # println("\n tmpdgidwa ")
+    # display(tmpdgidwa)
 
 
-    @show size(T2Vc)
+    #@show size(T2Vc)
     ## add contribution to the gradient in the fine grid
     for p=1:nptsonsrc #size(T2Vc,2)
         for h=1:Nhpts #size(T2Vc,1)
@@ -912,13 +910,13 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
         end
     end
 
-    println("\n T2Vc ")
-    display(T2Vc)
-    @show count(abs.(T2Vc).>0.0)
+    # println("\n T2Vc ")
+    # display(T2Vc)
+    # @show count(abs.(T2Vc).>0.0)
 
-    println("\n duh_dwq [T2Vc] ")
-    display(duh_dwq)
-    @show count(abs.(duh_dwq).>0.0)
+    # println("\n duh_dwq [T2Vc] ")
+    # display(duh_dwq)
+    # @show count(abs.(duh_dwq).>0.0)
     
 
     ##========================================
@@ -926,18 +924,18 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
     ##========================================
     H_Areg = H[:,onsrccols]
     T1Vc = H_Areg * dtaus_dwa
-    @show size(T1Vc)
+    #@show size(T1Vc)
     for p=1:nptsonsrc
         for h=1:Nhpts
             duh_dwq[h,p] += T1Vc[h,p]
         end
     end
-    println("\n T1Vc ")
-    display(T1Vc)
+    # println("\n T1Vc ")
+    # display(T1Vc)
 
-    println("\n duh_dwq [T1Vc] ")
-    display(duh_dwq)
-    @show count(abs.(duh_dwq).>0.0)
+    # println("\n duh_dwq [T1Vc] ")
+    # display(duh_dwq)
+    # @show count(abs.(duh_dwq).>0.0)
     
     ##========================================
     ## Compute dwq/dwa
@@ -945,56 +943,57 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
     # filter grid point which have been actually used 
     #dwq_dva = srcrefvars.nearneigh_oper#[ , ]
     #@show size(srcrefvars.nearneigh_oper)
-    dwq_dva = zeros(Nhpts,Nhpts)
+    dwq_dva = zeros(Naccpts,Nhpts)
 
-    nx_window_coarse = srcrefvars.nxny_window_coarse[1]
-    # @show nptsonsrc
-    # @show size(idxconv.lfmm2grid)
-    # @show length(idxonHpts)
-    # @show length(onHpts)
-    # for p=1:Naccpts
-    #     iorig = idxconv.lfmm2grid[p]
-    #     for (a,a_fine) in enumerate(idxonHpts)
-    #         a_coarse = srcrefvars.nearneigh_idxcoarse[a_fine]
-    #         dwq_dva[p,a] = srcrefvars.nearneigh_oper[iorig,a_coarse]
-    #     end
-    # end
+    #nx_window_coarse = srcrefvars.nxny_window_coarse[1]
 
-    # @show size(srcrefvars.nearneigh_oper)
-    
-    # lsiorig = Int64[]
-    # for p=1:size(ijsrc_coarse,1)
-    #     i,j = ijsrc_coarse[p,:]
-    #     ii = i - srcrefvars.ijcoarse[1]+1
-    #     jj = j - srcrefvars.ijcoarse[2]+1
-    #     iorig = cart2lin2D(ii,jj,nx_window_coarse)
-    #     push!(lsiorig,iorig)
-    # end
-    # @show lsiorig
-    dwq_dva = srcrefvars.nearneigh_oper[1:Nhpts,1:Nhpts] 
+    @warn "FIX ordering of srcrefvars.nearneigh_oper[1:Nhpts,1:Nhpts]"
 
+    # @show idxonHpts
+    # @show size(dwq_dva)
+    # @show srcrefvars.nearneigh_idxcoarse
+    # @show size(srcrefvars.nearneigh_idxcoarse)
 
-                                        
+    nneigh = srcrefvars.nearneigh_oper
+    ##
+    for (j,q) in enumerate(idxonHpts)
+
+        tmpqorig = idxconv.lfmm2grid[q]
+        qorig = srcrefvars.nearneigh_idxcoarse[tmpqorig]        
+
+        for p=1:Naccpts
+            #i = p
+            #  use the "full" indices (including points on source)
+            porig = idxconv.lfmm2grid[p]
+
+            #@show (p,j),q,(porig,qorig)
+            ## extract the proper elements from the interpolation
+            ##   matrix in FMM order
+            dwq_dva[p,j] = nneigh[porig,qorig]
+        end
+
+    end
+
     # println("nneigh:")
     # display(nneigh)
     # @show extrema(nneigh)
 
-    #println("dwq_dva:")
-    #display(dwq_dva)
-    @show size(dwq_dva)
-    @show extrema(dwq_dva)
+    # println("dwq_dva:")
+    # display(dwq_dva)
+    # @show size(dwq_dva)
+    # @show extrema(dwq_dva)
     
     ##========================================
     ## duh_dva
     ##========================================
     duh_dva = duh_dwq * dwq_dva
 
-    @show size( duh_dwq),size( dwq_dva)
-    @show size(duh_dva)
-    println("duh_dva:")
-    display(duh_dva)
-    @show extrema(duh_dva)
-    @show count(abs.(duh_dva).>0.0)
+    #@show size( duh_dwq),size( dwq_dva)
+    #@show size(duh_dva)
+    #println("duh_dva:")
+    #display(duh_dva)
+    #@show extrema(duh_dva)
+    #@show count(abs.(duh_dva).>0.0)
 
     return duh_dva
 end
