@@ -191,7 +191,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
             # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
             #  because the size of the grid may change when hitting borders, etc.
             fmmvars_fine,adjvars_fine,grd_fine,srcrefvars = ttFMM_hiord!(fmmvars,vel,view(xysrc,s,:),
-                                                                       grd,adjvars,extrapars)
+                                                                         grd,adjvars,extrapars)
         else
             ##
             ## NO refinement around the source
@@ -224,29 +224,7 @@ function calcgradsomesrc2D(vel::Array{Float64,2},xysrc::AbstractArray{Float64,2}
                                         srcrefvars=srcrefvars)
 
 
-        ###########################################
-        # projection operator P ordered according to FMM order        
-        # if extrapars.refinearoundsrc
-        #     # P from fine grid = 
-        #     H_fmmord_fine = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
-        # end
-        # # P from coarse grid
-        # P_fmmord = calcprojttfmmord(fmmvars.ttime,grd,adjvars.idxconv,coordrec[s])
-
-        ###########################################
-        # discrete adjoint formulation for gradient(s) with respect to velocity and/or source position
-        # gradvel1,gradsrcpos1[s,:] .= discradjoint2D_FMM_SINGLESRC(adjvars,P_fmmord1,pickobs1[s],
-        #                                                      stdobs[s],vel,xysrc[s,:],grd)
-        # if gradsrcpos==nothing
-        #     tmpgradsrcpos = gradsrcpos
-        # else
-        #     tmpgradsrcpos = view(gradsrcpos,s,:)
-        # end
-        # discradjoint2D_FMM_SINGLESRC!(gradvel1,tmpgradsrcpos,adjvars,P_fmmord,
-        #                               pickobs1[s],stdobs[s],vel,xysrc[s,:],grd,whichgrad,
-        #                               refinearoundsrc=extrapars.refinearoundsrc ) #,∂u_h∂x_s=∂u_h∂x_s)
-
-        
+         
         if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
             ###########################################
             ## smooth gradient (with respect to velocity) around the source
@@ -275,7 +253,7 @@ $(TYPEDSIGNATURES)
 
  Set the coefficients (elements) of the derivative matrices in the x and y directions.
     """
-function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFMM2D,
+function setcoeffderiv2D!(D::VecSPDerivMat,status::Array,irow::Integer,idxconv::MapOrderGridFMM2D,
                           codeDxy_orig::Array{Int64,2},allcoeff::CoeffDerivatives,ijpt::AbstractVector,
                           colinds::AbstractVector{Int64},colvals::AbstractVector{Float64},
                           idxperm::AbstractVector{Int64},
@@ -289,10 +267,24 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     lin2cart2D!(iptorig,nx,ijpt)
     igrid = ijpt[1]
     jgrid = ijpt[2]
-    # get the codes of the derivatives (+1,-2,...)
-    # extract codes for X and Y
-    codex,codey = codeDxy_orig[iptorig,1],codeDxy_orig[iptorig,2]
 
+    ##=======================
+    # ## OLD version
+    # # get the codes of the derivatives (+1,-2,...)
+    # # extract codes for X and Y
+    # codex,codey = codeDxy_orig[iptorig,1],codeDxy_orig[iptorig,2]
+
+    ##=======================
+    ## NEW version
+    ## If and only if the point has been accepted, then get the codes
+    if status[igrid,jgrid]==2
+        # get the codes of the derivatives (+1,-2,...)
+        # extract codes for X and Y
+        codex,codey = codeDxy_orig[iptorig,1],codeDxy_orig[iptorig,2]
+    else
+        codex,codey = 0,0
+    end
+    
     ## row stuff
     ## they must to be zeroed/filled every time!
     tmi = typemax(eltype(colinds)) # highest possible value for given type
@@ -346,7 +338,7 @@ function setcoeffderiv2D!(D::VecSPDerivMat,irow::Integer,idxconv::MapOrderGridFM
     ## select first or second order coefficients
     if abscode==1
         coeff = allcoeff.firstord
-    else
+    elseif abscode==2
         coeff = allcoeff.secondord
     end   
 
@@ -566,6 +558,14 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
 
+# println("\nlhs 1 coarse grid")
+# display(lhsterm1)
+# println("\nlhs 2 coarse grid")
+# display(lhsterm2)
+
+# println("lhs coarse grid")
+# display(tmplhs)    
+
    
     ## OLD stuff...
     # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
@@ -578,7 +578,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ############################################################
     lambda_fmmord = lhs\rhs
 
-    
+
     ##----------------------------------------------------------
     if whichgrad==:gradsrcloc || whichgrad==:gradvelandsrcloc
         
@@ -598,6 +598,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
                                             refinearoundsrc=refinearoundsrc ) 
     end
 
+    
     
     if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
       
@@ -623,69 +624,71 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         end
 
 
-        ##########################################
-        
+        ##===============================================
+        #   Derivative  du_s/dv_a
+        ##===============================================
         if refinearoundsrc==false
-            #################################################
+            #-----------------------------------
             #  NO refinement around the source
-            #################################################
-
+            #-----------------------------------
             ## source box parameters
             velcorn  = fmmvars.srcboxpar.velcorn
             distcorn = fmmvars.srcboxpar.distcorn
-            ijsrcreg = fmmvars.srcboxpar.ijsrc
 
             ## derivative of traveltime at source nodes w.r.t. velocity in region A
-            dus_dva = - diagm(distcorn) * 1.0 ./ velcorn.^2
-            
-            ##===============================================p
-            # Gradient with respect to velocity, term T2Va
-            ##===============================================
-            # deriv. of the implicit forw. mod. w.r.t. u_s
-            ∂fi_∂us = twoDttDSx .+ twoDttDSy
-            ## FMM ordering for ∂fi_∂us!!!
-            tmpdfidva = ∂fi_∂us * dus_dva        
-            ## FMM ordering for lambda_fmmord!!!
-            T2Va = transpose(lambda_fmmord) * tmpdfidva
-            ## add contribution to the gradient
-            for i=1:length(T2Va)
-                m,n = ijsrcreg[i,:]
-                gradvel1[m,n] += T2Va[i]
-            end
+            ##   dus_dva must be in FMM order to agree with ∂fi_∂us
+            dus_dva = - diagm(distcorn) .* (1.0 ./ velcorn.^2)  # Hadamard product!
 
-            ##===============================================
-            # Gradient with respect to velocity, term T1Va 
-            ##===============================================
-            # T1v = ∂ψ/∂u_s
-            ## using fact2∂ψ∂u from the calculations above!
-            ## fact2∂ψ∂u = ((P*tt_fmmord).-pickobs)./stdobs.^2
-            # pick only columns belonging to the source region
-            P_Areg = P[:,adjvars.fmmord.onsrccols]
-            ∂ψ_∂u_s = transpose(P_Areg) * fact2∂ψ∂u
-
-            ## add contribution to the gradient       
-            tmpT1Va = transpose(∂ψ_∂u_s) * dus_dva
-            for i=1:length(tmpT1Va)
-                m,n = ijsrcreg[i,:]
-                #@show i,m,n,tmpgr1[i]
-                gradvel1[m,n] += tmpT1Va[i]
-            end
-
-            println("=== END gradient coarse grid ===")
-
-        
         elseif refinearoundsrc
-            
-            println("=== END gradient coarse grid ===")
-
-            #############################################
-            ##   REFINEMENT around the source
-            #############################################
+            #-----------------------------------
+            #  REFINEMENT around the source
+            #-----------------------------------
             # #error("Gradient with respect to velocity with refinement of the grid currently missing a piece... Aborting.")
+            
             ## Solve the adjoint equation in the fine grid
-            duh_dva = solveadjointfinegrid!(fmmvars_fine,adjvars_fine,
-                                            grd_fine,srcrefvars)
+            ##   dus_dva must be in FMM order to agree with ∂fi_∂us
+            dus_dva = solveadjointfinegrid!(fmmvars_fine,adjvars_fine,
+                                            grd_fine,srcrefvars,
+                                            fmmvars.srcboxpar.ijsrc)
+        end
 
+
+        ##===============================================
+        # Gradient with respect to velocity, term T2Va
+        ##===============================================
+        # deriv. of the implicit forw. mod. w.r.t. u_s
+        #   ordered according to FMM order
+        ∂fi_∂us = twoDttDSx .+ twoDttDSy
+        ## FMM ordering for ∂fi_∂us!!!
+        tmpdfidva = ∂fi_∂us * dus_dva        
+        ## FMM ordering for lambda_fmmord!!!
+        T2Va = transpose(lambda_fmmord) * tmpdfidva
+
+        ## (i,j) indices of the source points
+        ijsrcreg = fmmvars.srcboxpar.ijsrc
+
+        ## add contribution to the gradient
+        for i=1:length(T2Va)
+            m,n = ijsrcreg[i,:]
+            gradvel1[m,n] += T2Va[i]
+        end
+
+        ##===============================================
+        # Gradient with respect to velocity, term T1Va 
+        ##===============================================
+        # T1v = ∂ψ/∂u_s
+        ## using fact2∂ψ∂u from the calculations above!
+        ## fact2∂ψ∂u = ((P*tt_fmmord).-pickobs)./stdobs.^2
+        # pick only columns belonging to the source region
+        P_Areg = P[:,adjvars.fmmord.onsrccols]
+        ∂ψ_∂u_s = transpose(P_Areg) * fact2∂ψ∂u
+
+        ## add contribution to the gradient       
+        tmpT1Va = transpose(∂ψ_∂u_s) * dus_dva
+        for i=1:length(tmpT1Va)
+            m,n = ijsrcreg[i,:]
+            #@show i,m,n,tmpgr1[i]
+            gradvel1[m,n] += tmpT1Va[i]
         end
 
     end
@@ -695,35 +698,41 @@ end
 
 ##############################################################################
 
-function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
+function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars,ijsrc_coarse)
 
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
-    println("=== START adjoint fine grid ===")
     
     ## find the last value of traveltime computed in the fine grid
     ##    (The fine grid stop when hitting a boundary...)
-    lasttt = findfirst( adjvars.fmmord.ttime.==0.0)-1
-    ## extract computed traveltime values
-    tt_fmmord = adjvars.fmmord.ttime[1:lasttt]
-    @show size(tt_fmmord)
-
-    ## bool array of grid points (in FMM order) on h (u_s) points
-    onHpts = adjvars.fmmord.onhpoints#[node]
     ## number of model parameters (== computed traveltimes)
-    Naccpts = length(tt_fmmord)
+    Naccpts = adjvars.fmmord.lastcomputedtt[]
+    @assert findfirst( adjvars.fmmord.ttime.==0.0)-1 == Naccpts
+    ## extract computed traveltime values
+    tt_fmmord = adjvars.fmmord.ttime[1:Naccpts]
+    #@show size(tt_fmmord)
+    onsrccols = adjvars.fmmord.onsrccols[1:Naccpts]
+    nptsonsrc = count(onsrccols)
+    @assert length(onsrccols)==length(tt_fmmord)
+    ## bool array of grid points (in FMM order) on h (u_s) points
+    onHpts = adjvars.fmmord.onhpoints[1:Naccpts]  #[node]
+
     ## indices of coinciding with u_s (h)
     idxonHpts = findall(onHpts) # get all "true" values
     Nhpts = length(idxonHpts)
-    @show Nhpts
+    #@show Nhpts
+
+@show grd.nx,grd.ny,grd.nx*grd.ny
+@show Naccpts,Nhpts,count(onsrccols)
+#@show onHpts
+
 
     ###########################################
     H_i = zeros(Int64,Nhpts)
     H_j = zeros(Int64,Nhpts)
     H_v = zeros(Float64,Nhpts)
     ##H = ??? #idxonHpts
-
 
     ############################################################
     ## Define the projection operator H in the fine grid
@@ -742,35 +751,44 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
         ## P[r,jfmmord] =
         H_i[q] = l
         H_j[q] = jfmmord
-        H_v[q] = 1
+        H_v[q] = 1.0
         q+=1
     end
     H = sparse(H_i,H_j,H_v,Nhpts,Naccpts)
+
+# @show Nhpts
+# @show size(H)
+#     display(H)
+# #    display(Array(H))
+# @show length(H.nzval)
     
     ###########################################
-    # Derivative (along x) matrix, row-deficien
+    # Derivative (along x) matrix, row-deficient
     vecDx = adjvars.fmmord.vecDx
     ###########################################
-    # Derivative (along y) matrix, row-deficien
+    # Derivative (along y) matrix, row-deficient
     vecDy = adjvars.fmmord.vecDy
+
+#@show vecDx.Nsize,vecDy.Nsize    
 
     #######################################################
     ##  right hand side adj eq. == -(adjoint source)^T
     #######################################################
     # @show size(H)
-    # @show size(.!adjvars.fmmord.onsrccols[1:lasttt])
+    # @show size(.!adjvars.fmmord.onsrccols[1:Naccpts])
     # bool vector with false for src columns
-    #    only part of the rectangular fine grid has been used, so [1:lasttt]
-    rq = .!adjvars.fmmord.onsrccols[1:lasttt]  
+    #    only part of the rectangular fine grid has been used, so [1:Naccpts]
+    rq = .!onsrccols
     HD = H[:,rq] # remove columns
     rhs = - transpose(HD)
+
 
     ################################
     ##   left hand side adj eq.
     ################################
     ## compute the lhs terms
-    twoDttDRx,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrccols)
-    twoDttDRy,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,adjvars.fmmord.onsrccols) 
+    twoDttDRx,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,onsrccols)
+    twoDttDRy,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,onsrccols) 
 
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
@@ -794,32 +812,28 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
     
-    # @show Nix,Njx
-    # @show Niy,Njy
-    # @show prod(size(vel2d_fine))
-    # @show count(adjvars.fmmord.onsrccols)
-
-    ## OLD stuff...
-    # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
-    # ##   the solver (\) does not use the correct sparse algo for matrix division
-    # tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) ))
-    # lhs = UpperTriangular(tmplhs)
 
     ############################################################
     ##  solve the linear system to get the adjoint variable
     ############################################################
     # Remark: "lambda_fmmord" excludes the points on the source (in the fine grid)
-    lambda_fmmord = lhs\rhs  
-    #@show size(lambda_fmmord)
+    #  lambda_fmmord is in FMM order
+    lambda_fmmord = lhs\rhs
 
-    # Reorder lambda from fmmord to original grid!!
-    idxconv = adjvars.idxconv
-    N = size(lambda_fmmord,1) # lambda is 2D for grid refinement
-    nptsonsrc = count(adjvars.fmmord.onsrccols)
-    #@show nptsonsrc
+    Nptsoffsrc = Naccpts-nptsonsrc
+    @assert size(lambda_fmmord,1)==Nptsoffsrc
+    @assert size(lambda_fmmord,2)==Nhpts
 
-    ##-------------------------------------------------------
-    #gradve1_fine = zeros(srcrefvals.grd.nx,srcrefvals.grd.ny)
+
+    @show size(lambda_fmmord)
+    @show extrema(lambda_fmmord)
+    #@show Array(lambda_fmmord)
+    # println("\n lambda_fmmord:")
+    # display(lambda_fmmord)
+    for h=1:Nhpts
+        nnz_lambda_h = count(abs.(lambda_fmmord[:,h]).>0.0)
+        @show h,nnz_lambda_h
+    end
 
     ##========================================
     ##  Compute the T2Vd term
@@ -828,110 +842,161 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
     ## The gradient in the fine grid is not a rectangular grid but it
     ##    depends on when the FMM has stopped (so a vector with 'Naccpts'
     ##    entries, not a 2D array)
-    #duh_dwq = zeros(Naccpts,Nhpts)
-    duh_dwq = zeros(Nhpts,grd.nx*grd.ny)
+    #duh_dwq = zeros(Nhpts,grd.nx*grd.ny)
+    duh_dwq = zeros(Nhpts,Naccpts)
+    @show size(duh_dwq),prod(size(duh_dwq))
 
-    @show N
-    @show size(srcrefvars.vel2d_fine)
-    @show size(lambda_fmmord)
-    @show size(duh_dwq)
-
+    # To reorder lambda from fmmord to original grid...
+    idxconv = adjvars.idxconv
     ijpt = MVector(0,0)
-    for p=1:N
+    for p=1:Nptsoffsrc
         # The following two lines (p+nptsonsrc) is a way to map the
         #  "full" indices to the "reduced" set of indices (no source region)
         iorig = idxconv.lfmm2grid[p+nptsonsrc] # skip pts on src
-        # get the i,j indices for vel and grad
+        # # get the i,j indices for vel and grad
         lin2cart2D!(iorig,idxconv.nx,ijpt)
         i,j = ijpt
-        for h=1:Nhpts   
-            # get the contribution of T2Vb to the gradient
-            #T2Vd[p,h] = 2.0 * lambda_fmmord[p,h] / vel2d_fine[i,j]^3
-            # T2Vd
-            duh_dwq[h,iorig] = 2.0 * lambda_fmmord[p,h] / srcrefvars.vel2d_fine[i,j]^3
+        p2 = p+nptsonsrc
+        for h=1:Nhpts
+            # get the contribution of T2Vd to the gradient
+            duh_dwq[h,p2] = 2.0 * lambda_fmmord[p,h] / srcrefvars.vel2d_fine[i,j]^3
         end
     end
-    @show N,Nhpts
+
+    println("\n duh_dwq [T2Vd] ")
+    display(duh_dwq)
+    @show count(abs.(duh_dwq).>0.0)
+
+
+    #@show N,Nhpts
     #@show size(T2Vd)
-    
+    # println("write duh_dwq to h5")
+    # h5open("duh_dwq.h5","w") do fl
+    #     fl["duh_dwq"] = duh_dwq
+    # end
+
     ## source box parameters
     velcorn  = fmmvars.srcboxpar.velcorn
     distcorn = fmmvars.srcboxpar.distcorn
     ijsrcreg = fmmvars.srcboxpar.ijsrc
 
     ## derivative of \tau_s w.r.t. w_a
-    dtaus_dwa = - diagm(distcorn) * 1.0 ./ velcorn.^2
+    dtaus_dwa = - diagm(distcorn) .* (1.0./velcorn.^2) # Hadamard product!
+
+    println("dtaus_dwa")
+    display(dtaus_dwa)
+    #display(diagm(distcorn))
 
 
     ##========================================
     ## Compute the T2Vc term 
     ##========================================
-    # deriv. of the implicit forw. mod. w.r.t. u_s
+    # deriv. of the implicit forw. mod. w.r.t. u_s, FMM ordering
     ∂gi_∂taus = twoDttDSx .+ twoDttDSy
     ## FMM ordering for ∂gi_∂taus!!!
-    tmpdgidwa = ∂gi_∂taus * dtaus_dwa        
+    tmpdgidwa = ∂gi_∂taus * dtaus_dwa  
     ## FMM ordering for lambda_fmmord!!!
     T2Vc = transpose(lambda_fmmord) * tmpdgidwa
+
+    println("\n ∂gi_∂taus ")
+    display(∂gi_∂taus)    
+    println("\n tmpdgidwa ")
+    display(tmpdgidwa)
+
+
     @show size(T2Vc)
     ## add contribution to the gradient in the fine grid
-    for a=1:size(T2Vc,2)
-        m,n = ijsrcreg[a,:]
-        iorig = cart2lin2D(m,n,grd.nx)
-        for h=1:Nhpts
-            duh_dwq[h,iorig] += T2Vc[h,a]
+    for p=1:nptsonsrc #size(T2Vc,2)
+        for h=1:Nhpts #size(T2Vc,1)
+            duh_dwq[h,p] += T2Vc[h,p]
         end
     end
+
+    println("\n T2Vc ")
+    display(T2Vc)
+    @show count(abs.(T2Vc).>0.0)
+
+    println("\n duh_dwq [T2Vc] ")
+    display(duh_dwq)
+    @show count(abs.(duh_dwq).>0.0)
+    
 
     ##========================================
     ## Compute the T1Vc term 
     ##========================================
-    H_Areg = H[:,adjvars.fmmord.onsrccols[1:lasttt]]
+    H_Areg = H[:,onsrccols]
     T1Vc = H_Areg * dtaus_dwa
     @show size(T1Vc)
-    for a=1:size(T1Vc,2)
-        m,n = ijsrcreg[a,:]
-        iorig = cart2lin2D(m,n,grd.nx)
+    for p=1:nptsonsrc
         for h=1:Nhpts
-            duh_dwq[h,iorig] += T1Vc[h,a]
+            duh_dwq[h,p] += T1Vc[h,p]
         end
     end
-    #println("duh_dwq:")
-    #display(duh_dwq)
-    @show extrema(duh_dwq)
+    println("\n T1Vc ")
+    display(T1Vc)
+
+    println("\n duh_dwq [T1Vc] ")
+    display(duh_dwq)
+    @show count(abs.(duh_dwq).>0.0)
     
     ##========================================
-    ## Compute dw1/dwa
+    ## Compute dwq/dwa
     ##========================================
     # filter grid point which have been actually used 
     #dwq_dva = srcrefvars.nearneigh_oper#[ , ]
-    @show size(srcrefvars.nearneigh_oper)
-    dwq_dva = zeros(grd.nx*grd.ny,Nhpts)
+    #@show size(srcrefvars.nearneigh_oper)
+    dwq_dva = zeros(Nhpts,Nhpts)
 
     nx_window_coarse = srcrefvars.nxny_window_coarse[1]
-    @show nptsonsrc
-    @show size(idxconv.lfmm2grid)
-    @show length(idxonHpts)
-    @show length(onHpts)
-    for p=1:Naccpts
-        iorig = idxconv.lfmm2grid[p]
-        for (a,a_fine) in enumerate(idxonHpts)
-            a_coarse = srcrefvars.nearneigh_idxcoarse[a_fine]
-            dwq_dva[p,a] = srcrefvars.nearneigh_oper[iorig,a_coarse]
-        end
-    end
+    # @show nptsonsrc
+    # @show size(idxconv.lfmm2grid)
+    # @show length(idxonHpts)
+    # @show length(onHpts)
+    # for p=1:Naccpts
+    #     iorig = idxconv.lfmm2grid[p]
+    #     for (a,a_fine) in enumerate(idxonHpts)
+    #         a_coarse = srcrefvars.nearneigh_idxcoarse[a_fine]
+    #         dwq_dva[p,a] = srcrefvars.nearneigh_oper[iorig,a_coarse]
+    #     end
+    # end
+
+    # @show size(srcrefvars.nearneigh_oper)
+    
+    # lsiorig = Int64[]
+    # for p=1:size(ijsrc_coarse,1)
+    #     i,j = ijsrc_coarse[p,:]
+    #     ii = i - srcrefvars.ijcoarse[1]+1
+    #     jj = j - srcrefvars.ijcoarse[2]+1
+    #     iorig = cart2lin2D(ii,jj,nx_window_coarse)
+    #     push!(lsiorig,iorig)
+    # end
+    # @show lsiorig
+    dwq_dva = srcrefvars.nearneigh_oper[1:Nhpts,1:Nhpts] 
 
 
-    # println("dwq_dva:")
-    # display(dwq_dva)
+                                        
+    # println("nneigh:")
+    # display(nneigh)
+    # @show extrema(nneigh)
+
+    #println("dwq_dva:")
+    #display(dwq_dva)
+    @show size(dwq_dva)
     @show extrema(dwq_dva)
     
-   #  ##========================================
-   #  ## duh_dva
-   #  ##========================================
-   #  duh_dva = duh_dwq * dwq_dva
+    ##========================================
+    ## duh_dva
+    ##========================================
+    duh_dva = duh_dwq * dwq_dva
 
-     println("=== END adjoint fine grid ===")    
-    return 
+    @show size( duh_dwq),size( dwq_dva)
+    @show size(duh_dva)
+    println("duh_dva:")
+    display(duh_dva)
+    @show extrema(duh_dva)
+    @show count(abs.(duh_dva).>0.0)
+
+    return duh_dva
 end
 
 #######################################################################################
@@ -971,9 +1036,12 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
     #############################################
     ## for grad w.r.t. velocity
     # Derivative (along x) matrix, row- *and* column-deficient
-    ncolidx = vecD.Nnnz[] - nsrcpts
-    two_Dtt_DR = VecSPDerivMat( iptr=zeros(Int64,nrows+1), j=zeros(Int64,ncolidx),
-                                v=zeros(ncolidx), Nsize=[nrows,ncolsR] )
+    ## ncolidx = vecD.Nnnz[] - nsrcpts #  <<--- OLD
+    #ncolidx = ncols - nsrcpts  #  <<--- NEW
+    Nnnz = vecD.Nnnz[]
+
+    two_Dtt_DR = VecSPDerivMat( iptr=zeros(Int64,nrows+1), j=zeros(Int64,Nnnz),
+                                v=zeros(Nnnz), Nsize=[nrows,ncolsR] )
     #############################################
     
     # mapping of column number from full to column reduced
@@ -991,9 +1059,9 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
     #############################################
     ## for grad w.r.t. source loc calculations
     #twoDttDS = zeros(eltype(vecD.v),nrows,nsrcpts)
-    DS_i = Vector{Int64}(undef,ncolidx)
-    DS_j = Vector{Int64}(undef,ncolidx)
-    DS_val = Vector{Float64}(undef,ncolidx)
+    DS_i = Vector{Int64}(undef,Nnnz)
+    DS_j = Vector{Int64}(undef,Nnnz)
+    DS_val = Vector{Float64}(undef,Nnnz)
     #############################################
 
     l3=0
@@ -1057,102 +1125,6 @@ function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
 
     return two_Dtt_DR,twoDttDS
 end
-
-#######################################################################################
-
-
-#######################################################################################
-
-# """
-# $(TYPEDSIGNATURES)
-
-#  Attempt to reconstruct how derivatives have been calculated in the area of 
-#   the refinement of the source. Updates the codes for derivatives used to construct
-#    Dx and Dy.
-# """
-# function derivaroundsrcfmm2D!(lseq::Integer,idxconv::MapOrderGridFMM2D,codeD::MVector)
-#     # lipt = index in fmmord in sequential order (1,2,3,4,...)
-    
-#     nx = idxconv.nx
-#     ny = idxconv.ny
-
-#     ijpt = MVector(0,0)
-#     idxpt = idxconv.lfmm2grid[lseq]
-#     lin2cart2D!(idxpt,nx,ijpt)
-#     ipt,jpt = ijpt[1],ijpt[2]
-    
-#     codeD[:] .= 0
-#     for axis=1:2
-
-#         chosenidx = lseq
-#         for dir=1:2
-
-#             ## map the 4 cases to an integer as in linear indexing...
-#             lax = dir + 2*(axis-1)
-#             if lax==1 # axis==1
-#                 ish = 1
-#                 jsh = 0
-#             elseif lax==2 # axis==1
-#                 ish = -1
-#                 jsh = 0
-#             elseif lax==3 # axis==2
-#                 ish = 0
-#                 jsh = 1
-#             elseif lax==4 # axis==2
-#                 ish = 0
-#                 jsh = -1
-#             end
-            
-#             ##=========================
-#             ## first order
-#             i = ipt+ish
-#             j = jpt+jsh
-
-#             ## check if on boundaries
-#             isonb1st,isonb2nd = isonbord(i,j,nx,ny)
-
-#             if !isonb1st
-#                 ## calculate the index of the neighbor in the fmmord
-#                 l = cart2lin2D(i,j,nx)
-#                 #idxne1 = findfirst(idxconv.lfmm2grid.==l)
-#                 idxne1 = idxconv.lgrid2fmm[l]
-                
-#                 if idxne1!=nothing && idxne1<chosenidx                   
-
-#                     # to make sure we chose correctly the direction
-#                     chosenidx = idxne1
-#                     # save derivative choices [first order]
-#                     axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
-
-#                     if !isonb2nd
-#                         ##=========================
-#                         ## second order
-#                         i = ipt + 2*ish
-#                         j = jpt + 2*jsh
-                        
-#                         ## calculate the index of the neighbor in the fmmord
-#                         l = cart2lin2D(i,j,nx)
-#                         idxne2 = idxconv.lgrid2fmm[l]
-                        
-#                         ##===========================================================
-#                         ## WARNING! The traveltime for the second order point must
-#                         ##   be smaller than the one for the first order for selecting
-#                         ##   second order. Otherwise first order only.
-#                         ##  Therefore we compare idxne2<idxne1 instead of idxne2<idxpt
-#                         ##===========================================================
-#                         if idxne2<idxne1
-#                             # save derivative choices [second order]
-#                             axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
-#                         end
-
-#                     end
-#                 end
-#             end            
-#         end
-#     end
-
-#     return 
-# end
 
 #######################################################################################
 
@@ -1250,198 +1222,4 @@ end
 ###########################################################################
 
 
-# function calc_∂u_h∂x_s_finegrid(fmmvars,adjvars,xysrc,vel2d,grd)
-
-#     # Derivative (along x) matrix, row-deficien
-#     vecDx = adjvars.fmmord.vecDx
-#     # Derivative (along y) matrix, row-deficien
-#     vecDy = adjvars.fmmord.vecDy
-
-#     onsrccols = adjvars.fmmord.onsrccols
-#     onhpoints = adjvars.fmmord.onhpoints
-#     tt = adjvars.fmmord.ttime
-
-#     ######################################
-#     ## First part: compute ∂u_h/∂u_s
-#     ######################################
-
-#     ##
-#     ##  ∂f_h/∂u_h * ∂u_h/∂u_s = - ∂f_h/∂u_s
-#     ##
-#     ##  "h" points
-#     ##  A = ∂f_h/∂u_h
-#     ##  A = 2 ( Dx_ij * tt_j ) * Dx_ih + 2 ( Dy_ij * tt_j ) * Dy_ih
-#     ##   size(A) => N_i x N_h  with i != s
-#     ##
-#     ##  "s" points
-#     ##  B = ∂f_h/∂u_s
-#     ##  B = 2 ( Dx_ij * tt_j ) * Dx_is + 2 ( Dy_ij * tt_j ) * Dy_is
-#     ##   size(A) => N_i x N_h  with i != s
-#     ##
-#     ##  X = ∂u_h/∂u_s
-#     ##  A * X = - B
-#     ##
-
-#     twoDttDH_x,twoDttDS_x = calcABtermsfinegrid(vecDx,tt,onsrccols,onhpoints)
-#     twoDttDH_y,twoDttDS_y = calcABtermsfinegrid(vecDy,tt,onsrccols,onhpoints)
-#     A = twoDttDH_x .+ twoDttDH_y
-#     B = twoDttDS_x .+ twoDttDS_y
-
-    
-#     # solve the linear systemS
-#     ∂u_h∂u_s = A \ (-B)
-
-#     println("A")
-#     display(A)
-#     println("B")
-#     display(B)
-#     println("∂u_h∂u_s")
-#     display(∂u_h∂u_s)
-
-#     ######################################
-#     ## END First part: compute ∂u_h/∂u_s
-#     ######################################
-
-    
-#     ######################################
-#     ## Second part part: compute ∂u_s/∂x_s
-#     ######################################
-#     nx,ny = size(vel2d)
-#     npts = size(B,2)
-#     ijpt = MVector(0,0)
-#     xypt = MVector(0.0,0.0)
-#     curijsrc = MVector(0,0)
-#     derpos = zeros(npts,2)
-
-#     for p=1:npts 
-#         # ifmmord_srcpts = count(sourcerows[1:p])
-#         # iorig_srcpts = idxconv.lfmm2grid[ifmmord_srcpts]
-#         iorig_srcpts = adjvars.idxconv.lfmm2grid[p] 
-
-#         ##################################
-#         ## Source velocity stuff
-#         # Get the correct velocity for all 4 vertices
-#         #  The velocity should be the same (same ii,jj) for all 4 points
-#         #velpts[p] = vel2d[iorig_srcpts]
-#         lin2cart2D!(iorig_srcpts,grd.nx,curijsrc)
-#         xps = grd.x[curijsrc[1]] 
-#         yps = grd.y[curijsrc[2]]
-#         ii = Int(floor((xysrc[1]-grd.xinit)/grd.hgrid)) +1
-#         jj = Int(floor((xysrc[2]-grd.yinit)/grd.hgrid)) +1 
-#         velpt = vel2d[ii,jj]
-        
-#         ##################################
-#         ## Derivatives for each source point
-#         ## CONVERT linear to cartesian 2D to get point position
-#         lin2cart2D!(iorig_srcpts,nx,ijpt)
-#         xypt .= (grd.x[ijpt[1]], grd.y[ijpt[2]])
-
-#         derpos[p,:] .= partderivttsrcpos2D(xypt,xysrc,velpt)
-#     end
-    
-#     ######################################
-#     ## END Second part part: compute ∂u_s/∂x_s
-#     ######################################
-
-
-#     ######################################
-#     ## Third part: combine results
-#     ##             ∂u_h/∂u_s * ∂u_s/∂x_s
-#     ######################################
-#     ∂u_h∂x_s = ∂u_h∂u_s * derpos
-
-#     return ∂u_h∂x_s
-# end
-
-###########################################################################
-
-# function calcABtermsfinegrid(vecD::VecSPDerivMat,tt::Vector{Float64},
-#                              onsrccols::Vector{Bool},onhpoints::Vector{Bool})
-    
-#     # Remark: equivalent to CSR format 
-#     # ## CSR matrix-vector product
-#     # tmp1 = zeros(nrows)
-#     # for i=1:nrows
-#     #     # pi=pointers to column indices
-#     #     for l=vecD.pi[i]:vecD.pi[i+1]-1
-#     #         j = vecD.j[l]
-#     #         # dot product
-#     #         tmp1[i] += vecD.v[l]*tt[j]
-#     #     end
-#     # end
-
-#     # size of D^x or D^y
-#     nrows,ncols = vecD.Nsize[1],vecD.Nsize[2]
-#     @show vecD.Nsize
-#     @show size(tt)
-#     # number of rows of D^xr, D^yr, both row and col deficient
-#     nsrcpts = count(onsrccols)
-#     nhpts = count(onhpoints)
-
-#     @show nsrcpts,nhpts
-#     @show findall(onsrccols)
-#     @show findall(onhpoints)
-
-#     #################################
-#     ## for grad w.r.t. source loc calculations
-#     twoDttDH = zeros(eltype(vecD.v),nhpts,nhpts)
-#     twoDttDS = zeros(eltype(vecD.v),nhpts,nsrcpts)
-#     #################################
-
-#     ## CSR matrix-vector product
-#     for i=1:nrows
-
-#         ## pre-compute Dx * tt 
-#         tmp1 = 0.0
-#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-#             j = vecD.j[l]
-#             # dot product
-#             tmp1 += vecD.v[l]*tt[j]
-#         end
-    
-#         for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-#             j = vecD.j[l]  # column index
-
-#             # +nsrcpts-> onhpoints runs on all columns, while rows are reduced...
-#             if onhpoints[j] #&& onhpoints[i+nsrcpts] 
-#                 ############################################################### 
-#                 ##  ∂f_h/∂u_h = twoDttDH = 2 ( D_ij * tt_j ) * D_ih
-#                 ###############################################################
-#                 # perform the calculation only if we are not on a source point
-#                 #   in order to remove the columns corresponding to the source
-#                 #   points
-#                 jh = count(onhpoints[1:j]) 
-#                 ih = count(onhpoints[1:i+nsrcpts]) 
-#                 twoDttDH[ih,jh] = 2.0 * tmp1 * vecD.v[l]
-
-#                 #@show i,j,ih,jh
-#             end
-
-#             # +nsrcpts-> onhpoints runs on all columns, while rows are reduced...
-#             if onsrccols[j] #&& onhpoints[i+nsrcpts]
-#                 # Remark: onsrc in the fine grid
-#                 ################################################################### 
-#                 ##  ∂f_h/∂u_s = twoDttDS = 2 ( D_ij * tt_j ) * D_is
-#                 ###################################################################
-#                 jss = count(onsrccols[1:j])
-#                 iss = count(onhpoints[1:i+nsrcpts])
-#                 #twoDttDS[iss,jss] = 2.0 * tmp1 * vecD.v[l]
-#                 @show i,j,iss,jss,onhpoints[i+nsrcpts]
-#                 # println()
-#                 # @show iss,jss,
-#                 # println()
-#             end
-
-#         end # for l=vecD.iptr[i]:vecD.iptr[i+1]-1
-#     end # i=1:nrows
-
-#     println("twoDttDH")
-#     display(twoDttDH)
-#     println("twoDttDS")
-#     display(twoDttDS)
-
-#     return twoDttDH,twoDttDS
-# end
-
-###########################################################################
 

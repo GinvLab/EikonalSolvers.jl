@@ -294,7 +294,10 @@ end
 ########################################################
 
 struct VarsFMMOrder2D
+    "Traveltime"
     ttime::Vector{Float64}
+    "Last computed traveltime"
+    lastcomputedtt::Base.RefValue{Int64}
     "Derivative (along x) matrix, row-deficient"
     vecDx::VecSPDerivMat
     "Derivative (along y) matrix, row-deficient"
@@ -315,7 +318,8 @@ struct VarsFMMOrder2D
                                v=zeros(nxy*3), Nsize=[nxy,nxy] )
         onsrccols = zeros(Bool,nxy) # all false
         onhpoints = zeros(Bool,nxy) # all false
-        return new(ttime,vecDx,vecDy,onsrccols,onhpoints)
+        lastcomputedtt = Ref(0)
+        return new(ttime,lastcomputedtt,vecDx,vecDy,onsrccols,onhpoints)
     end
 end
 
@@ -323,6 +327,8 @@ end
 
 struct VarsFMMOrder3D
     ttime::Vector{Float64}
+     "Last computed traveltime"
+    lastcomputedtt::Base.RefValue{Int64}
     vecDx::VecSPDerivMat
     vecDy::VecSPDerivMat
     vecDz::VecSPDerivMat
@@ -336,7 +342,7 @@ struct VarsFMMOrder3D
                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
         vecDz = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-
+        lastcomputedtt = Ref(0)
         return new(ttime,vecDx,vecDy,vecDz)
     end
 end

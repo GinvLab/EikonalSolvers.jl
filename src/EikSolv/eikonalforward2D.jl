@@ -270,8 +270,11 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         adjvars.fmmord.vecDx.Nnnz[] = 0
         adjvars.fmmord.vecDy.Nnnz[] = 0
         adjvars.fmmord.onsrccols[:] .= false
+        adjvars.fmmord.onhpoints[:] .= false
         # for safety, zeroes the traveltime
         adjvars.fmmord.ttime[:] .= 0.0
+        # init the valued of last ttime computed
+        adjvars.fmmord.lastcomputedtt[] = 0
         # for safety, zeroes the codes for derivatives
         adjvars.codeDxy[:,:] .= 0
     end
@@ -288,8 +291,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         #  because the size of the grid may change when hitting borders, etc.
         runrefinementaroundsrc!(fmmvars,vel,src,grd,adjvars,extrapars)
 
-        @show size(fmmvars.srcboxpar.ijsrc)
-
+        #@show size(fmmvars.srcboxpar.ijsrc)
 
     elseif fmmvars.refinearoundsrc && dodiscradj
         ##===================================================
@@ -300,7 +302,7 @@ function ttFMM_hiord!(fmmvars::FMMvars2D,vel::Array{Float64,2},src::AbstractVect
         # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
         #  because the SIZE of the grid may CHANGE when hitting borders, etc.
         fmmvars_fine,adjvars_fine,grd_fine,srcrefvars = runrefinementaroundsrc!(fmmvars,vel,src,grd,
-                                                                              adjvars,extrapars)
+                                                                                adjvars,extrapars)
     
     else        
         ##================================================
@@ -328,7 +330,8 @@ end
 
 ###########################################################################
 
-function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc::AbstractVector{Float64},
+function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},
+                                 xysrc::AbstractVector{Float64},
                                  grd::GridEik2D,adjvars::Union{AdjointVars2D,Nothing},
                                  extrapars::ExtraParams)
                               
@@ -383,6 +386,8 @@ function runrefinementaroundsrc!(fmmvars::FMMvars2D,vel::Array{Float64,2},xysrc:
         adjvars_fine.fmmord.onhpoints[:] .= false
         # for safety, zeroes the traveltime
         adjvars_fine.fmmord.ttime[:] .= 0.0
+        # init the valued of last ttime computed
+        adjvars_fine.fmmord.lastcomputedtt[] = 0
         # for safety, zeroes the codes for derivatives
         adjvars_fine.codeDxy[:,:] .= 0
 
@@ -522,7 +527,10 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
     if dodiscradj
         ## number of accepted points       
         naccinit = size(ijsrc,1)
-        @show isthisrefinementsrc,naccinit
+        ## total number of traveltimes computed so far
+        adjvars.fmmord.lastcomputedtt[] = naccinit
+
+        #@show isthisrefinementsrc,naccinit
         n1,n2 = size(vel)
 
         # discrete adjoint: first visited points in FMM order
@@ -689,25 +697,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
                     # codes of chosen derivatives for adjoint
                     adjvars.codeDxy[han,:] .= idD
                 end
-               
-            # elseif fmmvars.status[i,j]==1 ## narrow band
-            #     ##======================================
-            #     ## NNNNEEEEWWWW !!!!
-            #     #@show "Hello, construct initial narrow band $i, $j"
-            #     # update the traveltime for this point
-            #     tmptt = calcttpt_2ndord!(fmmvars,vel,grd,i,j,idD)
-
-            #     # get handle
-            #     han = cart2lin2D(i,j,n1)
-            #     # update the traveltime for this point in the heap
-            #     update_node_minheap!(fmmvars.bheap,tmptt,han)
-
-            #     if dodiscradj
-            #         # codes of chosen derivatives for adjoint
-            #         adjvars.codeDxy[han,:] .= idD
-            #     end
-            #     ##======================================
-                
+                              
             end ## if fmmvars.status[i,j]==0 ## far
         end ## for ne=1:4
     end
@@ -744,7 +734,9 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
             # store the linear index of FMM order
             adjvars.idxconv.lfmm2grid[node] = cart2lin2D(ia,ja,n1)
             # store arrival time for first points in FMM order
-            adjvars.fmmord.ttime[node] = tmptt  
+            adjvars.fmmord.ttime[node] = tmptt
+            ## total number of traveltimes computed so far
+            adjvars.fmmord.lastcomputedtt[] = node 
         end
 
         ##======================================================
@@ -800,7 +792,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
                 ##==============================================================
                 ##  Create the derivative matrices before quitting (sparse)
                 if dodiscradj
-                    createsparsederivativematrices!(grd,adjvars)
+                    createsparsederivativematrices!(grd,adjvars,fmmvars.status)
                 end
                 ##==============================================================
 
@@ -813,10 +805,8 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
                 ## re-allocate srcboxpar.ijsrc of type SourcePtsFromFineGrid (mutable struct)
                 fmmvars_coarse.srcboxpar.ijsrc = ijsrc_coarse[1:counter_ijsrccoarse-1,:]
 
-                @show naccinit,node,totnpts
-                @show size(fmmvars_coarse.srcboxpar.ijsrc)
-
-                return #ijsrc_coarse[1:counter_ijsrccoarse-1,:]
+                #println("\n === Hello, quitting the refinement at node $node === ")
+                return 
             end
             
         end # if isthisrefinementsrc      
@@ -871,7 +861,7 @@ function ttFMM_core!(fmmvars::FMMvars2D,vel::Array{Float64,2},grd::GridEik2D,
 
     ##======================================================
     if dodiscradj
-        createsparsederivativematrices!(grd,adjvars)
+        createsparsederivativematrices!(grd,adjvars,fmmvars.status)
     end # if dodiscradj
     ##======================================================
     
@@ -1352,7 +1342,7 @@ end
 
 #########################################################
 
-function createsparsederivativematrices!(grd,adjvars)
+function createsparsederivativematrices!(grd,adjvars,status::AbstractArray)
 
     if typeof(grd)==Grid2D
         simtype = :cartesian
@@ -1431,12 +1421,12 @@ function createsparsederivativematrices!(grd,adjvars)
     for irow=1:adjvars.fmmord.vecDx.Nsize[1]
         
         # compute the coefficients for X  derivatives
-        setcoeffderiv2D!(adjvars.fmmord.vecDx,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffx,ptij,
+        setcoeffderiv2D!(adjvars.fmmord.vecDx,status,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffx,ptij,
                          colinds,colvals,idxperm,nptsfixedtt, axis=:X,simtype=simtype)
 
         
         # compute the coefficients for Y derivatives
-        setcoeffderiv2D!(adjvars.fmmord.vecDy,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffy,ptij,
+        setcoeffderiv2D!(adjvars.fmmord.vecDy,status,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffy,ptij,
                          colinds,colvals,idxperm,nptsfixedtt, axis=:Y,simtype=simtype)
         
     end
@@ -1459,12 +1449,13 @@ function createfinegrid(grd,xysrc,vel)
     downscalefactor::Int = 0
     noderadius::Int = 0
     
-    downscalefactor = 3 #5
-    ## 2 instead of 5 for adjoint to avoid messing up...
+    downscalefactor = 1 #5
+    @show downscalefactor 
     ## if noderadius is not the same for forward and adjoint,
     ##   then troubles with comparisons with brute-force fin diff
     ##   will occur...
-    noderadius = 2 #2 
+    noderadius = 1 #2
+    @show noderadius
 
     ## find indices of closest node to source in the "big" array
     ## ix, iy will become the center of the refined grid
@@ -1533,19 +1524,19 @@ function createfinegrid(grd,xysrc,vel)
     ## Get the vel around the source on the coarse grid
     ##
     velcoarsegrd = view(vel,i1coarse:i2coarse,j1coarse:j2coarse)    
-
+@show size(velcoarsegrd)
     ##
     ## Nearest neighbor interpolation for velocity on finer grid
     ##
     n1_window_coarse = i2coarse-i1coarse+1
     n2_window_coarse = j2coarse-j1coarse+1
 
-    @show ijsrcpts
-    @show (i1coarse,i2coarse),(j1coarse,j2coarse)
-    @show n1_fine,n2_fine
-    @show 
-    @show n1_window_coarse,n2_window_coarse
-    @show size(velcoarsegrd)
+    # @show ijsrcpts
+    # @show (i1coarse,i2coarse),(j1coarse,j2coarse)
+    # @show n1_fine,n2_fine
+    # @show 
+    # @show n1_window_coarse,n2_window_coarse
+    # @show size(velcoarsegrd)
 
     nearneigh_oper = spzeros(n1_fine*n2_fine, n1_window_coarse*n2_window_coarse)
     vel_fine = Array{Float64}(undef,n1_fine,n2_fine)
@@ -1571,10 +1562,8 @@ function createfinegrid(grd,xysrc,vel)
             ##
             #@show i,j,f,c
             nearneigh_idxcoarse[f] = c
-
         end
     end
-@show n1_coarse,n2_coarse
     
     if simtype==:cartesian
         # set origin of the fine grid
@@ -1598,7 +1587,8 @@ function createfinegrid(grd,xysrc,vel)
                                 (n1_window_coarse,n2_window_coarse),
                                 (outxmin,outxmax,outymin,outymax),
                                 nearneigh_oper,nearneigh_idxcoarse,vel_fine)
-
+    @show grdfine.nx,grdfine.ny
+    @show size(nearneigh_oper)
     return grdfine,srcrefvars
 end
 
