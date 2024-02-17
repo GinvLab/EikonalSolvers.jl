@@ -947,8 +947,6 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
 
     #nx_window_coarse = srcrefvars.nxny_window_coarse[1]
 
-    @warn "FIX ordering of srcrefvars.nearneigh_oper[1:Nhpts,1:Nhpts]"
-
     # @show idxonHpts
     # @show size(dwq_dva)
     # @show srcrefvars.nearneigh_idxcoarse
