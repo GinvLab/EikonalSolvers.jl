@@ -37,7 +37,7 @@ $(TYPEDFIELDS)
 """
 Base.@kwdef struct EikonalProb
     ##mstart::Vector{Float64} # required
-    grd::Union{Grid2D,Grid3D}
+    grd::Union{Grid2DCart,Grid3DCart}
     dobs::Vector{Vector{Float64}}
     stdobs::Vector{Vector{Float64}}
     coordsrc::Array{Float64,2}
@@ -61,10 +61,10 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         vecvel = inpvecvel
     end
 
-    if typeof(eikprob.grd)==Grid2D
+    if typeof(eikprob.grd)==Grid2DCart
         # reshape vector to 2D array
         velnd = reshape(vecvel,eikprob.grd.nx,eikprob.grd.ny)
-    elseif typeof(eikprob.grd)==Grid3D
+    elseif typeof(eikprob.grd)==Grid3DCart
         # reshape vector to 3D array
         velnd = reshape(vecvel,eikprob.grd.nx,eikprob.grd.ny,eikprob.grd.nz)
     else
@@ -86,7 +86,7 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         #################################################
         ## compute the gradient of the misfit function ##
         #################################################
-        if typeof(eikprob.grd)==Grid2D
+        if typeof(eikprob.grd)==Grid2DCart
             grad = gradttime2D(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
                                extraparams=eikprob.extraparams)

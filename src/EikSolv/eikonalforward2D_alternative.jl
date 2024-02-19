@@ -27,7 +27,7 @@ The computations are run in parallel depending on the number of workers (nworker
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 
 """
-function traveltime2Dalt(vel::Array{Float64,2},grd::Grid2D,coordsrc::Array{Float64,2},
+function traveltime2Dalt(vel::Array{Float64,2},grd::Grid2DCart,coordsrc::Array{Float64,2},
                          coordrec::Vector{Array{Float64,2}} ; ttalgo::String, ##  ="ttFMM_hiord",
                          returntt::Bool=false) 
         
@@ -104,7 +104,7 @@ $(TYPEDSIGNATURES)
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc2Dalt(vel::Array{Float64,2},coordsrc::Array{Float64,2},
-                            coordrec::Vector{Array{Float64,2}},grd::Grid2D,
+                            coordrec::Vector{Array{Float64,2}},grd::Grid2DCart,
                             ttalgo::String ; returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
@@ -172,7 +172,7 @@ $(TYPEDSIGNATURES)
  
  Fast sweeping method for a single source in 2D using using Podvin-Lecomte stencils on a staggered grid.
 """
-function ttFS_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
+function ttFS_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2DCart) 
 
     epsilon = 1e-6
       
@@ -352,7 +352,7 @@ $(TYPEDSIGNATURES)
  
  Fast marching method for a single source in 2D using using Podvin-Lecomte stencils on a staggered grid.
 """
-function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2D) 
+function ttFMM_podlec(vel::Array{Float64,2},src::Vector{Float64},grd::Grid2DCart) 
  
     epsilon = 1e-6
       
@@ -541,7 +541,7 @@ $(TYPEDSIGNATURES)
  Compute the traveltime at requested node using Podvin-Lecomte stencils on a staggered grid.
 """
 function calcttpt_podlec!(ttime::Array{Float64,2},ttlocmin::Vector{Float64},inittt::Float64,
-                          slowness::Array{Float64,2},grd::Grid2D,
+                          slowness::Array{Float64,2},grd::Grid2DCart,
                           cooa::Array{Int64,2},coob::Array{Int64,2},
                           coovin::Array{Int64,2},coovadj::Array{Int64,2},
                           i::Int64,j::Int64)
@@ -632,7 +632,7 @@ $(TYPEDSIGNATURES)
  Define the "box" of nodes around/including the source.
 """
 function sourceboxloctt_alternative!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
-                                     grd::Grid2D; staggeredgrid::Bool )
+                                     grd::Grid2DCart; staggeredgrid::Bool )
     ## staggeredgrid keyword required!
     
     ## source location, etc.      

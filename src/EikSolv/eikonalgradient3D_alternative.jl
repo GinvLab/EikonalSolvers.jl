@@ -26,11 +26,11 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 3D array
 
     """
-function gradttime3Dalt(vel::Array{Float64,3},grd::GridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
+function gradttime3Dalt(vel::Array{Float64,3},grd::AbstractGridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
                         pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
                         gradttalgo::String="gradFMM_hiord",smoothgradsourceradius::Integer=0,smoothgrad::Bool=true)
     
-    if typeof(grd)==Grid3D
+    if typeof(grd)==Grid3DCart
         simtype = :cartesian
     elseif typeof(grd)==Grid3DSphere
         simtype = :spherical
@@ -95,7 +95,7 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc3Dalt(vel::Array{Float64,3},xyzsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
-                              grd::GridEik3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
+                              grd::AbstractGridEik3D,stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
                               adjalgo::String,smoothgradsourceradius::Integer)
 
     nx,ny,nz=size(vel)
@@ -264,7 +264,7 @@ end
 $(TYPEDSIGNATURES)
 """
 function eikgrad_FS_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
-                         src::Vector{Float64},rec::Array{Float64,2},grd::Grid3D,
+                         src::Vector{Float64},rec::Array{Float64,2},grd::Grid3DCart,
                          pickobs::Vector{Float64},ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(3,)
@@ -437,7 +437,7 @@ $(TYPEDSIGNATURES)
 """
 function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
                          src::Vector{Float64},rec::Array{Float64,2},
-                         grd::Grid3D,pickobs::Vector{Float64},
+                         grd::Grid3DCart,pickobs::Vector{Float64},
                          ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(3,)
@@ -676,7 +676,7 @@ $(TYPEDSIGNATURES)
 """
 function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,3},vel::Array{Float64,3},
                          src::Vector{Float64},rec::Array{Float64,2},
-                         grd::Grid3D,pickobs::Vector{Float64},
+                         grd::Grid3DCart,pickobs::Vector{Float64},
                          ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(3,)
@@ -1019,7 +1019,7 @@ end
 $(TYPEDSIGNATURES)
 """
 function sourceboxlocgrad!(ttime::Array{Float64,3},vel::Array{Float64,3},srcpos::Vector{Float64},
-                           grd::Grid3D; staggeredgrid::Bool )
+                           grd::Grid3DCart; staggeredgrid::Bool )
 
     ##########################
     ##   Init source
@@ -1173,7 +1173,7 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function recboxlocgrad!(ttime::Array{Float64,3},lambda::Array{Float64,3},ttpicks::Vector{Float64},grd::Grid3D,
+function recboxlocgrad!(ttime::Array{Float64,3},lambda::Array{Float64,3},ttpicks::Vector{Float64},grd::Grid3DCart,
                         rec::Array{Float64,2},pickobs::Vector{Float64},stdobs::Vector{Float64}; staggeredgrid::Bool)
 
     ##########################

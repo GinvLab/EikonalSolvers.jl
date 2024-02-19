@@ -1,9 +1,15 @@
 
 ######################################################
 
-abstract type GridEik end
-abstract type GridEik2D <: GridEik end
-abstract type GridEik3D <: GridEik end
+abstract type AbstractGridEik end
+abstract type AbstractGridEik2D <: AbstractGridEik end
+abstract type AbstractGridEik3D <: AbstractGridEik end
+
+
+abstract type AbstractFMMVars end
+abstract type AbstractAdjointVars end
+
+abstract type AbstractSrcRefinVars end
 
 ######################################################
 """
@@ -23,7 +29,7 @@ The fields are:
 julia> Grid2D(hgrid=5.0,xinit=0.0,yinit=0.0,nx=300,ny=250)
 ```
 """
-struct Grid2D <: GridEik2D
+struct Grid2DCart <: AbstractGridEik2D
     hgrid::Float64
     xinit::Float64
     yinit::Float64
@@ -34,7 +40,7 @@ struct Grid2D <: GridEik2D
     x::Vector{Float64}
     y::Vector{Float64}
 
-    function Grid2D(; hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
+    function Grid2DCart(; hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
         x = [xinit+(i-1)*hgrid for i=1:nx]
@@ -66,7 +72,7 @@ The fields are:
 julia> Grid3D(hgrid=5.0,xinit=0.0,yinit=0.0,zinit=0.0,nx=60,ny=60,nz=40)
 ```
 """
-struct Grid3D <: GridEik3D
+struct Grid3DCart <: AbstractGridEik3D
     hgrid::Float64
     xinit::Float64
     yinit::Float64
@@ -82,7 +88,7 @@ struct Grid3D <: GridEik3D
     z::Vector{Float64}
     
     ## constructor function
-    function Grid3D(; hgrid::Float64,xinit::Float64,yinit::Float64, zinit::Float64,
+    function Grid3DCart(; hgrid::Float64,xinit::Float64,yinit::Float64, zinit::Float64,
                     nx::Int64,ny::Int64,nz::Int64)
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
@@ -113,7 +119,7 @@ The fields are:
 julia> Grid2DSphere(Δr=15.0,Δθ=2.0,nr=10,nθ=15,rinit=500.0,θinit=0.0)
 ```
 """
-struct Grid2DSphere <: GridEik2D
+struct Grid2DSphere <: AbstractGridEik2D
     Δr::Float64
     Δθ::Float64
     rinit::Float64
@@ -156,7 +162,7 @@ The fields are:
     julia> Grid3DSphere(Δr=15.0,Δθ=2.0,Δφ=1.5,nr=10,nθ=15,nφ=12,rinit=500.0,θinit=20.0,φinit=0.0)
 ```
 """
-struct Grid3DSphere <: GridEik3D
+struct Grid3DSphere <: AbstractGridEik3D
     Δr::Float64
     Δθ::Float64
     Δφ::Float64
@@ -239,39 +245,36 @@ end
 
 ###############################################################
 
-abstract type MapOrderGridFMM end
+abstract type AbstractMapOrderGridFMM end
 
-struct MapOrderGridFMM2D <: MapOrderGridFMM
+struct MapOrderGridFMM2D <: AbstractMapOrderGridFMM
     "Linear grid indices in FMM order (as visited by FMM)"
     lfmm2grid::Vector{Int64} # idx_fmmord
     "Linear FMM indices in grid order"
     lgrid2fmm::Vector{Int64} # idx_gridord
-    nx::Int64
-    ny::Int64
+    grsize::NTuple{2,Int64}
 
     function MapOrderGridFMM2D(nx,ny)
         nxy = nx*ny
         lfmm2grid = zeros(Int64,nxy)
         lgrid2fmm = zeros(Int64,nxy)
-        return new(lfmm2grid,lgrid2fmm,nx,ny)
+        return new(lfmm2grid,lgrid2fmm,(nx,ny))
     end
 end
 
 
-struct MapOrderGridFMM3D <: MapOrderGridFMM
+struct MapOrderGridFMM3D <: AbstractMapOrderGridFMM
     "Linear grid indices in FMM order (as visited by FMM)"
     lfmm2grid::Vector{Int64} # idx_fmmord
     "Linear FMM indices in grid order"
     lgrid2fmm::Vector{Int64} # idx_gridord
-    nx::Int64
-    ny::Int64
-    nz::Int64
+    grsize::NTuple{3,Int64}
 
     function MapOrderGridFMM3D(nx,ny,nz)
         nxyz = nx*ny*nz
         lfmm2grid = zeros(Int64,nxyz)
         lgrid2fmm = zeros(Int64,nxyz)
-        return new(lfmm2grid,lgrid2fmm,nx,ny,nz)
+        return new(lfmm2grid,lgrid2fmm,(nx,ny,nz))
     end
 end
 
@@ -377,7 +380,7 @@ end
 
 ####################################
 
-struct AdjointVars2D
+struct AdjointVars2D <: AbstractAdjointVars
     idxconv::MapOrderGridFMM2D
     fmmord::VarsFMMOrder2D
     codeDxy::Array{Int64,2}
@@ -391,7 +394,7 @@ struct AdjointVars2D
 end
 
 
-struct AdjointVars3D
+struct AdjointVars3D <: AbstractAdjointVars
     idxconv::MapOrderGridFMM3D
     fmmord::VarsFMMOrder3D
     codeDxyz::Array{Int64,2}
@@ -407,23 +410,10 @@ end
 
 ####################################
 
-struct SourceBoxParams2D
+struct SourceBoxParams
     "(i,j) positions of the corners surrounding the source location"
-    ijsrc::MArray
-    "(x,y) position of the source"
-    xysrc::MVector
-    "coefficient matrix for the interpolation of the velocity"
-    velcorn::MVector
-    "distance from the corners to the source location"
-    distcorn::MVector
-end
-
-####################################
-
-struct SourceBoxParams3D
-    "(i,j,k) positions of the corners surrounding the source location"
     ijksrc::MArray
-     "(x,y,z) position of the source"
+    "(x,y) position of the source"
     xyzsrc::MVector
     "coefficient matrix for the interpolation of the velocity"
     velcorn::MVector
@@ -431,16 +421,32 @@ struct SourceBoxParams3D
     distcorn::MVector
 end
 
+####################################
+
+# struct SourceBoxParams3D
+#     "(i,j,k) positions of the corners surrounding the source location"
+#     ijksrc::MArray
+#      "(x,y,z) position of the source"
+#     xyzsrc::MVector
+#     "coefficient matrix for the interpolation of the velocity"
+#     velcorn::MVector
+#     "distance from the corners to the source location"
+#     distcorn::MVector
+# end
+
 
 ####################################
 
 mutable struct SourcePtsFromFineGrid
-    ijsrc::Matrix{Int64} 
+    ijksrc::Matrix{Int64} 
 end
 
 ######################################################
 
-struct FMMvars2D
+
+######################################################
+
+struct FMMVars2D <: AbstractFMMVars
     ttime::Array{Float64,2}
     status::Array{UInt8,2}
     bheap::BinHeapMin
@@ -448,9 +454,9 @@ struct FMMvars2D
     refinearoundsrc::Bool
     "brute-force fix negative saqarg"
     allowfixsqarg::Bool 
-    srcboxpar::Union{SourceBoxParams2D,SourcePtsFromFineGrid}
+    srcboxpar::Union{SourceBoxParams,SourcePtsFromFineGrid}
 
-    function FMMvars2D(n1,n2; amIcoarsegrid::Bool,refinearoundsrc,allowfixsqarg)
+    function FMMVars2D(n1,n2; amIcoarsegrid::Bool,refinearoundsrc,allowfixsqarg)
         ttime = zeros(Float64,n1,n2)
         status = zeros(UInt8,n1,n2)
         bheap = init_minheap(n1*n2)
@@ -466,10 +472,10 @@ struct FMMvars2D
         else
             ## there is NO refinement
             Ncoe = 4
-            srcboxpar = SourceBoxParams2D(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,2)),
-                                          MVector{2}(zeros(2)),
-                                          MVector{Ncoe}(zeros(Ncoe)),
-                                          MVector{Ncoe}(zeros(Ncoe)) )
+            srcboxpar = SourceBoxParams(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,2)),
+                                        MVector{2}(zeros(2)),
+                                        MVector{Ncoe}(zeros(Ncoe)),
+                                        MVector{Ncoe}(zeros(Ncoe)) )
         end
         new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
     end
@@ -477,7 +483,7 @@ end
 
 ######################################################
 
-struct FMMvars3D
+struct FMMVars3D <: AbstractFMMVars
     ttime::Array{Float64,3}
     status::Array{UInt8,3}
     bheap::BinHeapMin
@@ -485,9 +491,9 @@ struct FMMvars3D
     refinearoundsrc::Bool
     "brute-force fix negative saqarg"
     allowfixsqarg::Bool 
-    srcboxpar::SourceBoxParams3D
+    srcboxpar::SourceBoxParams
     
-    function FMMvars3D(n1,n2,n3; amIcoarsegrid::Bool,refinearoundsrc,allowfixsqarg)
+    function FMMVars3D(n1,n2,n3; amIcoarsegrid::Bool,refinearoundsrc,allowfixsqarg)
         ttime = zeros(Float64,n1,n2,n3)
         status = zeros(UInt8,n1,n2,n3)
         bheap = init_minheap(n1*n2*n3)
@@ -501,10 +507,10 @@ struct FMMvars3D
             srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,3))
         else
             Ncoe = 8
-            srcboxpar = SourceBoxParams3D(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,3)),
-                                          MVector{3}(zeros(3)),
-                                          MVector{Ncoe}(zeros(Ncoe)),
-                                          MVector{Ncoe}(zeros(Ncoe)) )                                          
+            srcboxpar = SourceBoxParams(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,3)),
+                                        MVector{3}(zeros(3)),
+                                        MVector{Ncoe}(zeros(Ncoe)),
+                                        MVector{Ncoe}(zeros(Ncoe)) )                                          
         end
         new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
     end
@@ -512,14 +518,25 @@ end
 
 ###################################################
 
-struct SrcRefinVars2D
+struct SrcRefinVars2D <: AbstractSrcRefinVars
     downscalefactor::Int64
-    ijcoarse::NTuple{4,Int64}
-    nxny_window_coarse::NTuple{2,Int64}
-    outxyminmax::NTuple{4,Bool}
+    ijkcoarse::NTuple{4,Int64}
+    #nxny_window_coarse::NTuple{2,Int64}
+    #outxyminmax::NTuple{4,Bool}
     nearneigh_oper::SparseMatrixCSC{Float64,Int64}
     nearneigh_idxcoarse::Vector{Int64}
-    vel2d_fine::Array{Float64,2}
+    vel_fine::Array{Float64,2}
+end
+
+
+struct SrcRefinVars3D <: AbstractSrcRefinVars
+    downscalefactor::Int64
+    ijkcoarse::NTuple{6,Int64}
+    #nxnynz_window_coarse::NTuple{3,Int64}
+    #outxyminmax::NTuple{6,Bool}
+    nearneigh_oper::SparseMatrixCSC{Float64,Int64}
+    nearneigh_idxcoarse::Vector{Int64}
+    vel_fine::Array{Float64,3}
 end
 
 ###################################################

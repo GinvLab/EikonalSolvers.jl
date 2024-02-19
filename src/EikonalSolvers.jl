@@ -20,12 +20,11 @@ $(EXPORTS)
 module EikonalSolvers
 
 
-export Grid2D,Grid2DSphere
-export traveltime2D,gradttime2D
-export traveltime2Dalt,gradttime2Dalt
+export Grid2DCart,Grid2DSphere
+export Grid3DCart,Grid3DSphere
+export eiktraveltime,eikgradient
 
-export Grid3D,Grid3DSphere
-export traveltime3D,gradttime3D
+export traveltime2Dalt,gradttime2Dalt
 export traveltime3Dalt,gradttime3Dalt
 
 export ttmisfitfunc
@@ -58,19 +57,21 @@ using .BinHeaps
 
 ## general utils
 include("EikSolv/eikstructs.jl")
+include("EikSolv/eikchecks.jl")
 include("EikSolv/eikonalutils_spherical.jl")
-include("EikSolv/eikonalutils.jl")
+include("EikSolv/eikutils.jl")
 include("EikSolv/utils.jl")
+include("EikSolv/eikmain.jl")
 
 ## 2D stuff
-include("EikSolv/eikonalforward2D.jl")
-include("EikSolv/eikonalgradient2D.jl")
+include("EikSolv/eikforward2D.jl")
+#include("EikSolv/eikgradient2D.jl")
 include("EikSolv/eikonalforward2D_alternative.jl")
 include("EikSolv/eikonalgradient2D_alternative.jl")
 
 ## 3D stuff
-include("EikSolv/eikonalforward3D.jl")
-include("EikSolv/eikonalgradient3D.jl")
+include("EikSolv/eikforward3D.jl")
+#include("EikSolv/eikgradient3D.jl")
 include("EikSolv/eikonalforward3D_alternative.jl")
 include("EikSolv/eikonalgradient3D_alternative.jl")
 
