@@ -305,59 +305,61 @@ end
 
 ########################################################
 
-struct VarsFMMOrder2D
+struct VarsFMMOrder
     "Traveltime"
     ttime::Vector{Float64}
     "Last computed traveltime"
     lastcomputedtt::Base.RefValue{Int64}
-    "Derivative (along x) matrix, row-deficient"
-    vecDx::VecSPDerivMat
-    "Derivative (along y) matrix, row-deficient"
-    vecDy::VecSPDerivMat
+    "Derivative (along x, y, z) matrix, row-deficient"
+    Deriv::Vector{VecSPDerivMat}
     "keep track of source points in term of row index (ordered according to FMM)"
     onsrccols::Vector{Bool}
     "keep track of points marked as source points for the coarse grid while running the refinement of the grid around the source (ordered according to FMM)"
     onhpoints::Vector{Bool}
     
-    function VarsFMMOrder2D(nx,ny)
-        nxy =  nx*ny
-        ttime = zeros(nxy)
+    function VarsFMMOrder(nijk::NTuple{<:Integer}) 
+        npts = prod(nijk)
+        ndim = length(nijk)
+        ttime = zeros(ntps)
         ## nxy*3 because of the stencils in the second-order fast marching (max 3 points)
-        ## Nsize=[nxy,nxy] will be changed while the algo is running...
-        vecDx = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
-                               v=zeros(nxy*3), Nsize=[nxy,nxy] )
-        vecDy = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
-                               v=zeros(nxy*3), Nsize=[nxy,nxy] )
-        onsrccols = zeros(Bool,nxy) # all false
-        onhpoints = zeros(Bool,nxy) # all false
+        ## Nsize=[npts,npts] will be changed while the algo is running...
+        Deriv = Vector{VecSPDerivMat}(undef,ndim)
+        for d=1:ndim
+            Deriv[d] = VecSPDerivMat( iptr=zeros(Int64,npts+1), j=zeros(Int64,npts*3),
+                                      v=zeros(npts*3), Nsize=[npts,npts] )
+        end
+        # vecDy = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
+        #                        v=zeros(nxy*3), Nsize=[nxy,nxy] )
+        onsrccols = zeros(Bool,ntps) # all false
+        onhpoints = zeros(Bool,ntps) # all false
         lastcomputedtt = Ref(0)
-        return new(ttime,lastcomputedtt,vecDx,vecDy,onsrccols,onhpoints)
+        return new(ttime,lastcomputedtt,Deriv,onsrccols,onhpoints)
     end
 end
 
 ###################################################
 
-struct VarsFMMOrder3D
-    ttime::Vector{Float64}
-     "Last computed traveltime"
-    lastcomputedtt::Base.RefValue{Int64}
-    vecDx::VecSPDerivMat
-    vecDy::VecSPDerivMat
-    vecDz::VecSPDerivMat
+# struct VarsFMMOrder3D
+#     ttime::Vector{Float64}
+#      "Last computed traveltime"
+#     lastcomputedtt::Base.RefValue{Int64}
+#     vecDx::VecSPDerivMat
+#     vecDy::VecSPDerivMat
+#     vecDz::VecSPDerivMat
 
-    function VarsFMMOrder3D(nx,ny,nz)
-        nxyz =  nx*ny*nz
-        ttime = zeros(nxyz)
-        vecDx = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
-                               v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-        vecDy = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
-                               v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-        vecDz = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
-                               v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-        lastcomputedtt = Ref(0)
-        return new(ttime,vecDx,vecDy,vecDz)
-    end
-end
+#     function VarsFMMOrder3D(nx,ny,nz)
+#         nxyz =  nx*ny*nz
+#         ttime = zeros(nxyz)
+#         vecDx = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
+#                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
+#         vecDy = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
+#                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
+#         vecDz = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
+#                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
+#         lastcomputedtt = Ref(0)
+#         return new(ttime,vecDx,vecDy,vecDz)
+#     end
+# end
 
 ###################################################
 
@@ -382,28 +384,28 @@ end
 
 struct AdjointVars2D <: AbstractAdjointVars
     idxconv::MapOrderGridFMM2D
-    fmmord::VarsFMMOrder2D
-    codeDxy::Array{Int64,2}
+    fmmord::VarsFMMOrder
+    codeDeriv::Array{Int64,2}
 
     function AdjointVars2D(n1,n2)
         idxconv = MapOrderGridFMM2D(n1,n2)
         fmmord = VarsFMMOrder2D(n1,n2)
-        codeDxy = zeros(Int64,n1*n2,2)
-        new(idxconv,fmmord,codeDxy)
+        codeDeriv = zeros(Int64,n1*n2,2)
+        new(idxconv,fmmord,codeDeriv)
     end
 end
 
 
 struct AdjointVars3D <: AbstractAdjointVars
     idxconv::MapOrderGridFMM3D
-    fmmord::VarsFMMOrder3D
-    codeDxyz::Array{Int64,2}
+    fmmord::VarsFMMOrder
+    codeDeriv::Array{Int64,2}
 
     function AdjointVars3D(n1,n2,n3)
         idxconv = MapOrderGridFMM3D(n1,n2,n3)
         fmmord = VarsFMMOrder3D(n1,n2,n3)
-        codeDxyz = zeros(Int64,n1*n2*n3,3)
-        new(idxconv,fmmord,codeDxyz)
+        codeDeriv = zeros(Int64,n1*n2*n3,3)
+        new(idxconv,fmmord,codeDeriv)
     end
 end
 
@@ -476,6 +478,7 @@ struct FMMVars2D <: AbstractFMMVars
                                         MVector{2}(zeros(2)),
                                         MVector{Ncoe}(zeros(Ncoe)),
                                         MVector{Ncoe}(zeros(Ncoe)) )
+
         end
         new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
     end

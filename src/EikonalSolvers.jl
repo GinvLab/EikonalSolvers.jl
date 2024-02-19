@@ -61,11 +61,12 @@ include("EikSolv/eikchecks.jl")
 include("EikSolv/eikonalutils_spherical.jl")
 include("EikSolv/eikutils.jl")
 include("EikSolv/utils.jl")
-include("EikSolv/eikmain.jl")
+include("EikSolv/eikmainfwd.jl")
+include("EikSolv/eikmaingrad.jl")
 
 ## 2D stuff
 include("EikSolv/eikforward2D.jl")
-#include("EikSolv/eikgradient2D.jl")
+include("EikSolv/eikgradient2D.jl")
 include("EikSolv/eikonalforward2D_alternative.jl")
 include("EikSolv/eikonalgradient2D_alternative.jl")
 

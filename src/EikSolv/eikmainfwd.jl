@@ -32,8 +32,8 @@ The computations are run in parallel depending on the value of `extraparams.para
 
     """
 
-function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Array{Float64,N},
-                       coordrec::Vector{Array{Float64,N}} ; returntt::Bool=false,
+function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Array{Float64,2},
+                       coordrec::Vector{Array{Float64,2}} ; returntt::Bool=false,
                        extraparams::Union{ExtraParams,Nothing}=nothing  ) where N
         
     if extraparams==nothing
