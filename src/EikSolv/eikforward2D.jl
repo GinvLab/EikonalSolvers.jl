@@ -223,7 +223,7 @@ function createfinegrid(grd::AbstractGridEik2D,xysrc::AbstractVector{Float64},
     ##--------------------------------------------------
     ## get the interpolated velocity for the fine grid
     tmp_vel_fine = nearneigh_oper * vec(velcoarsegrd)
-    vel_fine = reshape(tmp_vel_fine,n1_fine,n2_fine)
+    velcart_fine = reshape(tmp_vel_fine,n1_fine,n2_fine)
     # @show size(nearneigh_oper)
     # @show size(vel_fine)
 
@@ -250,7 +250,7 @@ function createfinegrid(grd::AbstractGridEik2D,xysrc::AbstractVector{Float64},
                                 (i1coarse,j1coarse,i2coarse,j2coarse),
                                 #(n1_window_coarse,n2_window_coarse),
                                 #(outxmin,outxmax,outymin,outymax),
-                                nearneigh_oper,nearneigh_idxcoarse,vel_fine)
+                                nearneigh_oper,nearneigh_idxcoarse,velcart_fine)
     # @show grdfine.nx,grdfine.ny
     # @show size(nearneigh_oper)
     return grdfine,srcrefvars
@@ -310,102 +310,6 @@ function sourceboxloctt!(fmmvars::FMMVars2D,vel::Array{Float64,2},srcpos::Abstra
 end 
 
 #################################################################################
-
-function createsparsederivativematrices!(grd::AbstractGridEik2D,
-                                         adjvars::AdjointVars2D,
-                                         status::Array{Integer,2})
-
-    if typeof(grd)==Grid2DCart
-        simtype = :cartesian
-    elseif typeof(grd)==Grid2DSphere
-        simtype = :spherical
-    end
-
-    ptij = MVector(0,0)
-
-    # pre-determine derivative coefficients for positive codes (0,+1,+2)
-    if simtype==:cartesian
-        n1,n2 = grd.nx,grd.ny
-        hgrid = grd.hgrid
-        #allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
-        allcoeffx = CoeffDerivCartesian( MVector(-1.0/hgrid,
-                                                 1.0/hgrid), 
-                                         MVector(-3.0/(2.0*hgrid),
-                                                 4.0/(2.0*hgrid),
-                                                 -1.0/(2.0*hgrid)) )
-        # coefficients along X are the same than along Y
-        allcoeffy = allcoeffx
-
-    elseif simtype==:spherical
-        n1,n2 = grd.nr,grd.nθ
-        Δr = grd.Δr
-        ## DEG to RAD !!!!
-        Δarc = [grd.r[i] * deg2rad(grd.Δθ) for i=1:grd.nr]
-        # coefficients
-        coe_r_1st = [-1.0/Δr  1.0/Δr]
-        coe_r_2nd = [-3.0/(2.0*Δr)  4.0/(2.0*Δr) -1.0/(2.0*Δr) ]
-        coe_θ_1st = [-1.0 ./ Δarc  1.0 ./ Δarc ]
-        coe_θ_2nd = [-3.0./(2.0*Δarc)  4.0./(2.0*Δarc)  -1.0./(2.0*Δarc) ]
-
-        allcoeffx = CoeffDerivSpherical2D( coe_r_1st, coe_r_2nd )
-        allcoeffy = CoeffDerivSpherical2D( coe_θ_1st, coe_θ_2nd )
-
-    end
-
-    ##--------------------------------------------------------
-    ## pre-compute the mapping between fmm and original order
-    n12 = n1*n2
-    nptsonsrc = count(adjvars.fmmord.onsrccols)
-    #nptsonh   = count(adjvars.fmmord.onhpoints)
-
-    for i=1:n12
-        # ifm = index from fast marching ordering
-        ifm = adjvars.idxconv.lfmm2grid[i]
-        if ifm==0
-            # ifm is zero = end of indices for fmm ordering [lfmm2grid=zeros(Int64,nxyz)]
-            Nnnzsteps = i-1
-            # remove rows corresponding to points in the source region
-            adjvars.fmmord.vecDx.Nsize[1] = Nnnzsteps - nptsonsrc
-            adjvars.fmmord.vecDx.Nsize[2] = Nnnzsteps
-            adjvars.fmmord.vecDy.Nsize[1] = Nnnzsteps - nptsonsrc
-            adjvars.fmmord.vecDy.Nsize[2] = Nnnzsteps
-            break
-        end
-        adjvars.idxconv.lgrid2fmm[ifm] = i
-    end
-
-    ##
-    ## Set the derivative operators in FMM order, skipping source points onwards
-    ## 
-    ##   From adjvars.fmmord.vecDx.lastrowupdated[]+1 onwards because some rows might have already
-    ##   been updated above and the CSR format used here requires to add rows in sequence to
-    ##   avoid expensive re-allocations
-    #startloop = adjvars.fmmord.vecDx.lastrowupdated[]+1
-    #startloop = count(adjvars.fmmord.onsrccols)+1
-    nptsfixedtt = count(adjvars.fmmord.onsrccols )
-
-    colinds = MVector(0,0,0)
-    colvals = MVector(0.0,0.0,0.0)
-    idxperm = MVector(0,0,0)
-
-    #for irow=startloop:n12
-    for irow=1:adjvars.fmmord.vecDx.Nsize[1]
-        
-        # compute the coefficients for X  derivatives
-        setcoeffderiv2D!(adjvars.fmmord.vecDx,status,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffx,ptij,
-                         colinds,colvals,idxperm,nptsfixedtt, axis=:X,simtype=simtype)
-
-        
-        # compute the coefficients for Y derivatives
-        setcoeffderiv2D!(adjvars.fmmord.vecDy,status,irow,adjvars.idxconv,adjvars.codeDxy,allcoeffy,ptij,
-                         colinds,colvals,idxperm,nptsfixedtt, axis=:Y,simtype=simtype)
-        
-    end
-
-    return
-end
-
-##########################################################################
 
 """
 $(TYPEDSIGNATURES)

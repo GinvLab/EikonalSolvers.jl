@@ -27,7 +27,7 @@ The computations are run in parallel depending on the value of `extraparams.para
 - `grad`: the gradient as a 2D array
 
 """
-function gradttime2D(vel::Array{Float64,N}, grd::AbstractGridEik,coordsrc::Array{Float64,2},
+function eikgradient(vel::Array{Float64,N}, grd::AbstractGridEik,coordsrc::Array{Float64,2},
                      coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
                      stdobs::Vector{Vector{Float64}},whichgrad::Symbol=:gradvel ;
                      extraparams::Union{ExtraParams,Nothing}=nothing) where N
@@ -37,21 +37,6 @@ function gradttime2D(vel::Array{Float64,N}, grd::AbstractGridEik,coordsrc::Array
     if extraparams==nothing
         extraparams =  ExtraParams()
     end
-
-    # if typeof(grd)==Grid2D
-    #     simtype = :cartesian
-    # elseif typeof(grd)==Grid2DSphere
-    #     simtype = :spherical
-    # end
-    # if simtype==:cartesian
-    #     n1,n2 = grd.nx,grd.ny 
-    #     ax1min,ax1max = grd.x[1],grd.x[end]
-    #     ax2min,ax2max = grd.y[1],grd.y[end]
-    # elseif simtype==:spherical
-    #     n1,n2 = grd.nr,grd.nθ
-    #     ax1min,ax1max = grd.r[1],grd.r[end]
-    #     ax2min,ax2max = grd.θ[1],grd.θ[end]
-    # end
 
     # some checks
     @assert all(vel.>0.0)
@@ -143,7 +128,7 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
                            whichgrad::Symbol,extrapars::ExtraParams ) where N
                            
     grsize = size(vel)
-    nsrc = size(xysrc,1)
+    nsrc = size(xyzsrc,1)
 
     if whichgrad==:gradvel
         gradvel1 = zeros(grsize)
@@ -167,7 +152,7 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
                             allowfixsqarg=extrapars.allowfixsqarg)
     
     ## pre-allocate discrete adjoint variables for coarse grid
-    adjvars = AdjointVars2D(grsize)
+    adjvars = createAdjointVars(grsize)
 
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
@@ -194,8 +179,6 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
             srcrefvars=nothing
         end
 
-
-
         ###############################################################
         # Solve the adjoint problem(s) and get the requested gradient(s)
         if gradsrcpos==nothing
@@ -214,12 +197,11 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
                                         grd_fine=grd_fine,
                                         srcrefvars=srcrefvars)
 
-
          
         if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
             ###########################################
             ## smooth gradient (with respect to velocity) around the source
-            smoothgradaroundsrc2D!(gradvel1,view(xysrc,s,:),grd,
+            smoothgradaroundsrc2D!(gradvel1,view(xyzsrc,s,:),grd,
                                    radiuspx=extrapars.radiussmoothgradsrc)
             ##########################################
             ## add up gradients from different sources
@@ -237,6 +219,17 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
     return gradvelall,gradsrcpos
 end 
 
+##############################################################################
+
+function createAdjointVars(grsize::Tuple)
+    ndim = length(grsize)
+    if ndim==2
+        adjointvars = AdjointVars2D(grsize[1],grsize[2])
+    elseif ndim==3
+        adjointvars = AdjointVars3D(grsize[1],grsize[2],grsize[3])
+    end
+    return adjointvars
+end
 
 ##############################################################################
 
@@ -271,10 +264,12 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
                                       
     ##==============================
     tt_fmmord = adjvars.fmmord.ttime
-    ndim = ndims(velcart)
+    Ndim = ndims(velcart)
+    grsize = size(velcart)
+    
 
     ###########################################
-    # Derivative (along x,y,z) matrices, row-deficient
+    # Derivatives (along x,y,z) matrices, row-deficient
     Deriv = adjvars.fmmord.Deriv
 
     #######################################################
@@ -292,13 +287,11 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ##   left hand side adj eq.
     ################################
     ## compute the lhs terms
-    twoDttDR = Vector{VecSPDerivMat}(undef,ndim)
-    twoDttDS = Vector{SparseMatrixCSC}(undef,ndim)
-    for d=1:ndim
-        twoDttDR[d],twoDttDS[d] = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrccols)
+    twoDttDR = Vector{VecSPDerivMat}(undef,Ndim)
+    twoDttDS = Vector{SparseMatrixCSC}(undef,Ndim)
+    for d=1:Ndim
+        twoDttDR[d],twoDttDS[d] = calcadjlhsterms(Deriv[d],tt_fmmord,adjvars.fmmord.onsrccols)
     end
-    # twoDttDRx,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,adjvars.fmmord.onsrccols)
-    # twoDttDRy,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,adjvars.fmmord.onsrccols) 
 
     #===========================================
     ###  !!! REMARK from SparseArrays:  !!! ####
@@ -317,51 +310,23 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
 
     ============================================#
     
-    Ni = twoDttDR[d].Nsize[1]
-    Nj = twoDttDR[d].Nsize[2]
-    lhsterm = spzeros(Ni,Nj)
+    Ni = twoDttDR[1].Nsize[1]
+    Nj = twoDttDR[1].Nsize[2]
+    tmplhs = spzeros(Ni,Nj)
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    for d=1:ndim
+    for d=1:Ndim
         Nnnz = twoDttDR[d].Nnnz[]
         # Ni = twoDttDR[d].Nsize[1]
         # Nj = twoDttDR[d].Nsize[2]
         # Transpose the matrices and add them
-        lhsterm .+= SparseMatrixCSC(Nj,Ni,twoDttDR[d].iptr[1:Ni+1],
-                                    twoDttDR[d].j[1:Nnnz],twoDttDR[d].v[1:Nnnz])
+        tmplhs .+= SparseMatrixCSC(Nj,Ni,twoDttDR[d].iptr[1:Ni+1],
+                                   twoDttDR[d].j[1:Nnnz],twoDttDR[d].v[1:Nnnz])
     end
         
-    # ## We have a CSR matrix as vectors, we need a *transpose* of it,
-    # ##  so we construct directly a CSC by *exchanging* i and j indices
-    # Nxnnz = twoDttDRx.Nnnz[]
-    # Nix = twoDttDRx.Nsize[1]
-    # Njx = twoDttDRx.Nsize[2]
-    # lhsterm1 = SparseMatrixCSC(Njx,Nix,twoDttDRx.iptr[1:Nix+1],
-    #                            twoDttDRx.j[1:Nxnnz],twoDttDRx.v[1:Nxnnz])
- 
-    # ## We have a CSR matrix as vectors, we need a *transpose* of it,
-    # ##  so we construct directly a CSC by *exchanging* i and j indices
-    # Nynnz = twoDttDRy.Nnnz[]
-    # Niy = twoDttDRy.Nsize[1]
-    # Njy = twoDttDRy.Nsize[2]
-    # lhsterm2 = SparseMatrixCSC(Njy,Niy,twoDttDRy.iptr[1:Niy+1],
-    #                            twoDttDRy.j[1:Nynnz],twoDttDRy.v[1:Nynnz])
-
-    # They are already transposed, so only add them
-    # tmplhs = lhsterm1 .+ lhsterm2
-
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
 
-# println("\nlhs 1 coarse grid")
-# display(lhsterm1)
-# println("\nlhs 2 coarse grid")
-# display(lhsterm2)
-
-# println("lhs coarse grid")
-# display(tmplhs)    
-
-   
     ## OLD stuff...
     # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
     # ##   the solver (\) does not use the correct sparse algo for matrix division
@@ -372,7 +337,6 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ##  solve the linear system to get the adjoint variable
     ############################################################
     lambda_fmmord = lhs\rhs
-
 
     ##----------------------------------------------------------
     if whichgrad==:gradsrcloc || whichgrad==:gradvelandsrcloc
@@ -402,22 +366,24 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ##===============================================
         # Reorder lambda from fmmord to original grid!!
         idxconv = adjvars.idxconv
-        N = length(lambda_fmmord)
+        Nacc = length(lambda_fmmord)
         nptsonsrc = count(adjvars.fmmord.onsrccols)
 
-        ijpt = MVector(0,0)
+        if Ndim==2
+            # a 2D point
+            ijkpt = MVector(0,0)
+        elseif Ndim==3
+            ijkpt = MVector(0,0,0)
+        end
+
         #Nall = length(idxconv.lfmm2grid)
-        for p=1:N
+        for p=1:Nacc
             # The following two lines (p+nptsonsrc) is a way to map the
             #  "full" indices to the "reduced" set of indices (no source region)
             iorig = idxconv.lfmm2grid[p+nptsonsrc] # skip pts on src
-            # get the i,j indices for vel and grad
-            lin2cart2D!(iorig,idxconv.nx,ijpt)
-            i,j = ijpt
             # get the contribution of T2Vb to the gradient
-            gradvel1[i,j] = 2.0 * lambda_fmmord[p] / velcart[i,j]^3
+            gradvel1[iorig] = 2.0 * lambda_fmmord[p] / velcart[iorig]^3
         end
-
 
         ##===============================================
         #   Derivative  du_s/dv_a
@@ -438,13 +404,11 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
             #-----------------------------------
             #  REFINEMENT around the source
             #-----------------------------------
-            # #error("Gradient with respect to velocity with refinement of the grid currently missing a piece... Aborting.")
-            
             ## Solve the adjoint equation in the fine grid
             ##   dus_dva must be in FMM order to agree with ∂fi_∂us
             dus_dva = solveadjointfinegrid!(fmmvars_fine,adjvars_fine,
                                             grd_fine,srcrefvars)
-                                            #fmmvars.srcboxpar.ijsrc)
+
         end
 
 
@@ -453,19 +417,19 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ##===============================================
         # deriv. of the implicit forw. mod. w.r.t. u_s
         #   ordered according to FMM order
-        ∂fi_∂us = twoDttDSx .+ twoDttDSy
+        ∂fi_∂us = sum( twoDttDS )
         ## FMM ordering for ∂fi_∂us!!!
         tmpdfidva = ∂fi_∂us * dus_dva        
         ## FMM ordering for lambda_fmmord!!!
         T2Va = transpose(lambda_fmmord) * tmpdfidva
-
         ## (i,j) indices of the source points
-        ijsrcreg = fmmvars.srcboxpar.ijsrc
+        ijksrcreg = fmmvars.srcboxpar.ijksrc
 
         ## add contribution to the gradient
         for i=1:length(T2Va)
-            m,n = ijsrcreg[i,:]
-            gradvel1[m,n] += T2Va[i]
+            ijkpt .= ijksrcreg[i,:]
+            igr = cart2lin(ijkpt,grsize)
+            gradvel1[igr] += T2Va[i]
         end
 
         ##===============================================
@@ -481,9 +445,9 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ## add contribution to the gradient       
         tmpT1Va = transpose(∂ψ_∂u_s) * dus_dva
         for i=1:length(tmpT1Va)
-            m,n = ijsrcreg[i,:]
-            #@show i,m,n,tmpgr1[i]
-            gradvel1[m,n] += tmpT1Va[i]
+            ijkpt .= ijksrcreg[i,:]
+            igr = cart2lin(ijkpt,grsize)
+            gradvel1[igr] += tmpT1Va[i]
         end
 
     end
@@ -516,18 +480,16 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
     ## indices of coinciding with u_s (h)
     idxonHpts = findall(onHpts) # get all "true" values
     Nhpts = length(idxonHpts)
-    #@show Nhpts
 
-    # @show grd.nx,grd.ny,grd.nx*grd.ny
-    # @show Naccpts,Nhpts,count(onsrccols)
-    #@show onHpts
-
+    # To reorder lambda from fmmord to original grid...
+    idxconv = adjvars.idxconv
+    grsize = idxconv.grsize
+    Ndim = length(grsize)
 
     ###########################################
     H_i = zeros(Int64,Nhpts)
     H_j = zeros(Int64,Nhpts)
     H_v = zeros(Float64,Nhpts)
-    ##H = ??? #idxonHpts
 
     ############################################################
     ## Define the projection operator H in the fine grid
@@ -551,20 +513,9 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
     end
     H = sparse(H_i,H_j,H_v,Nhpts,Naccpts)
 
-# @show Nhpts
-# @show size(H)
-#     display(H)
-# #    display(Array(H))
-# @show length(H.nzval)
-    
     ###########################################
-    # Derivative (along x) matrix, row-deficient
-    vecDx = adjvars.fmmord.vecDx
-    ###########################################
-    # Derivative (along y) matrix, row-deficient
-    vecDy = adjvars.fmmord.vecDy
-
-#@show vecDx.Nsize,vecDy.Nsize    
+    #  Derivatives (along x,y,z) matrices, row-deficient
+    Deriv = adjvars.fmmord.Deriv
 
     #######################################################
     ##  right hand side adj eq. == -(adjoint source)^T
@@ -582,31 +533,26 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
     ##   left hand side adj eq.
     ################################
     ## compute the lhs terms
-    twoDttDRx,twoDttDSx = calcadjlhsterms(vecDx,tt_fmmord,onsrccols)
-    twoDttDRy,twoDttDSy = calcadjlhsterms(vecDy,tt_fmmord,onsrccols) 
+    twoDttDR = Vector{VecSPDerivMat}(undef,Ndim)
+    twoDttDS = Vector{SparseMatrixCSC}(undef,Ndim)
+    for d=1:Ndim
+        twoDttDR[d],twoDttDS[d] = calcadjlhsterms(Deriv[d],tt_fmmord,onsrccols)
+    end
 
+    Ni = twoDttDR[1].Nsize[1]
+    Nj = twoDttDR[1].Nsize[2]
+    tmplhs = spzeros(Ni,Nj)
     ## We have a CSR matrix as vectors, we need a *transpose* of it,
     ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nxnnz = twoDttDRx.Nnnz[]
-    Nix = twoDttDRx.Nsize[1]
-    Njx = twoDttDRx.Nsize[2]
-    lhsterm1 = SparseMatrixCSC(Njx,Nix,twoDttDRx.iptr[1:Nix+1],
-                               twoDttDRx.j[1:Nxnnz],twoDttDRx.v[1:Nxnnz])
- 
-    ## We have a CSR matrix as vectors, we need a *transpose* of it,
-    ##  so we construct directly a CSC by *exchanging* i and j indices
-    Nynnz = twoDttDRy.Nnnz[]
-    Niy = twoDttDRy.Nsize[1]
-    Njy = twoDttDRy.Nsize[2]
-    lhsterm2 = SparseMatrixCSC(Njy,Niy,twoDttDRy.iptr[1:Niy+1],
-                               twoDttDRy.j[1:Nynnz],twoDttDRy.v[1:Nynnz])
-
-    # They are already transposed, so only add them
-    tmplhs = lhsterm1 .+ lhsterm2
+    for d=1:Ndim
+        Nnnz = twoDttDR[d].Nnnz[]
+        # Transpose the matrices and add them
+        tmplhs .+= SparseMatrixCSC(Nj,Ni,twoDttDR[d].iptr[1:Ni+1],
+                                   twoDttDR[d].j[1:Nnnz],twoDttDR[d].v[1:Nnnz])
+    end
 
     ## make sure it's recognised as upper triangular...
     lhs = UpperTriangular(tmplhs)
-    
 
     ############################################################
     ##  solve the linear system to get the adjoint variable
@@ -619,85 +565,46 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
     @assert size(lambda_fmmord,1)==Nptsoffsrc
     @assert size(lambda_fmmord,2)==Nhpts
 
-    # @show size(lambda_fmmord)
-    # @show extrema(lambda_fmmord)
-    #@show Array(lambda_fmmord)
-    # println("\n lambda_fmmord:")
-    # display(lambda_fmmord)
-    # for h=1:Nhpts
-    #     nnz_lambda_h = count(abs.(lambda_fmmord[:,h]).>0.0)
-    #     @show h,nnz_lambda_h
-    # end
-
     ##========================================
     ##  Compute the T2Vd term
     ##========================================
-    #T2Vd = zeros(N,Nhpts)
     ## The gradient in the fine grid is not a rectangular grid but it
     ##    depends on when the FMM has stopped (so a vector with 'Naccpts'
     ##    entries, not a 2D array)
-    #duh_dwq = zeros(Nhpts,grd.nx*grd.ny)
     duh_dwq = zeros(Nhpts,Naccpts)
-    #@show size(duh_dwq),prod(size(duh_dwq))
-
-    # To reorder lambda from fmmord to original grid...
-    idxconv = adjvars.idxconv
-    ijpt = MVector(0,0)
+    
     for p=1:Nptsoffsrc
         # The following two lines (p+nptsonsrc) is a way to map the
         #  "full" indices to the "reduced" set of indices (no source region)
         iorig = idxconv.lfmm2grid[p+nptsonsrc] # skip pts on src
         # # get the i,j indices for vel and grad
-        lin2cart2D!(iorig,idxconv.nx,ijpt)
-        i,j = ijpt
+        # lin2cart!(iorig,grsize,ijkpt)
+        # i,j = ijkpt
         p2 = p+nptsonsrc
         for h=1:Nhpts
             # get the contribution of T2Vd to the gradient
-            duh_dwq[h,p2] = 2.0 * lambda_fmmord[p,h] / srcrefvars.velcart_fine[i,j]^3
+            duh_dwq[h,p2] = 2.0 * lambda_fmmord[p,h] / srcrefvars.velcart_fine[iorig]^3
         end
     end
-
-    # println("\n duh_dwq [T2Vd] ")
-    # display(duh_dwq)
-    # @show count(abs.(duh_dwq).>0.0)
-
-    #@show N,Nhpts
-    #@show size(T2Vd)
-    # println("write duh_dwq to h5")
-    # h5open("duh_dwq.h5","w") do fl
-    #     fl["duh_dwq"] = duh_dwq
-    # end
 
     ## source box parameters
     velcorn  = fmmvars.srcboxpar.velcorn
     distcorn = fmmvars.srcboxpar.distcorn
-    ijsrcreg = fmmvars.srcboxpar.ijsrc
+    ijsrcreg = fmmvars.srcboxpar.ijksrc
 
     ## derivative of \tau_s w.r.t. w_a
     dtaus_dwa = - diagm(distcorn) .* (1.0./velcorn.^2) # Hadamard product!
-
-    # println("dtaus_dwa")
-    # display(dtaus_dwa)
-    # #display(diagm(distcorn))
-
 
     ##========================================
     ## Compute the T2Vc term 
     ##========================================
     # deriv. of the implicit forw. mod. w.r.t. u_s, FMM ordering
-    ∂gi_∂taus = twoDttDSx .+ twoDttDSy
+    ∂gi_∂taus = sum( twoDttDS )
     ## FMM ordering for ∂gi_∂taus!!!
     tmpdgidwa = ∂gi_∂taus * dtaus_dwa  
     ## FMM ordering for lambda_fmmord!!!
     T2Vc = transpose(lambda_fmmord) * tmpdgidwa
 
-    # println("\n ∂gi_∂taus ")
-    # display(∂gi_∂taus)    
-    # println("\n tmpdgidwa ")
-    # display(tmpdgidwa)
-
-
-    #@show size(T2Vc)
     ## add contribution to the gradient in the fine grid
     for p=1:nptsonsrc #size(T2Vc,2)
         for h=1:Nhpts #size(T2Vc,1)
@@ -705,48 +612,22 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
         end
     end
 
-    # println("\n T2Vc ")
-    # display(T2Vc)
-    # @show count(abs.(T2Vc).>0.0)
-
-    # println("\n duh_dwq [T2Vc] ")
-    # display(duh_dwq)
-    # @show count(abs.(duh_dwq).>0.0)
-    
-
     ##========================================
     ## Compute the T1Vc term 
     ##========================================
     H_Areg = H[:,onsrccols]
     T1Vc = H_Areg * dtaus_dwa
-    #@show size(T1Vc)
     for p=1:nptsonsrc
         for h=1:Nhpts
             duh_dwq[h,p] += T1Vc[h,p]
         end
     end
-    # println("\n T1Vc ")
-    # display(T1Vc)
-
-    # println("\n duh_dwq [T1Vc] ")
-    # display(duh_dwq)
-    # @show count(abs.(duh_dwq).>0.0)
     
     ##========================================
     ## Compute dwq/dwa
     ##========================================
     # filter grid point which have been actually used 
-    #dwq_dva = srcrefvars.nearneigh_oper#[ , ]
-    #@show size(srcrefvars.nearneigh_oper)
     dwq_dva = zeros(Naccpts,Nhpts)
-
-    #nx_window_coarse = srcrefvars.nxny_window_coarse[1]
-
-    # @show idxonHpts
-    # @show size(dwq_dva)
-    # @show srcrefvars.nearneigh_idxcoarse
-    # @show size(srcrefvars.nearneigh_idxcoarse)
-
     nneigh = srcrefvars.nearneigh_oper
     ##
     for (j,q) in enumerate(idxonHpts)
@@ -767,26 +648,10 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
 
     end
 
-    # println("nneigh:")
-    # display(nneigh)
-    # @show extrema(nneigh)
-
-    # println("dwq_dva:")
-    # display(dwq_dva)
-    # @show size(dwq_dva)
-    # @show extrema(dwq_dva)
-    
     ##========================================
     ## duh_dva
     ##========================================
     duh_dva = duh_dwq * dwq_dva
-
-    #@show size( duh_dwq),size( dwq_dva)
-    #@show size(duh_dva)
-    #println("duh_dva:")
-    #display(duh_dva)
-    #@show extrema(duh_dva)
-    #@show count(abs.(duh_dva).>0.0)
 
     return duh_dva
 end
@@ -929,10 +794,10 @@ $(TYPEDSIGNATURES)
 function calcprojttfmmord(ttime::AbstractArray{Float64,N},grd::AbstractGridEik,idxconv::MapOrderGridFMM,
                           coordrec::AbstractArray{Float64}) where N
 
-    if typeof(grd)==AbstractGridEik2D
+    if typeof(grd)<:AbstractGridEik2D
         simdim = :sim2D
         Ncoe = 4 
-    elseif typeof(grd)==AbstractGridEik2D
+    elseif typeof(grd)<:AbstractGridEik3D
         simdim = :sim3D
         Ncoe = 8
     else
@@ -953,7 +818,7 @@ function calcprojttfmmord(ttime::AbstractArray{Float64,N},grd::AbstractGridEik,i
             coeff,_,ijcoe = bilinear_interp( ttime,grd,view(coordrec,r,:),
                                              outputcoeff=true )
         elseif simdim==:sim3D 
-            coeff,_,ijcoe = trilinear_interp( ttime,grd,view(coordrec,r,:),
+            coeff,_,ijkcoe = trilinear_interp( ttime,grd,view(coordrec,r,:),
                                               outputcoeff=true )
         end
 
@@ -963,11 +828,9 @@ function calcprojttfmmord(ttime::AbstractArray{Float64,N},grd::AbstractGridEik,i
 
             # convert (i,j) from original grid to fmmord
             if simdim==:sim2D
-                i,j = ijcoe[l,1],ijcoe[l,2]
-                iorig = cart2lin2D(i,j,idxconv.nx)
+                iorig = cart2lin(ijcoe[l,:],idxconv.grsize)
             elseif simdim==:sim3D
-                i,j,k = ijcoe[l,1],ijcoe[l,2],ijcoe[l,3]
-                iorig = cart2lin3D(i,j,k,idxconv.nx,idxconv.ny)
+                iorig = cart2lin(ijkcoe[l,:],idxconv.grsize)
             end
 
             # get index in fmm order
@@ -984,10 +847,205 @@ function calcprojttfmmord(ttime::AbstractArray{Float64,N},grd::AbstractGridEik,i
         end
 
     end
-
-    P = sparse(P_i,P_j,P_v,nrec,nmodpar)
     
+    P = sparse(P_i,P_j,P_v,nrec,nmodpar)
     return P
 end
 
 #############################################
+
+"""
+$(TYPEDSIGNATURES)
+
+ Set the coefficients (elements) of the derivative matrices in the x and y directions.
+"""
+function setcoeffderiv!(D::VecSPDerivMat,status::Array,irow::Integer,idxconv::MapOrderGridFMM,
+                        codeDeriv_orig::Array{Int64,2},allcoeff::CoeffDerivatives,ijkpt::AbstractVector,
+                        colinds::AbstractVector{Int64},colvals::AbstractVector{Float64},
+                        idxperm::AbstractVector{Int64},
+                        nptsfixedtt::Integer;
+                        axis::Symbol, simtype::Symbol)
+    
+    # get the linear index in the original grid
+    iptorig = idxconv.lfmm2grid[irow+nptsfixedtt]
+    # get the (i,j) indices in the original grid
+    grsize = idxconv.grsize
+    ijkpt = MVector(0,0)
+    lin2cart!(iptorig,grsize,ijkpt)
+
+    ##=======================
+    # ## OLD version
+    # # get the codes of the derivatives (+1,-2,...)
+    # # extract codes for X and Y
+    # codex,codey = codeDxy_orig[iptorig,1],codeDxy_orig[iptorig,2]
+
+    ##=======================
+    ## NEW version
+    ## If and only if the point has been accepted, then get the codes
+    if status[iptorig]==2
+        # get the codes of the derivatives (+1,-2,...)
+        # extract codes for X and Y
+        #codex,codey = codeDeriv_orig[iptorig,1],codeDeriv_orig[iptorig,2]
+        codexyz = codeDeriv_orig[iptorig,:]
+    else
+        codexyz = SVector(0,0,0)
+    end
+    
+    ## row stuff
+    ## they must to be zeroed/filled every time!
+    tmi = typemax(eltype(colinds)) # highest possible value for given type
+    colinds .= tmi # for permsort!() to work with only 2 out of 3 elements
+    colvals .= 0.0
+    idxperm .= 0
+    
+    # whX::Int=0
+    # whY::Int=0
+    if length(grsize)==2
+        whXYZ = MVector(0,0)
+        ijkcoe = MVector(0,0)
+    elseif length(grsize)==3
+        whXYZ = MVector(0,0,0)
+        ijkcoe = MVector(0,0,0)
+    end
+
+    if axis==:X
+        if codexyz[1]==0
+            ## no derivatives have been used, so no element will
+            ##  be added, but the row counter will increase...
+            nnzcol = 0
+            addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
+            return
+        else
+            code = codexyz[1]
+            whXYZ[1] = 1
+        end
+
+    elseif axis==:Y
+        if codexyz[2]==0
+            ## no derivatives have been used, so no element will
+            ##  be added, but the row counter will increase...
+            nnzcol = 0
+            addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
+            return
+        else        
+            code = codexyz[2]
+            whXYZ[2] = 1
+        end
+        
+    elseif axis==:Z
+        if codexyz[3]==0
+            ## no derivatives have been used, so no element will
+            ##  be added, but the row counter will increase...
+            nnzcol = 0
+            addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
+            return
+        else        
+            code = codexyz[3]
+            whXYZ[3] = 1
+        end
+ 
+    else
+        error("setcoeffderiv2D(): if axis==:X ...")
+    end
+    
+    # we skip points on source, so there must always be derivatives
+    if all(code.==0)
+        error("setcoeffderiv2D: code==[0,0,0]")
+    end
+
+    # at this point abs(code) can only be 1 or 2
+    abscode = abs(code)
+    nnzcol = abscode+1 # max 3
+    signcod = sign(code)
+    ## select first or second order coefficients
+    if abscode==1
+        coeff = allcoeff.firstord
+    elseif abscode==2
+        coeff = allcoeff.secondord
+    end   
+
+    if simtype==:cartesian
+        ## store coefficients in the struct for sparse matrices
+        for p=1:nnzcol 
+            # i = igrid + whX*signcod*(p-1)  # start from 0  (e.g., 0,+1,+2)
+            # j = jgrid + whY*signcod*(p-1)  # start from 0  (e.g., 0,-1)
+            ijkcoe .= ijkpt .+ (whXYZ .* signcod*(p-1))
+            mycoeff = signcod * coeff[p]
+            ##
+            #iorig = cart2lin2D(i,j,nx)
+            iorig = cart2lin(ijkcoe,grsize)
+            ifmmord = idxconv.lgrid2fmm[iorig] 
+            ##
+            colinds[p] = ifmmord
+            colvals[p] = mycoeff
+        end
+
+    elseif simtype==:spherical
+        ## store coefficients in the struct for sparse matrices
+        for p=1:nnzcol 
+            # i = igrid + whX*signcod*(p-1)  # start from 0  (e.g., 0,+1,+2)
+            # j = jgrid + whY*signcod*(p-1)  # start from 0  (e.g., 0,-1)
+            ijkcoe .= ijkpt .+ (whXYZ .* signcod*(p-1))
+            mycoeff = signcod * coeff[p]
+            
+            if axis==:X
+                mycoeff = signcod * coeff[p]
+            elseif axis==:Y
+                # in this case coeff depends on radius (index i)
+                mycoeff = signcod * coeff[i,p]
+            elseif axis==:Z
+                error("setcoeffderiv!(): :Z axis not yet implemented for spherical stuff.")
+                # # in this case coeff depends on radius (index i)
+                # mycoeff = signcod * coeff[i,p]
+            end
+            ##
+            #iorig = cart2lin2D(i,j,nx)
+            iorig = cart2lin(ijkcoe,grsize)
+            ifmmord = idxconv.lgrid2fmm[iorig]
+            ##
+            colinds[p] = ifmmord
+            colvals[p] = mycoeff
+        end       
+
+    end
+    
+    ##########################################
+    ## Add one entire row at a time!
+    ##########################################
+    ## the following is needed because in Julia's CSR format the
+    ##    row indices in every column NEED to be SORTED!
+    sortperm!(idxperm,colinds)
+    colinds .= colinds[idxperm]
+    colvals .= colvals[idxperm]
+    addrowCSRmat!(D,irow,colinds,colvals,nnzcol)
+
+    return
+end
+
+##############################################################################
+
+function addrowCSRmat!(D::VecSPDerivMat,irow::Integer,colinds::AbstractVector{<:Integer},
+                       colvals::AbstractVector{<:Float64},nnzcol::Integer)
+
+    @assert D.lastrowupdated[]==irow-1
+    # set 1 to first entry
+    if irow==1
+        D.iptr[irow] = 1
+    end
+    # count total nnz values
+    D.Nnnz[] += nnzcol 
+    # update col pointer
+    D.iptr[irow+1] = D.iptr[irow] + nnzcol
+
+    # if there are values, then add them
+    for p=1:nnzcol
+        j = D.iptr[irow]-1+p
+        D.j[j] = colinds[p]
+        D.v[j] = colvals[p]
+    end
+    D.lastrowupdated[] = irow
+
+    return
+end
+
+##############################################################################

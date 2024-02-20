@@ -232,35 +232,35 @@ end
 
 ######################################################
 
-function createAdjointVars(grd::AbstractGridEik2D;
-                           amIcoarsegrid::Bool,
-                           refinearoundsrc::Bool,
-                           allowfixsqarg::Bool)
-    if typeof(grd)==Grid2DCart
-        n1,n2 = grd.nx,grd.ny
-    elseif typeof(grd)==Grid2DSphere
-        n1,n2 = grd.r,grd.θ
-    end  
-    adjvars = FMMVars2D(n1,n2,amIcoarsegrid=true,
-                        refinearoundsrc=refinearoundsrc,
-                        allowfixsqarg=allowfixsqarg)
-    return adjvars
-end
+# function createAdjointVars(grd::AbstractGridEik2D;
+#                            amIcoarsegrid::Bool,
+#                            refinearoundsrc::Bool,
+#                            allowfixsqarg::Bool)
+#     if typeof(grd)==Grid2DCart
+#         n1,n2 = grd.nx,grd.ny
+#     elseif typeof(grd)==Grid2DSphere
+#         n1,n2 = grd.r,grd.θ
+#     end  
+#     adjvars = FMMVars2D(n1,n2,amIcoarsegrid=true,
+#                         refinearoundsrc=refinearoundsrc,
+#                         allowfixsqarg=allowfixsqarg)
+#     return adjvars
+# end
 
-function createAdjointVars(grd::AbstractGridEik3D;
-                           amIcoarsegrid::Bool,
-                           refinearoundsrc::Bool,
-                           allowfixsqarg::Bool)
-    if typeof(grd)==Grid3DCart
-        n1,n2,n3 = grd.nx,grd.ny,grd.nz
-    elseif typeof(grd)==Grid3DSphere
-        n1,n2,n3 = grd.r,grd.θ,grd.φ
-    end 
-    adjvars = FMMVars3D(n1,n2,n3,amIcoarsegrid=true,
-                        refinearoundsrc=refinearoundsrc,
-                        allowfixsqarg=allowfixsqarg)
-    return adjvars
-end
+# function createAdjointVars(grd::AbstractGridEik3D;
+#                            amIcoarsegrid::Bool,
+#                            refinearoundsrc::Bool,
+#                            allowfixsqarg::Bool)
+#     if typeof(grd)==Grid3DCart
+#         n1,n2,n3 = grd.nx,grd.ny,grd.nz
+#     elseif typeof(grd)==Grid3DSphere
+#         n1,n2,n3 = grd.r,grd.θ,grd.φ
+#     end 
+#     adjvars = FMMVars3D(n1,n2,n3,amIcoarsegrid=true,
+#                         refinearoundsrc=refinearoundsrc,
+#                         allowfixsqarg=allowfixsqarg)
+#     return adjvars
+# end
 
 #######################################################
 
@@ -279,6 +279,8 @@ function ttFMM_hiord!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},src::Abstra
     else
         dodiscradj=true
     end
+
+    Ndim = ndims(vel)
 
     ##==================================================##
     ###
@@ -382,8 +384,10 @@ function runrefinementaroundsrc!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
     end
     if typeof(grd)==Grid2DCart || typeof(grd)==Grid3DCart 
         simtype = :cartesian
+        Ndim = 2
     elseif typeof(grd)==Grid2DSphere || typeof(grd)==Grid3DSphere
         simtype = :spherical
+        Ndim = 3
     end
     
     ##==================================================
@@ -420,7 +424,7 @@ function runrefinementaroundsrc!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
     ##==================================================
     if dodiscradj
         ## pre-allocate adjoint variables for the fine grid
-        adjvars_fine = createAdjointVars(grd_fine)
+        adjvars_fine = createAdjointVars(size(srcrefvars.velcart_fine))
         ##
         ##  discrete adjoint: init stuff
         ## 
@@ -428,8 +432,8 @@ function runrefinementaroundsrc!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
             adjvars_fine.fmmord.Deriv[i].lastrowupdated[] = 0
             adjvars_fine.fmmord.Deriv[i].Nnnz[] = 0
         end
-        adjvars_fine.fmmord.onsrccols[:] .= false
-        adjvars_fine.fmmord.onhpoints[:] .= false
+        adjvars_fine.fmmord.onsrccols .= false
+        adjvars_fine.fmmord.onhpoints .= false
         # for safety, zeroes the traveltime
         adjvars_fine.fmmord.ttime .= 0.0
         # init the valued of last ttime computed
@@ -444,38 +448,16 @@ function runrefinementaroundsrc!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
     ##==================================================
 
     ## source location, etc.      
-    sourceboxloctt!(fmmvars_fine,srcrefvars.vel_fine,xyzsrc,grd_fine)
-
-
-    # ## REGULAR grid
-    # if simtype==:cartesian
-    #     #ijsrc_fine = sourceboxloctt!(fmmvars_fine,vel_fine,xysrc,grd_fine )
-    #     sourceboxloctt_cart!(fmmvars_fine,srcrefvars.vel_fine,xyzsrc,grd_fine )
-               
-    # elseif simtype==:spherical
-    #     #ijsrc_fine = sourceboxloctt_sph!(fmmvars_fine,vel_fine,xysrc,grd_fine )
-    #     sourceboxloctt_sph!(fmmvars_fine,srcrefvars.vel_fine,xyzsrc,grd_fine )
-       
-    # end
+    sourceboxloctt!(fmmvars_fine,srcrefvars.velcart_fine,xyzsrc,grd_fine)
 
     ##==================================================================
     ## Run forward simulation (FMM) within the FINE grid
     #ijsrc_coarse = ttFMM_core!(fmmvars_fine,vel_fine,grd_fine,ijsrc_fine,adjvars_fine,
-    ttFMM_core!(fmmvars_fine,srcrefvars.vel_fine,grd_fine,adjvars_fine,
+    ttFMM_core!(fmmvars_fine,srcrefvars.velcart_fine,grd_fine,adjvars_fine,
                 fmmvars_coarse=fmmvars, adjvars_coarse=adjvars,
                 srcrefvars=srcrefvars)
          
-
     ##==================================================================
-
-    # if dogradsrcpos
-    #     ##======================================================
-    #     ## Derivatives w.r.t. source position.  !!!FINE GRID!!!
-    #     ##======================================================
-      #     ∂u_h∂x_s = calc_∂u_h∂x_s_finegrid(fmmvars_fine,adjvars_fine,xysrc,vel_fine,grd_fine)
-    #     println("hello from runrefinementaroundsrc(): ∂u_h∂x_s = $∂u_h∂x_s")
-    # end
-  
     if dodiscradj
         return fmmvars_fine,adjvars_fine,grd_fine,srcrefvars
     else
@@ -490,22 +472,6 @@ function initnorefsrc(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
                       grd::AbstractGridEik,
                       adjvars::Union{AbstractAdjointVars,Nothing}) where N
 
-    # if typeof(grd)==Grid2D
-    #     simtype=:cartesian
-    # elseif typeof(grd)==Grid2DSphere
-    #     simtype=:spherical
-    # end
-    
-    # ## source location, etc.      
-    # ## REGULAR grid
-    # if simtype==:cartesian
-    #     #ijsrc = sourceboxloctt!(fmmvars,vel,src,grd )
-    #     sourceboxloctt_cart!(fmmvars,vel,src,grd )
-    # elseif simtype==:spherical
-    #     #ijsrc = sourceboxloctt_sph!(fmmvars,vel,src,grd )
-    #     sourceboxloctt_sph!(fmmvars,vel,src,grd )
-    # end
-
     ## source location, etc.      
     sourceboxloctt!(fmmvars,vel,src,grd)
 
@@ -513,7 +479,6 @@ function initnorefsrc(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
 end
 
 ##################################################################
-
 
 """
 $(TYPEDSIGNATURES)
@@ -539,11 +504,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     if isthisrefinementsrc
         downscalefactor = srcrefvars.downscalefactor
         ijkcoarse = srcrefvars.ijkcoarse
-        
-        # outxmin = srcrefvars.outxyminmax[1]
-        # outxmax = srcrefvars.outxyminmax[2]
-        # outymin = srcrefvars.outxyminmax[3]
-        # outymax = srcrefvars.outxyminmax[4]
     end
 
     if adjvars==nothing
@@ -551,19 +511,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     else
         dodiscradj=true
     end    
-
-    # ## Sizes
-    # if typeof(grd)==Grid2DCart || typeof(grd)==Grid3DCart 
-    #     simtype = :cartesian
-    # elseif typeof(grd)==Grid2DSphere || typeof(grd)==Grid3DSphere
-    #     simtype = :spherical
-    # end
-    # if simtype==:cartesian
-    #     n1,n2 = grd.nx,grd.ny 
-    # elseif simtype==:spherical
-    #     n1,n2 = grd.nr,grd.nθ
-    # end
-    # n12 = n1*n2
 
     ##----------------------------------------------------------------------
     ## fmmvars.srcboxpar.ijksrc can be a field of either
@@ -586,7 +533,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     
     ##======================================================
     # MVector size needs to be know at compile time, so...
-    if N==2
+    if ND==2
         # a 2D point
         curptijk = MVector(0,0)
         accptijk = MVector(0,0)
@@ -598,7 +545,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                    -1  0;
                     0 -1]
         
-    elseif N==3
+    elseif ND==3
         # a 3D point
         curptijk = MVector(0,0,0)
         accptijk = MVector(0,0,0)
@@ -668,9 +615,9 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
             # add true for this point being on src
             adjvars.fmmord.onsrccols[l] = true
             # remove one row because of point being on source!
-            adjvars.fmmord.vecDx.Nsize[1] -= 1
-            adjvars.fmmord.vecDy.Nsize[1] -= 1
-
+            for d=1:ND
+                adjvars.fmmord.Deriv[d].Nsize[1] -= 1
+            end
         end
     end # if dodiscradj
     ##======================================================
@@ -752,7 +699,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
         end ## for ne=1:size(neigh,1)
     end
 
-
     
     ######################################################
     ## main FMM loop
@@ -801,8 +747,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                 fmmvars_coarse.ttime[pthan_coarse]  = fmmvars.ttime[acchan]
                 fmmvars_coarse.status[pthan_coarse] = fmmvars.status[acchan]
                 ijksrc_coarse[counter_ijksrccoarse,:] .= ijk_coarse
-                ##fmmvars_coarse.srcboxpar.ijksrc = vcat(fmmvars_coarse.srcboxpar.ijksrc,[ia_coarse ja_coarse])
-                #@show counter_ijksrccoarse,fmmvars_coarse.srcboxpar.ijksrc
+                                
                 ## update counter
                 counter_ijksrccoarse += 1
                 
@@ -868,12 +813,9 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
         ##===========================================
         ## try all neighbors of newly accepted point
         for ne=1:size(neigh,1) 
-            # i = ia + neigh[ne,1]
-            # j = ja + neigh[ne,2]
             curptijk .= accptijk .+ neigh[ne,:]
             # get the linear index/handle 
             curpthan = cart2lin(curptijk,grsize)
-
 
             ## if the point is out of bounds skip this iteration
             #if (i>n1) || (i<1) || (j>n2) || (j<1)
@@ -885,8 +827,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
 
                 ## add tt of point to binary heap and give handle
                 tmptt = calcttpt_2ndord!(fmmvars,vel,grd,curptijk,idD)
-                # get handle
-                #han = cart2lin(curptijk,grsize)
                 # insert new point into min-heap
                 insert_minheap!(fmmvars.bheap,tmptt,curpthan)
                 # change status, add to narrow band
@@ -901,9 +841,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
 
                 # update the traveltime for this point
                 tmptt = calcttpt_2ndord!(fmmvars,vel,grd,curptijk,idD)
-
-                # get handle
-                #han = cart2lin(curptijk,n1)
                 # update the traveltime for this point in the heap
                 update_node_minheap!(fmmvars.bheap,tmptt,curpthan)
 
@@ -926,10 +863,129 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     return 
 end
 
-
-
-
-
-
-
 ##################################################################
+
+function createsparsederivativematrices!(grd::AbstractGridEik,
+                                         adjvars::AbstractAdjointVars,
+                                         status::Array{UInt8,N}) where N
+
+    # pre-determine derivative coefficients for positive codes (0,+1,+2)
+    if typeof(grd)==Grid2DCart
+        simtype = :cartesian
+        Ndim = 2
+        n1,n2 = grd.nx,grd.ny
+        npts = n1*n2
+        hgrid = grd.hgrid
+        #allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
+        allcoeff = Vector{CoeffDerivCartesian}(undef,Ndim)
+        allcoeff[1] = CoeffDerivCartesian( MVector(-1.0/hgrid,
+                                                   1.0/hgrid), 
+                                           MVector(-3.0/(2.0*hgrid),
+                                                   4.0/(2.0*hgrid),
+                                                   -1.0/(2.0*hgrid)) )
+        # coefficients along X are the same than along Y
+        allcoeff[2] = allcoeff[1]
+
+    elseif typeof(grd)==Grid2DSphere
+        simtype = :spherical
+        Ndim = 2
+        n1,n2 = grd.nr,grd.nθ
+        npts = n1*n2
+        Δr = grd.Δr
+        ## DEG to RAD !!!!
+        Δarc = [grd.r[i] * deg2rad(grd.Δθ) for i=1:grd.nr]
+        # coefficients
+        coe_r_1st = MVector(-1.0/Δr,  1.0/Δr)
+        coe_r_2nd = MVector(-3.0/(2.0*Δr),  4.0/(2.0*Δr) -1.0/(2.0*Δr) )
+        coe_θ_1st = MVector(-1.0 ./ Δarc,  1.0 ./ Δarc )
+        coe_θ_2nd = MVector(-3.0./(2.0*Δarc),  4.0./(2.0*Δarc),  -1.0./(2.0*Δarc) )
+
+        allcoeff = Vector{CoeffDerivSpherical2D}(undef,Ndim)
+        allcoeff[1] = CoeffDerivSpherical2D( coe_r_1st, coe_r_2nd )
+        allcoeff[2] = CoeffDerivSpherical2D( coe_θ_1st, coe_θ_2nd )
+
+    elseif typeof(grd)==Grid3DCart
+        simtype = :cartesian
+        Ndim = 3
+        n1,n2,n3 = grd.nx,grd.ny,grd.nz
+        npts = n1*n2*n3
+        hgrid = grd.hgrid
+        #allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
+        allcoeff = Vector{CoeffDerivCartesian}(undef,Ndim)
+        allcoeff[1]= CoeffDerivCartesian( MVector(-1.0/hgrid,
+                                                 1.0/hgrid), 
+                                         MVector(-3.0/(2.0*hgrid),
+                                                 4.0/(2.0*hgrid),
+                                                 -1.0/(2.0*hgrid)) )
+        # coefficients along X are the same than along Y and Z
+        allcoeff[2] = allcoeff[1]
+        allcoeff[3] = allcoeff[1]
+        
+
+    elseif typeof(grd)==Grid3DSphere
+
+        error("createsparsederivativematrices!(): Not yet implemented for Grid3DSphere.")
+
+    end
+
+    ##--------------------------------------------------------
+    ## pre-compute the mapping between fmm and original order
+    
+    nptsonsrc = count(adjvars.fmmord.onsrccols)
+    #nptsonh   = count(adjvars.fmmord.onhpoints)
+
+    for i=1:npts
+        # ifm = index from fast marching ordering
+        ifm = adjvars.idxconv.lfmm2grid[i]
+        if ifm==0
+            # ifm is zero = end of indices for fmm ordering [lfmm2grid=zeros(Int64,nxyz)]
+            Nnnzsteps = i-1
+            # remove rows corresponding to points in the source region
+            for d=1:Ndim
+                adjvars.fmmord.Deriv[d].Nsize[1] = Nnnzsteps - nptsonsrc
+                adjvars.fmmord.Deriv[d].Nsize[2] = Nnnzsteps
+            end
+            break
+        end
+        adjvars.idxconv.lgrid2fmm[ifm] = i
+    end
+
+    ##
+    ## Set the derivative operators in FMM order, skipping source points onwards
+    ## 
+    ##   From adjvars.fmmord.vecDx.lastrowupdated[]+1 onwards because some rows might have already
+    ##   been updated above and the CSR format used here requires to add rows in sequence to
+    ##   avoid expensive re-allocations
+    #startloop = adjvars.fmmord.vecDx.lastrowupdated[]+1
+    #startloop = count(adjvars.fmmord.onsrccols)+1
+    nptsfixedtt = count(adjvars.fmmord.onsrccols )
+
+    ## init MVectors as 3D even if we are in the 2D case, only
+    ##   the first indices will be used...
+    if Ndim==2
+        ijkpt = MVector(0,0)
+    elseif Ndim==3
+        ijkpt = MVector(0,0,0)
+    end
+    colinds = MVector(0,0,0) # 3 elem because max stencil length is 3
+    colvals = MVector(0.0,0.0,0.0) # 3 elem because max stencil length is 3
+    idxperm = MVector(0,0,0) # 3 elem because max stencil length is 3
+
+    #for irow=startloop:n12
+    axis = (:X, :Y, :Z)
+    for irow=1:adjvars.fmmord.Deriv[1].Nsize[1]
+
+        for d=1:Ndim
+            # compute the coefficients for X,Y,Z derivatives
+            setcoeffderiv!(adjvars.fmmord.Deriv[d],status,irow,adjvars.idxconv,
+                           adjvars.codeDeriv,allcoeff[d],ijkpt,
+                           colinds,colvals,idxperm,nptsfixedtt,
+                           axis=axis[d],simtype=simtype)
+        end
+
+    end
+
+    return
+end
+
+##########################################################################

@@ -245,38 +245,55 @@ end
 
 ###############################################################
 
-abstract type AbstractMapOrderGridFMM end
-
-struct MapOrderGridFMM2D <: AbstractMapOrderGridFMM
+struct MapOrderGridFMM{N} 
     "Linear grid indices in FMM order (as visited by FMM)"
     lfmm2grid::Vector{Int64} # idx_fmmord
     "Linear FMM indices in grid order"
     lgrid2fmm::Vector{Int64} # idx_gridord
-    grsize::NTuple{2,Int64}
+    grsize::NTuple{N,Int64}
 
-    function MapOrderGridFMM2D(nx,ny)
-        nxy = nx*ny
-        lfmm2grid = zeros(Int64,nxy)
-        lgrid2fmm = zeros(Int64,nxy)
-        return new(lfmm2grid,lgrid2fmm,(nx,ny))
-    end
-end
-
-
-struct MapOrderGridFMM3D <: AbstractMapOrderGridFMM
-    "Linear grid indices in FMM order (as visited by FMM)"
-    lfmm2grid::Vector{Int64} # idx_fmmord
-    "Linear FMM indices in grid order"
-    lgrid2fmm::Vector{Int64} # idx_gridord
-    grsize::NTuple{3,Int64}
-
-    function MapOrderGridFMM3D(nx,ny,nz)
-        nxyz = nx*ny*nz
+    function MapOrderGridFMM(nxnynz::Tuple)
+        nxyz = prod(nxnynz)
         lfmm2grid = zeros(Int64,nxyz)
         lgrid2fmm = zeros(Int64,nxyz)
-        return new(lfmm2grid,lgrid2fmm,(nx,ny,nz))
+        Ndim = length(nxnynz)
+        return new{Ndim}(lfmm2grid,lgrid2fmm,nxnynz)
     end
 end
+
+
+#abstract type AbstractMapOrderGridFMM end
+
+# struct MapOrderGridFMM2D <: AbstractMapOrderGridFMM
+#     "Linear grid indices in FMM order (as visited by FMM)"
+#     lfmm2grid::Vector{Int64} # idx_fmmord
+#     "Linear FMM indices in grid order"
+#     lgrid2fmm::Vector{Int64} # idx_gridord
+#     grsize::NTuple{2,Int64}
+
+#     function MapOrderGridFMM2D(nx,ny)
+#         nxy = nx*ny
+#         lfmm2grid = zeros(Int64,nxy)
+#         lgrid2fmm = zeros(Int64,nxy)
+#         return new(lfmm2grid,lgrid2fmm,(nx,ny))
+#     end
+# end
+
+
+# struct MapOrderGridFMM3D <: AbstractMapOrderGridFMM
+#     "Linear grid indices in FMM order (as visited by FMM)"
+#     lfmm2grid::Vector{Int64} # idx_fmmord
+#     "Linear FMM indices in grid order"
+#     lgrid2fmm::Vector{Int64} # idx_gridord
+#     grsize::NTuple{3,Int64}
+
+#     function MapOrderGridFMM3D(nx,ny,nz)
+#         nxyz = nx*ny*nz
+#         lfmm2grid = zeros(Int64,nxyz)
+#         lgrid2fmm = zeros(Int64,nxyz)
+#         return new(lfmm2grid,lgrid2fmm,(nx,ny,nz))
+#     end
+# end
 
 
 ########################################################
@@ -317,10 +334,10 @@ struct VarsFMMOrder
     "keep track of points marked as source points for the coarse grid while running the refinement of the grid around the source (ordered according to FMM)"
     onhpoints::Vector{Bool}
     
-    function VarsFMMOrder(nijk::NTuple{<:Integer}) 
+    function VarsFMMOrder(nijk::Tuple) 
         npts = prod(nijk)
         ndim = length(nijk)
-        ttime = zeros(ntps)
+        ttime = zeros(npts)
         ## nxy*3 because of the stencils in the second-order fast marching (max 3 points)
         ## Nsize=[npts,npts] will be changed while the algo is running...
         Deriv = Vector{VecSPDerivMat}(undef,ndim)
@@ -330,8 +347,8 @@ struct VarsFMMOrder
         end
         # vecDy = VecSPDerivMat( iptr=zeros(Int64,nxy+1), j=zeros(Int64,nxy*3),
         #                        v=zeros(nxy*3), Nsize=[nxy,nxy] )
-        onsrccols = zeros(Bool,ntps) # all false
-        onhpoints = zeros(Bool,ntps) # all false
+        onsrccols = zeros(Bool,npts) # all false
+        onhpoints = zeros(Bool,npts) # all false
         lastcomputedtt = Ref(0)
         return new(ttime,lastcomputedtt,Deriv,onsrccols,onhpoints)
     end
@@ -383,13 +400,13 @@ end
 ####################################
 
 struct AdjointVars2D <: AbstractAdjointVars
-    idxconv::MapOrderGridFMM2D
+    idxconv::MapOrderGridFMM#2D
     fmmord::VarsFMMOrder
     codeDeriv::Array{Int64,2}
 
     function AdjointVars2D(n1,n2)
-        idxconv = MapOrderGridFMM2D(n1,n2)
-        fmmord = VarsFMMOrder2D(n1,n2)
+        idxconv = MapOrderGridFMM((n1,n2))
+        fmmord = VarsFMMOrder((n1,n2))
         codeDeriv = zeros(Int64,n1*n2,2)
         new(idxconv,fmmord,codeDeriv)
     end
@@ -397,13 +414,13 @@ end
 
 
 struct AdjointVars3D <: AbstractAdjointVars
-    idxconv::MapOrderGridFMM3D
+    idxconv::MapOrderGridFMM#3D
     fmmord::VarsFMMOrder
     codeDeriv::Array{Int64,2}
 
     function AdjointVars3D(n1,n2,n3)
-        idxconv = MapOrderGridFMM3D(n1,n2,n3)
-        fmmord = VarsFMMOrder3D(n1,n2,n3)
+        idxconv = MapOrderGridFMM((n1,n2,n3))
+        fmmord = VarsFMMOrder((n1,n2,n3))
         codeDeriv = zeros(Int64,n1*n2*n3,3)
         new(idxconv,fmmord,codeDeriv)
     end
@@ -528,7 +545,7 @@ struct SrcRefinVars2D <: AbstractSrcRefinVars
     #outxyminmax::NTuple{4,Bool}
     nearneigh_oper::SparseMatrixCSC{Float64,Int64}
     nearneigh_idxcoarse::Vector{Int64}
-    vel_fine::Array{Float64,2}
+    velcart_fine::Array{Float64,2}
 end
 
 
@@ -539,7 +556,7 @@ struct SrcRefinVars3D <: AbstractSrcRefinVars
     #outxyminmax::NTuple{6,Bool}
     nearneigh_oper::SparseMatrixCSC{Float64,Int64}
     nearneigh_idxcoarse::Vector{Int64}
-    vel_fine::Array{Float64,3}
+    velcart_fine::Array{Float64,3}
 end
 
 ###################################################
