@@ -7,7 +7,7 @@ using GLMakie
 
 # create the Grid2D struct
 hgrid = 180.73
-grd = Grid2D(hgrid=hgrid,xinit=0.0,yinit=0.0,nx=180,ny=160) 
+grd = Grid2DCart(hgrid=hgrid,xinit=0.0,yinit=0.0,nx=180,ny=160) 
 # nsrc = 4
 # coordsrc = [hgrid.*LinRange(10.0,190.0,nsrc)   hgrid.*100.0.*ones(nsrc)] # coordinates of the sources (4 sources)
 
@@ -58,8 +58,8 @@ for refinesrc in [false] #[false,true]
 
     println("\n-------------- forward  ----------------")
     # run the traveltime computation with default algorithm ("ttFMM_hiord")
-    ttpicks = traveltime2D(velmod,grd,coordsrc1,coordrec,
-                           extraparams=extraparams)
+    ttpicks = eiktraveltime(velmod,grd,coordsrc1,coordrec,
+                            extraparams=extraparams)
 
 
     # standard deviation of error on observed data
@@ -86,7 +86,7 @@ for refinesrc in [false] #[false,true]
 
     println("\n-------------- gradient  ----------------")
     ## calculate the gradient of the misfit function
-    gradvel,∂χ∂xysrc = gradttime2D(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
+    gradvel,∂χ∂xysrc = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
                                    gradtype,extraparams=extraparams)
 
 
@@ -95,7 +95,7 @@ for refinesrc in [false] #[false,true]
     misf_ref = ttmisfitfunc(vel0,dobs,stdobs,coordsrc2,coordrec,grd;
                             extraparams=extraparams)
 
-    dh = 0.00001
+    dh = 0.0001
 
     coordsrc_plusdx = coordsrc2 .+ [dh 0.0]
     misf_pdx = ttmisfitfunc(vel0,dobs,stdobs,coordsrc_plusdx,coordrec,grd;
@@ -118,9 +118,9 @@ for refinesrc in [false] #[false,true]
     ∂χ∂y_src_FD = (misf_pdy-misf_mdy)/(2*dh)
     ∂χ∂xysrc_FD = [∂χ∂x_src_FD ∂χ∂y_src_FD]
 
-    @show misf_ref
-    @show misf_pdx,misf_mdx
-    @show misf_pdy,misf_mdy
+    # @show misf_ref
+    # @show misf_pdx,misf_mdx
+    # @show misf_pdy,misf_mdy
 
 
     if ∂χ∂xysrc!=nothing
@@ -130,9 +130,7 @@ for refinesrc in [false] #[false,true]
         # println("\n∂χ∂xysrc_FD:")
         # display(∂χ∂xysrc_FD)
         @show ∂χ∂xysrc_FD
-        @show ∂χ∂xysrc≈∂χ∂xysrc_FD
         @show ∂χ∂xysrc.-∂χ∂xysrc_FD
-        @show (∂χ∂xysrc.-∂χ∂xysrc_FD)./∂χ∂xysrc_FD*100
 
     else
         println("No ∂χ∂xysrc requested.")

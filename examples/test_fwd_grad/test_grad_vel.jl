@@ -10,11 +10,11 @@ function runtest()
     
     # create the Grid2D struct
     hgrid = 40.0 #122.73
-    grd = Grid2D(hgrid=hgrid,
-                 xinit=0.0,
-                 yinit=0.0,
-                 nx=50,
-                 ny=30) 
+    grd = Grid2DCart(hgrid=hgrid,
+                     xinit=0.0,
+                     yinit=0.0,
+                     nx=50,
+                     ny=30) 
     # nsrc = 4
     # coordsrc = [hgrid.*LinRange(10.0,190.0,nsrc)   hgrid.*100.0.*ones(nsrc)] # coordinates of the sources (4 sources)
 
@@ -83,64 +83,8 @@ function runtest()
 
     println("\n-------------- forward  ----------------")
     # run the traveltime computation with default algorithm ("ttFMM_hiord")
-    ttpicks,tt_ref = traveltime2D(velmod,grd,coordsrc1,coordrec,
-                                  returntt=true,extraparams=extraparams)
-
-    srcpoints = h5read("srcpoints.h5","srcpts")
-    @show srcpoints
-
-
-    #     gradmi_ij = zeros(grd.nx,grd.ny)
-    #     tt_analytic = zeros(grd.nx,grd.ny)
-
-    #     for j=1:grd.ny
-    #         for i=1:grd.nx
-
-    #             dh = 0.001
-    #             velpdh = copy(velmod)
-    #             velpdh[i,j] += dh
-    #             velmdh = copy(velmod)
-    #             velmdh[i,j] -= dh
-
-    #             tp1,tt_pdh = traveltime2D(velpdh,grd,coordsrc1,coordrec,
-    #                                       returntt=true,extraparams=extraparams)
-
-    #             tp2,tt_mdh = traveltime2D(velmdh,grd,coordsrc1,coordrec,
-    #                                       returntt=true,extraparams=extraparams)
-
-    #             ett = extrema(tt_pdh[:,:,1] .- tt_mdh[:,:,1])
-
-                
-    #             misf1 = 0.0
-    #             misf2 = 0.0
-    #             nsrc = size(coordsrc1,1)
-    #             for s=1:nsrc
-    #                 misf1 += sum( (tp1[s] ).^2 )
-    #                 misf2 += sum( (tp2[s] ).^2 )
-    #             end
-    #             misf1 *= 0.5
-    #             misf2 *= 0.5
-    #             gradmi = (misf1-misf2)/2dh
-
-    #             @show gradmi
-
-    #             gradmi_ij[i,j] = gradmi
-
-    #             if i==18 && j==12
-    #                 global tt1_save = tt_pdh[:,:,1]
-    #                 global tt2_save = tt_mdh[:,:,1]
-    #             end
-
-    #             xsrc = coordsrc1[1]
-    #             ysrc = coordsrc1[2]
-    #             dist = sqrt((grd.x[i]-xsrc)^2+(grd.y[j]-ysrc)^2)
-    #             tt_analytic[i,j] = dist/velmod[i,j]
-
-    #         end
-    #     end
-
-    #     @show extrema(tt_ref),extrema(tt_analytic)
-    #     @show extrema(tt_ref[:,:,1] .- tt_analytic)
+    ttpicks,tt_ref = eiktraveltime(velmod,grd,coordsrc1,coordrec,
+                                   returntt=true,extraparams=extraparams)
 
 
     #######################################################
@@ -170,7 +114,7 @@ function runtest()
 
         println("\n-------------- gradient  ----------------")
         ## calculate the gradient of the misfit function
-        gradvel,∂χ∂xysrc = gradttime2D(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
+        gradvel,∂χ∂xysrc = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
                                        gradtype,extraparams=extraparams)
 
    

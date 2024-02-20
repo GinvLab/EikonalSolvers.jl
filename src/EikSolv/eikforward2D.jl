@@ -297,13 +297,6 @@ function sourceboxloctt!(fmmvars::FMMVars2D,vel::Array{Float64,2},srcpos::Abstra
         # set the traveltime to corner
         fmmvars.ttime[i,j] = distcorn / vel[i,j] #velsrc
 
-
-        # ##-----------
-        # ## old way
-        # ii = Int(floor((xsrc-grd.xinit)/grd.hgrid)) +1
-        # jj = Int(floor((ysrc-grd.yinit)/grd.hgrid)) +1
-        # fmmvars.ttime[i,j] = distcorn / vel[ii,jj]
-
     end
 
     return #ijsrc
@@ -503,74 +496,74 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
     ##=========================================================================================
     ## If discriminant is negative (probably because of sharp contrasts in
     ##  velocity) revert to 1st order for both x and y
-    # if sqarg<0.0
+    if sqarg<0.0
 
-    #     begin    
-    #         codeD[:] .= 0 # integers
-    #         alpha = 0.0
-    #         beta  = 0.0
-    #         gamma = - slowcurpt^2 ## !!!!
+        begin    
+            codeD[:] .= 0 # integers
+            alpha = 0.0
+            beta  = 0.0
+            gamma = - slowcurpt^2 ## !!!!
 
-    #         ## 2 directions
-    #         for axis=1:2
+            ## 2 directions
+            for axis=1:2
                 
-    #             use1stord = false
-    #             chosenval1 = HUGE
+                use1stord = false
+                chosenval1 = HUGE
                 
-    #             ## two sides for each direction
-    #             for l=1:2
+                ## two sides for each direction
+                for l=1:2
 
-    #                 ## map the 4 cases to an integer as in linear indexing...
-    #                 lax = l + 2*(axis-1)
-    #                 if lax==1 # axis==1
-    #                     ish = 1
-    #                     jsh = 0
-    #                 elseif lax==2 # axis==1
-    #                     ish = -1
-    #                     jsh = 0
-    #                 elseif lax==3 # axis==2
-    #                     ish = 0
-    #                     jsh = 1
-    #                 elseif lax==4 # axis==2
-    #                     ish = 0
-    #                     jsh = -1
-    #                 end
+                    ## map the 4 cases to an integer as in linear indexing...
+                    lax = l + 2*(axis-1)
+                    if lax==1 # axis==1
+                        ish = 1
+                        jsh = 0
+                    elseif lax==2 # axis==1
+                        ish = -1
+                        jsh = 0
+                    elseif lax==3 # axis==2
+                        ish = 0
+                        jsh = 1
+                    elseif lax==4 # axis==2
+                        ish = 0
+                        jsh = -1
+                    end
 
-    #                 ## check if on boundaries
-    #                 isonb1st,isonb2nd = isonbord(i+ish,j+jsh,n1,n2)
+                    ## check if on boundaries
+                    isonb1st,isonb2nd = isonbord(i+ish,j+jsh,n1,n2)
                     
-    #                 ## 1st order
-    #                 if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
-    #                     testval1 = fmmvars.ttime[i+ish,j+jsh]
-    #                     ## pick the lowest value of the two
-    #                     if testval1<chosenval1 ## < only
-    #                         chosenval1 = testval1
-    #                         use1stord = true
+                    ## 1st order
+                    if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
+                        testval1 = fmmvars.ttime[i+ish,j+jsh]
+                        ## pick the lowest value of the two
+                        if testval1<chosenval1 ## < only
+                            chosenval1 = testval1
+                            use1stord = true
 
-    #                         # save derivative choices
-    #                         axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+                            # save derivative choices
+                            axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
 
-    #                     end
-    #                 end
-    #             end # end two sides
+                        end
+                    end
+                end # end two sides
 
-    #             ## spacing
-    #             deltah = Δh[axis]
+                ## spacing
+                deltah = Δh[axis]
                 
-    #             if use1stord # first order
-    #                 ## curalpha: make sure you multiply only times the
-    #                 ##   current alpha for beta and gamma...
-    #                 curalpha = 1.0/deltah^2 
-    #                 alpha += curalpha
-    #                 beta  += ( -2.0*curalpha * chosenval1 )
-    #                 gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
-    #             end
-    #         end
+                if use1stord # first order
+                    ## curalpha: make sure you multiply only times the
+                    ##   current alpha for beta and gamma...
+                    curalpha = 1.0/deltah^2 
+                    alpha += curalpha
+                    beta  += ( -2.0*curalpha * chosenval1 )
+                    gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
+                end
+            end
             
-    #         ## recompute sqarg
-    #         sqarg = beta^2-4.0*alpha*gamma
+            ## recompute sqarg
+            sqarg = beta^2-4.0*alpha*gamma
 
-    #     end ## begin...
+        end ## begin...
 
         if sqarg<0.0
 
@@ -589,8 +582,8 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                 
                 error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j)")
             end
-         end
-    # end ## if sqarg<0.0
+        end
+    end ## if sqarg<0.0
     ##=========================================================================================
 
     ### roots of the quadratic equation

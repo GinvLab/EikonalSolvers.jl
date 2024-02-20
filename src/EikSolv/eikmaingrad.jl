@@ -350,7 +350,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ##     at the "onsrc" points
         ##  compute gradient
         ##############################################
-        gradsrcpos1 .= ∂misfit∂initsrcpos2D(twoDttDSx,twoDttDSy,tt_fmmord,
+        gradsrcpos1 .= ∂misfit∂initsrcpos2D(twoDttDS,
                                             fmmvars.srcboxpar,
                                             adjvars.idxconv,lambda_fmmord,velcart,
                                             adjvars.fmmord.onsrccols,xyzsrc,grd,
@@ -358,7 +358,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     end
 
     
-    
+    ##----------------------------------------------------------
     if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
       
         ##===============================================
@@ -1049,3 +1049,116 @@ function addrowCSRmat!(D::VecSPDerivMat,irow::Integer,colinds::AbstractVector{<:
 end
 
 ##############################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+Calculates the derivative of the misfit function with respect to the traveltime at the initial points around the source ("onsrc").
+"""
+function ∂misfit∂initsrcpos2D(twoDttDS,
+                              srcboxpar,
+                              idxconv,
+                              lambda::AbstractArray{Float64},
+                              velcart::Array{Float64,N},
+                              sourcerows,
+                              xyzsrc,
+                              grd::AbstractGridEik;
+                              refinearoundsrc::Bool ) where N
+
+    #                                                                       #
+    # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
+    #                                                                       #
+    ###################################################################
+    ## Derivative of the misfit w.r.t. the traveltime at source nodes
+    ###################################################################
+    tmp1 = sum( twoDttDS )
+    
+    npts = size(twoDttDS[1],2)
+    ∂χ∂t_src = zeros(npts)
+    for p=1:npts
+        ∂χ∂t_src[p] = dot(lambda,tmp1[:,p])
+    end
+    ########################################
+    Ndim = ndims(velcart)
+    dχdx_src = zeros(Ndim)
+
+    
+    if refinearoundsrc
+        ###################################################################
+        ## WITH REFINEMENT of around the source
+        ###################################################################
+        # # If there is refinement around the source, an extra factor needs
+        # #  to be computed in the chain rule 
+        # #   ∂ψ/∂u_h * ∂u_h/∂u_s * ∂u_s/∂x_s
+        # ∂u_h∂u_s = calc∂u_h∂u_s_finegrid(fmmvars_fine,adjvars_coarse,xysrc,grd)
+        # for d=1:Ndim
+        #     dχdx_src[d] = dot( ∂χ∂t_src, ∂u_h∂x_s[d]) # along x
+        #     #dχdy_src = dot( ∂χ∂t_src, ∂u_h∂y_s) # along y
+        # end
+
+        
+    else
+        ###################################################################
+        ## NO REFINEMENT around the source
+        ## Derivative of the misfit w.r.t. the source position (chain rule)
+        ###################################################################
+        if Ndim==2
+            ijkpt = MVector(0,0)
+            xyzpt = MVector(0.0,0.0)
+            curijksrc = MVector(0,0)
+        elseif Ndim==2
+            ijkpt = MVector(0,0,0)
+            xyzpt = MVector(0.0,0.0,0.0)
+            curijksrc = MVector(0,0,0)
+        end
+        derpos = zeros(npts,Ndim)
+
+        ##
+        velcorn  = srcboxpar.velcorn
+        distcorn = srcboxpar.distcorn
+        ijksrc = srcboxpar.ijksrc
+
+        for p=1:npts 
+            ## coordinates of point
+            if Ndim==2
+                xyzpt .= (grd.x[ijksrc[p,1]],grd.y[ijksrc[p,2]])
+                ## velocity associated with the above point
+                velsrc = velcart[ijksrc[p,1],ijksrc[p,2]]
+            elseif Ndim==3
+                xyzpt .= (grd.x[ijksrc[p,1]],grd.y[ijksrc[p,2]],grd.z[ijksrc[p,3]])
+                ## velocity associated with the above point
+                velsrc = velcart[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
+            end
+            ## get the derivative
+            derpos[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
+        end
+
+        dχdx_src = zeros(Ndim)
+        for d=1:Ndim
+            dχdx_src[d] = dot( ∂χ∂t_src, derpos[:,d] ) # along x
+            #dχdy_src = dot( ∂χ∂t_src, derpos[:,2] ) # along y
+        end
+    end
+
+    return dχdx_src
+end
+
+###########################################################################
+
+function partderivttsrcpos(xyzpt::AbstractVector,xyzsrc::AbstractVector,vel::Real)
+
+    #denom = vel * sqrt((xpt - xsrc)^2 + (ypt - ysrc)^2)
+    denom = vel .* sqrt.( sum((xyzpt.-xyzsrc).^2) )
+    @assert denom!=0.0 "partderivttsrcpos2D(): Source position and grid node position concide."
+    # deriv_x = -(xpt - xsrc) / denom
+    # deriv_y = -(ypt - ysrc) / denom
+    Ndim = length(xyzpt)
+    deriv_xyz = zeros(Ndim)
+    for d=1:Ndim
+        deriv_xyz[d] = - (xyzpt[d]-xyzsrc[d]) / denom
+    end
+
+    return deriv_xyz
+end
+
+###########################################################################
