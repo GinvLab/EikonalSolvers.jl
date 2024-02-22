@@ -188,14 +188,14 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
             tmpgradsrcpos = view(gradsrcpos,s,:)
         end
                 
-        solveadjointgetgrads_singlesrc!(gradvel1,tmpgradsrcpos,
-                                        fmmvars,adjvars,
-                                        xyzsrc[s,:],coordrec[s],pickobs1[s],stdobs[s],
-                                        vel,grd,whichgrad,extrapars.refinearoundsrc,
-                                        fmmvars_fine=fmmvars_fine,
-                                        adjvars_fine=adjvars_fine,
-                                        grd_fine=grd_fine,
-                                        srcrefvars=srcrefvars)
+        calcgrads_singlesrc!(gradvel1,tmpgradsrcpos,
+                            fmmvars,adjvars,
+                            xyzsrc[s,:],coordrec[s],pickobs1[s],stdobs[s],
+                            vel,grd,whichgrad,extrapars.refinearoundsrc,
+                            fmmvars_fine=fmmvars_fine,
+                            adjvars_fine=adjvars_fine,
+                            grd_fine=grd_fine,
+                            srcrefvars=srcrefvars)
 
          
         if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
@@ -233,28 +233,27 @@ end
 
 ##############################################################################
 
-function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
-                                         gradsrcpos1::Union{AbstractArray{Float64},Nothing},
-                                         fmmvars::AbstractFMMVars,
-                                         adjvars::AbstractAdjointVars,
-                                         xyzsrc::AbstractArray{Float64},
-                                         xyzrecs::AbstractArray{Float64},
-                                         pickobs::AbstractVector{Float64},
-                                         stdobs::AbstractVector{Float64},
-                                         velcart::AbstractArray{Float64},
-                                         grd::AbstractGridEik,
-                                         whichgrad::Symbol,
-                                         refinearoundsrc::Bool;
-                                         fmmvars_fine::Union{AbstractFMMVars,Nothing}=nothing,
-                                         adjvars_fine::Union{AbstractAdjointVars,Nothing}=nothing,
-                                         grd_fine::Union{AbstractGridEik,Nothing}=nothing,
-                                         srcrefvars::Union{AbstractArray{Float64},AbstractSrcRefinVars,Nothing}=nothing
-                                         )
+function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
+                              gradsrcpos1::Union{AbstractArray{Float64},Nothing},
+                              fmmvars::AbstractFMMVars,
+                              adjvars::AbstractAdjointVars,
+                              xyzsrc::AbstractArray{Float64},
+                              xyzrecs::AbstractArray{Float64},
+                              pickobs::AbstractVector{Float64},
+                              stdobs::AbstractVector{Float64},
+                              velcart::AbstractArray{Float64},
+                              grd::AbstractGridEik,
+                              whichgrad::Symbol,
+                              refinearoundsrc::Bool;
+                              fmmvars_fine::Union{AbstractFMMVars,Nothing}=nothing,
+                              adjvars_fine::Union{AbstractAdjointVars,Nothing}=nothing,
+                              grd_fine::Union{AbstractGridEik,Nothing}=nothing,
+                              srcrefvars::Union{AbstractArray{Float64},AbstractSrcRefinVars,Nothing}=nothing
+                              )
     
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
-    println("=== START gradient coarse grid ===" )
     ##======================================================
     # Projection operator P ordered according to FMM order
     #  The order for P is:
@@ -267,11 +266,6 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     Ndim = ndims(velcart)
     grsize = size(velcart)
     
-
-    ###########################################
-    # Derivatives (along x,y,z) matrices, row-deficient
-    Deriv = adjvars.fmmord.Deriv
-
     #######################################################
     ##  right hand side adj eq. == -(∂ψ/∂u_p)^T
     #######################################################
@@ -280,87 +274,85 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     # bool vector with false for src columns
     rq = .!adjvars.fmmord.onsrccols
     P_Breg = P[:,rq] # remove columns
-    rhs = - transpose(P_Breg) * fact2∂ψ∂u
-
-    P_Areg = P[:,adjvars.fmmord.onsrccols]
+    P_Areg = P[:,adjvars.fmmord.onsrccols] # only cols on source pts
     
-    ################################
-    ##   left hand side adj eq.
-    ################################
+    #################################################################
+    ##  2 * diag(D_ij*tt_j)*D_ip ( for ∂f_i_∂u_p and ∂f_i_∂u_s )
+    #################################################################
+    # Derivatives (along x,y,z) matrices, row-deficient
+    Deriv = adjvars.fmmord.Deriv
     ## compute the lhs terms
     twoDttDR = Vector{VecSPDerivMat}(undef,Ndim)
     twoDttDS = Vector{SparseMatrixCSC}(undef,Ndim)
     for d=1:Ndim
-        twoDttDR[d],twoDttDS[d] = calcadjlhsterms(Deriv[d],tt_fmmord,adjvars.fmmord.onsrccols)
+        twoDttDR[d],twoDttDS[d] = calc2diagDttD(Deriv[d],tt_fmmord,adjvars.fmmord.onsrccols)
     end
 
-    #===========================================
-    ###  !!! REMARK from SparseArrays:  !!! ####
-    ============================================
-    The row indices in every column NEED to be SORTED. If your 
-    SparseMatrixCSC object contains unsorted row indices, one quick way 
-    to sort them is by doing a double transpose.
+    #####################################
+    ##   Solve the adjoint equation
+    #####################################
+    rhs = - transpose(P_Breg) * fact2∂ψ∂u
+    lambda_fmmord_coarse = solveadjointeq(twoDttDR,rhs)
 
-    # struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrixCSC{Tv,Ti}
-    #     m::Int                  # Number of rows
-    #     n::Int                  # Number of columns
-    #     colptr::Vector{Ti}      # Column j is in colptr[j]:(colptr[j+1]-1)
-    #     rowval::Vector{Ti}      # Row indices of stored values
-    #     nzval::Vector{Tv}       # Stored values, typically nonzeros
-    # end
+    ###############################################
+    # deriv. of the implicit forw. mod. w.r.t. u_s
+    #   ordered according to FMM order
+    ∂fi_∂us = sum( twoDttDS )
+    ## 
+    ∂ψ_∂u_s = transpose(P_Areg) * fact2∂ψ∂u
+    ∂ψ_∂u_p = transpose(∂fi_∂us) * lambda_fmmord_coarse
 
-    ============================================#
-    
-    Ni = twoDttDR[1].Nsize[1]
-    Nj = twoDttDR[1].Nsize[2]
-    tmplhs = spzeros(Ni,Nj)
-    ## We have a CSR matrix as vectors, we need a *transpose* of it,
-    ##  so we construct directly a CSC by *exchanging* i and j indices
-    for d=1:Ndim
-        Nnnz = twoDttDR[d].Nnnz[]
-        # Ni = twoDttDR[d].Nsize[1]
-        # Nj = twoDttDR[d].Nsize[2]
-        # Transpose the matrices and add them
-        tmplhs .+= SparseMatrixCSC(Nj,Ni,twoDttDR[d].iptr[1:Ni+1],
-                                   twoDttDR[d].j[1:Nnnz],twoDttDR[d].v[1:Nnnz])
-    end
+
         
-    ## make sure it's recognised as upper triangular...
-    lhs = UpperTriangular(tmplhs)
+    ####################################################
+    ##   Pre-compute stuff for grid refinement
+    ####################################################
+    if refinearoundsrc
+        ############################################################
+        #  Get adjoint variable, etc. from fine grid
+        ############################################################
+        lambda_fmmord_fine,∂u_h_dtau_s,H_Areg  = computestuff_finegrid!(fmmvars_fine,
+                                                                        adjvars_fine,
+                                                                        grd_fine,
+                                                                        srcrefvars)
+    end
 
-    ## OLD stuff...
-    # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
-    # ##   the solver (\) does not use the correct sparse algo for matrix division
-    # tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) ))
-    # lhs = UpperTriangular(tmplhs)
-
-    ############################################################
-    ##  solve the linear system to get the adjoint variable
-    ############################################################
-    lambda_fmmord = lhs\rhs
 
     ##----------------------------------------------------------
     if whichgrad==:gradsrcloc || whichgrad==:gradvelandsrcloc
         
-        # if refinearoundsrc
-        #     error("Gradient with respect to source location with refinement of the grid currently broken... Aborting.")
-        # end
-
         ##############################################
         ##  Derivative with respect to the traveltime
         ##     at the "onsrc" points
         ##  compute gradient
         ##############################################
-        gradsrcpos1 .= ∂misfit∂srcpos(P_Areg,
-                                      fact2∂ψ∂u,
-                                      twoDttDS,
-                                      fmmvars.srcboxpar,
-                                      adjvars.idxconv,
-                                      lambda_fmmord,
-                                      velcart,
-                                      adjvars.fmmord.onsrccols,
-                                      xyzsrc,grd,
-                                      refinearoundsrc=refinearoundsrc ) 
+        if refinearoundsrc
+            gradsrcpos1 .= ∂misfit∂srcpos(∂fi_∂us,
+                                          lambda_fmmord_coarse,
+                                          velcart,
+                                          ∂ψ_∂u_s,
+                                          ∂ψ_∂u_p,
+                                          fmmvars.srcboxpar,
+                                          grd,
+                                          xyzsrc,
+                                          lambda_fmmord_fine,
+                                          grd_fine,
+                                          ∂u_h_dtau_s,
+                                          H_Areg,
+                                          srcrefvars,
+                                          fmmvars_fine.srcboxpar,
+                                          refinearoundsrc=refinearoundsrc )
+        else
+            gradsrcpos1 .= ∂misfit∂srcpos(∂fi_∂us,
+                                          lambda_fmmord_coarse,
+                                          velcart,
+                                          ∂ψ_∂u_s,
+                                          ∂ψ_∂u_p,
+                                          fmmvars.srcboxpar,
+                                          grd,
+                                          xyzsrc,
+                                          refinearoundsrc=refinearoundsrc )
+        end
     end
 
     
@@ -372,7 +364,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ##===============================================
         # Reorder lambda from fmmord to original grid!!
         idxconv = adjvars.idxconv
-        Nacc = length(lambda_fmmord)
+        Nacc = length(lambda_fmmord_coarse)
         nptsonsrc = count(adjvars.fmmord.onsrccols)
 
         if Ndim==2
@@ -388,7 +380,7 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
             #  "full" indices to the "reduced" set of indices (no source region)
             iorig = idxconv.lfmm2grid[p+nptsonsrc] # skip pts on src
             # get the contribution of T2Vb to the gradient
-            gradvel1[iorig] = 2.0 * lambda_fmmord[p] / velcart[iorig]^3
+            gradvel1[iorig] = 2.0 * lambda_fmmord_coarse[p] / velcart[iorig]^3
         end
 
         ##===============================================
@@ -412,21 +404,20 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
             #-----------------------------------
             ## Solve the adjoint equation in the fine grid
             ##   dus_dva must be in FMM order to agree with ∂fi_∂us
-            dus_dva = solveadjointfinegrid!(fmmvars_fine,adjvars_fine,
-                                            grd_fine,srcrefvars)
-
+            dus_dva = calc_duh_dva_finegrid!(lambda_fmmord_fine,
+                                             H_Areg,
+                                             ∂u_h_dtau_s,
+                                             fmmvars_fine,
+                                             adjvars_fine,
+                                             srcrefvars)
         end
 
         ##===============================================
         # Gradient with respect to velocity, term T2Va
         ##===============================================
-        # deriv. of the implicit forw. mod. w.r.t. u_s
-        #   ordered according to FMM order
-        ∂fi_∂us = sum( twoDttDS )
-        ## FMM ordering for ∂fi_∂us!!!
-        tmpdfidva = ∂fi_∂us * dus_dva        
-        ## FMM ordering for lambda_fmmord!!!
-        T2Va = transpose(lambda_fmmord) * tmpdfidva
+        ## FMM ordering 
+        T2Va = transpose( dus_dva ) * ∂ψ_∂u_p 
+        #T2Va = transpose(lambda_fmmord_coarse) * tmpdfidva
         ## (i,j) indices of the source points
         ijksrcreg = fmmvars.srcboxpar.ijksrc
 
@@ -440,14 +431,8 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ##===============================================
         # Gradient with respect to velocity, term T1Va 
         ##===============================================
-        # T1v = ∂ψ/∂u_s
-        ## using fact2∂ψ∂u from the calculations above!
-        ## fact2∂ψ∂u = ((P*tt_fmmord).-pickobs)./stdobs.^2
-        # pick only columns belonging to the source region
-        ∂ψ_∂u_s = transpose(P_Areg) * fact2∂ψ∂u
-
-        ## add contribution to the gradient       
-        tmpT1Va = transpose(∂ψ_∂u_s) * dus_dva
+        ## FMM ordering
+        tmpT1Va = transpose( dus_dva) * ∂ψ_∂u_s 
         for i=1:length(tmpT1Va)
             ijkpt .= ijksrcreg[i,:]
             igr = cart2lin(ijkpt,grsize)
@@ -461,7 +446,61 @@ end
 
 ##############################################################################
 
-function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
+function solveadjointeq(twoDttDR::Vector{VecSPDerivMat},rhs::AbstractVecOrMat{Float64})
+
+    #===========================================
+    ###  !!! REMARK from SparseArrays:  !!! ####
+    ============================================
+    The row indices in every column NEED to be SORTED. If your 
+    SparseMatrixCSC object contains unsorted row indices, one quick way 
+    to sort them is by doing a double transpose.
+
+    # struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrixCSC{Tv,Ti}
+    #     m::Int                  # Number of rows
+    #     n::Int                  # Number of columns
+    #     colptr::Vector{Ti}      # Column j is in colptr[j]:(colptr[j+1]-1)
+    #     rowval::Vector{Ti}      # Row indices of stored values
+    #     nzval::Vector{Tv}       # Stored values, typically nonzeros
+    # end
+
+    ============================================#
+    
+    Ni = twoDttDR[1].Nsize[1]
+    Nj = twoDttDR[1].Nsize[2]
+    tmplhs = spzeros(Ni,Nj)
+    ## We have a CSR matrix as vectors, we need a *transpose* of it,
+    ##  so we construct directly a CSC by *exchanging* i and j indices
+    Ndim = length(twoDttDR)
+    for d=1:Ndim
+        Nnnz = twoDttDR[d].Nnnz[]
+        # Ni = twoDttDR[d].Nsize[1]
+        # Nj = twoDttDR[d].Nsize[2]
+        # Transpose the matrices and add them
+        tmplhs .+= SparseMatrixCSC(Nj,Ni,twoDttDR[d].iptr[1:Ni+1],
+                                   twoDttDR[d].j[1:Nnnz],twoDttDR[d].v[1:Nnnz])
+    end
+        
+    ## make sure it's recognised as upper triangular...
+    lhs = UpperTriangular(tmplhs)
+
+    ## OLD stuff...
+    # ## WARNING! Using copy(transpose(...)) to MATERIALIZE the transpose, otherwise
+    # ##   the solver (\) does not use the correct sparse algo for matrix division
+    # tmplhs = copy(transpose( (2.0.*Diagonal(Dx*tt)*Dx) .+ (2.0.*Diagonal(Dy*tt)*Dy) ))
+    # lhs = UpperTriangular(tmplhs)
+
+    ############################################################
+    ##  solve the linear system to get the adjoint variable
+    ############################################################
+    lambda_fmmord_coarse = lhs\rhs
+
+    return lambda_fmmord_coarse
+end
+
+
+##############################################################################
+
+function computestuff_finegrid!(fmmvars,adjvars,grd,srcrefvars)
 
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
@@ -517,9 +556,20 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
     end
     H = sparse(H_i,H_j,H_v,Nhpts,Naccpts)
 
+    
     ###########################################
     #  Derivatives (along x,y,z) matrices, row-deficient
     Deriv = adjvars.fmmord.Deriv
+
+    ################################
+    ##   left hand side adj eq.
+    ################################
+    ## compute the lhs terms
+    twoDttDR = Vector{VecSPDerivMat}(undef,Ndim)
+    twoDttDS = Vector{SparseMatrixCSC}(undef,Ndim)
+    for d=1:Ndim
+        twoDttDR[d],twoDttDS[d] = calc2diagDttD(Deriv[d],tt_fmmord,onsrccols)
+    end
 
     #######################################################
     ##  right hand side adj eq. == -(adjoint source)^T
@@ -529,45 +579,46 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
     # bool vector with false for src columns
     #    only part of the rectangular fine grid has been used, so [1:Naccpts]
     rq = .!onsrccols
-    HD = H[:,rq] # remove columns
-    rhs = - transpose(HD)
+    H_Breg = H[:,rq] # remove columns
+    H_Areg = H[:,onsrccols]
+    rhs = - transpose(H_Breg)
 
+  
+    #####################################
+    ##   Solve the adjoint equation
+    #####################################
+    lambda_fmmord_fine = solveadjointeq(twoDttDR,rhs)
 
-    ################################
-    ##   left hand side adj eq.
-    ################################
-    ## compute the lhs terms
-    twoDttDR = Vector{VecSPDerivMat}(undef,Ndim)
-    twoDttDS = Vector{SparseMatrixCSC}(undef,Ndim)
-    for d=1:Ndim
-        twoDttDR[d],twoDttDS[d] = calcadjlhsterms(Deriv[d],tt_fmmord,onsrccols)
-    end
+    # deriv. of the implicit forw. mod. w.r.t. u_s, FMM ordering
+    ∂gi_∂taus = sum( twoDttDS )
+    # copy to materialize the lazy transpose
+    ∂u_h_dtau_s =  transpose(lambda_fmmord_fine ) * ∂gi_∂taus
+   
+    return lambda_fmmord_fine,∂u_h_dtau_s,H_Areg 
+end
 
-    Ni = twoDttDR[1].Nsize[1]
-    Nj = twoDttDR[1].Nsize[2]
-    tmplhs = spzeros(Ni,Nj)
-    ## We have a CSR matrix as vectors, we need a *transpose* of it,
-    ##  so we construct directly a CSC by *exchanging* i and j indices
-    for d=1:Ndim
-        Nnnz = twoDttDR[d].Nnnz[]
-        # Transpose the matrices and add them
-        tmplhs .+= SparseMatrixCSC(Nj,Ni,twoDttDR[d].iptr[1:Ni+1],
-                                   twoDttDR[d].j[1:Nnnz],twoDttDR[d].v[1:Nnnz])
-    end
+####################################################################
 
-    ## make sure it's recognised as upper triangular...
-    lhs = UpperTriangular(tmplhs)
+function calc_duh_dva_finegrid!(lambda_fmmord_fine,
+                                H_Areg,
+                                ∂u_h_dtau_s,
+                                fmmvars,
+                                adjvars,
+                                srcrefvars)
 
-    ############################################################
-    ##  solve the linear system to get the adjoint variable
-    ############################################################
-    # Remark: "lambda_fmmord" excludes the points on the source (in the fine grid)
-    #  lambda_fmmord is in FMM order
-    lambda_fmmord = lhs\rhs
-
+    Naccpts = adjvars.fmmord.lastcomputedtt[]
+    onsrccols = adjvars.fmmord.onsrccols[1:Naccpts]
+    nptsonsrc = count(onsrccols)
     Nptsoffsrc = Naccpts-nptsonsrc
-    @assert size(lambda_fmmord,1)==Nptsoffsrc
-    @assert size(lambda_fmmord,2)==Nhpts
+    onHpts = adjvars.fmmord.onhpoints[1:Naccpts]  #[node]
+    ## indices of coinciding with u_s (h)
+    idxonHpts = findall(onHpts) # get all "true" values
+    Nhpts = length(idxonHpts)
+    idxconv = adjvars.idxconv
+
+    @assert size(lambda_fmmord_fine,1)==Nptsoffsrc
+    @assert size(lambda_fmmord_fine,2)==Nhpts
+
 
     ##========================================
     ##  Compute the T2Vd term
@@ -587,7 +638,7 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
         p2 = p+nptsonsrc
         for h=1:Nhpts
             # get the contribution of T2Vd to the gradient
-            duh_dwq[h,p2] = 2.0 * lambda_fmmord[p,h] / srcrefvars.velcart_fine[iorig]^3
+            duh_dwq[h,p2] = 2.0 * lambda_fmmord_fine[p,h] / srcrefvars.velcart_fine[iorig]^3
         end
     end
 
@@ -601,13 +652,12 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
 
     ##========================================
     ## Compute the T2Vc term 
-    ##========================================
-    # deriv. of the implicit forw. mod. w.r.t. u_s, FMM ordering
-    ∂gi_∂taus = sum( twoDttDS )
+    ##======================================== 
     ## FMM ordering for ∂gi_∂taus!!!
-    tmpdgidwa = ∂gi_∂taus * dtaus_dwa  
+    #tmpdgidwa = ∂gi_∂taus * dtaus_dwa  
     ## FMM ordering for lambda_fmmord!!!
-    T2Vc = transpose(lambda_fmmord) * tmpdgidwa
+    #T2Vc = transpose(lambda_fmmord_fine) * tmpdgidwa
+    T2Vc = ∂u_h_dtau_s * dtaus_dwa
 
     ## add contribution to the gradient in the fine grid
     for p=1:nptsonsrc #size(T2Vc,2)
@@ -619,7 +669,6 @@ function solveadjointfinegrid!(fmmvars,adjvars,grd,srcrefvars)
     ##========================================
     ## Compute the T1Vc term 
     ##========================================
-    H_Areg = H[:,onsrccols]
     T1Vc = H_Areg * dtaus_dwa
     for p=1:nptsonsrc
         for h=1:Nhpts
@@ -668,7 +717,7 @@ $(TYPEDSIGNATURES)
 Calculates the following maintaining the sparse structure:
      2 * diag(D * tt) * Dr
 """
-function calcadjlhsterms(vecD::VecSPDerivMat,tt::Vector{Float64},
+function calc2diagDttD(vecD::VecSPDerivMat,tt::Vector{Float64},
                          onsrccols::Vector{Bool})
     # Remark: equivalent to CSR format 
 
@@ -1058,17 +1107,21 @@ end
 $(TYPEDSIGNATURES)
 
 Calculates the derivative of the misfit function with respect to the traveltime at the initial points around the source ("onsrc").
-"""
-function ∂misfit∂srcpos(P_Areg,
-                        fact2∂ψ∂u,
-                        twoDttDS::Vector{SparseMatrixCSC},
-                        srcboxpar,
-                        idxconv,
-                        lambda::AbstractArray{Float64},
-                        velcart::Array{Float64,N},
-                        onsrccols,
-                        xyzsrc,
-                        grd::AbstractGridEik;
+    """
+function ∂misfit∂srcpos(∂fi_∂us::AbstractMatrix{Float64},
+                        lambda_coarse::AbstractArray{Float64},
+                        velcart_coarse::Array{Float64,N},
+                        ∂ψ_∂u_s::AbstractVector{Float64},
+                        ∂ψ_∂u_p::AbstractVector{Float64},
+                        srcboxpar_coarse,
+                        grd::AbstractGridEik,
+                        xyzsrc::Vector{Float64},
+                        lambda_fmmord_fine=nothing,
+                        grd_fine=nothing,
+                        ∂u_h_dtau_s=nothing,
+                        H_Areg=nothing,
+                        srcrefvars=nothing,
+                        srcboxpar_fine=nothing;
                         refinearoundsrc::Bool ) where N
 
     #                                                                       #
@@ -1077,16 +1130,8 @@ function ∂misfit∂srcpos(P_Areg,
     ###################################################################
     ## Derivative of the misfit w.r.t. the traveltime at source nodes
     ###################################################################
-    ∂fi_∂us = sum( twoDttDS )
-    npts = size(twoDttDS[1],2)
-
-    ∂ψ∂u_p = transpose(∂fi_∂us) * lambda
-
-    Ndim = ndims(velcart)
-    dψds_r = zeros(Ndim)
-    
-    ∂ψ_∂u_s = transpose(P_Areg) * fact2∂ψ∂u
-
+    npts = length(∂ψ_∂u_s)
+    Ndim = ndims(velcart_coarse)
 
     if Ndim==2
         ijkpt = MVector(0,0)
@@ -1097,47 +1142,66 @@ function ∂misfit∂srcpos(P_Areg,
         xyzpt = MVector(0.0,0.0,0.0)
         curijksrc = MVector(0,0,0)
     end
-    dus_dsr = zeros(npts,Ndim)
 
+    dus_dsr = zeros(npts,Ndim)
 
     if refinearoundsrc
         ###################################################################
         ## WITH REFINEMENT of around the source
         ###################################################################
+        velcorn  = srcboxpar_fine.velcorn
+        distcorn = srcboxpar_fine.distcorn
+        ijksrc = srcboxpar_fine.ijksrc
 
+        npts_fine = size(∂u_h_dtau_s,2)
+        dtaus_dsr = zeros(npts_fine,Ndim)
+        @show npts_fine,size(∂u_h_dtau_s)
+        for p=1:npts_fine
+            ## coordinates of point
+            if Ndim==2
+                xyzpt .= (grd_fine.x[ijksrc[p,1]],grd_fine.y[ijksrc[p,2]])
+                ## velocity associated with the above point
+                velsrc = srcrefvars.velcart_fine[ijksrc[p,1],ijksrc[p,2]]
+            elseif Ndim==3
+                xyzpt .= (grd_fine.x[ijksrc[p,1]],grd_fine.y[ijksrc[p,2]],grd_fine.z[ijksrc[p,3]])
+                ## velocity associated with the above point
+                velsrc = srcrefvars.velcart_fine[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
+            end
+            ## get the derivative
+            dtaus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
+        end
 
+        trm1 = ∂u_h_dtau_s * dtaus_dsr
+        trm2 = H_Areg * dtaus_dsr
         
-
-
-        
+        dus_dsr .= trm1 .+ trm2
     else
         ###################################################################
         ## NO REFINEMENT around the source
         ## Derivative of the misfit w.r.t. the source position (chain rule)
         ###################################################################
-        velcorn  = srcboxpar.velcorn
-        distcorn = srcboxpar.distcorn
-        ijksrc = srcboxpar.ijksrc
+        velcorn  = srcboxpar_coarse.velcorn
+        distcorn = srcboxpar_coarse.distcorn
+        ijksrc = srcboxpar_coarse.ijksrc
 
         for p=1:npts 
             ## coordinates of point
             if Ndim==2
                 xyzpt .= (grd.x[ijksrc[p,1]],grd.y[ijksrc[p,2]])
                 ## velocity associated with the above point
-                velsrc = velcart[ijksrc[p,1],ijksrc[p,2]]
+                velsrc = velcart_coarse[ijksrc[p,1],ijksrc[p,2]]
             elseif Ndim==3
                 xyzpt .= (grd.x[ijksrc[p,1]],grd.y[ijksrc[p,2]],grd.z[ijksrc[p,3]])
                 ## velocity associated with the above point
-                velsrc = velcart[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
+                velsrc = velcart_coarse[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
             end
             ## get the derivative
             dus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
-            
         end
     end
 
-    dψds_r = transpose(dus_dsr) * ∂ψ∂u_p + transpose(dus_dsr) * ∂ψ_∂u_s
-    return dψds_r
+    dψ_ds_r = transpose(dus_dsr) * ∂ψ_∂u_p + transpose(dus_dsr) * ∂ψ_∂u_s
+    return dψ_ds_r
 end
 
 ###########################################################################

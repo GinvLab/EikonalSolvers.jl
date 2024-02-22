@@ -43,7 +43,7 @@ gradtype = :gradvelandsrcloc #:gradvel  # :gradvelandsrcloc  # :gradvel
 parallelkind = :serial #:sharedmem
 
 
-for refinesrc in [false] #[false,true]
+for refinesrc in [false,true]
 
     extraparams=ExtraParams(parallelkind=parallelkind,
                             refinearoundsrc=refinesrc,
