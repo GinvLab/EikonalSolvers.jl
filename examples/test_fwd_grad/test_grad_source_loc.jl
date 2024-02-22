@@ -7,7 +7,7 @@ using GLMakie
 
 # create the Grid2D struct
 hgrid = 180.73
-grd = Grid2DCart(hgrid=hgrid,xinit=0.0,yinit=0.0,nx=180,ny=160) 
+grd = Grid2DCart(hgrid=hgrid,xinit=0.0,yinit=0.0,nx=380,ny=260) 
 # nsrc = 4
 # coordsrc = [hgrid.*LinRange(10.0,190.0,nsrc)   hgrid.*100.0.*ones(nsrc)] # coordinates of the sources (4 sources)
 
@@ -53,7 +53,7 @@ for refinesrc in [false,true]
 
     #coordsrc = [hgrid*15.0 hgrid*(grd.ny-15.0)]
     #coordsrc = [hgrid*5.4 hgrid*(grd.ny-3.2)]
-    coordsrc1 = [hgrid*37.8123 hgrid*(grd.ny-28.9123)]
+    coordsrc1 = [hgrid*37.8 hgrid*(grd.ny-28.4)]
     #coordsrc = [hgrid*5.39123 hgrid*(grd.ny-3.1123)]
 
     println("\n-------------- forward  ----------------")
@@ -118,9 +118,9 @@ for refinesrc in [false,true]
     ∂χ∂y_src_FD = (misf_pdy-misf_mdy)/(2*dh)
     ∂χ∂xysrc_FD = [∂χ∂x_src_FD ∂χ∂y_src_FD]
 
-    @show misf_ref
-    @show misf_pdx,misf_mdx
-    @show misf_pdy,misf_mdy
+    # @show misf_ref
+    # @show misf_pdx,misf_mdx
+    # @show misf_pdy,misf_mdy
 
 
     if ∂χ∂xysrc!=nothing

@@ -326,33 +326,32 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
         ##     at the "onsrc" points
         ##  compute gradient
         ##############################################
-        if refinearoundsrc
-            gradsrcpos1 .= ∂misfit∂srcpos(∂fi_∂us,
-                                          lambda_fmmord_coarse,
-                                          velcart,
-                                          ∂ψ_∂u_s,
-                                          ∂ψ_∂u_p,
-                                          fmmvars.srcboxpar,
-                                          grd,
-                                          xyzsrc,
-                                          lambda_fmmord_fine,
-                                          grd_fine,
-                                          ∂u_h_dtau_s,
-                                          H_Areg,
-                                          srcrefvars,
-                                          fmmvars_fine.srcboxpar,
-                                          refinearoundsrc=refinearoundsrc )
-        else
-            gradsrcpos1 .= ∂misfit∂srcpos(∂fi_∂us,
-                                          lambda_fmmord_coarse,
-                                          velcart,
-                                          ∂ψ_∂u_s,
-                                          ∂ψ_∂u_p,
-                                          fmmvars.srcboxpar,
-                                          grd,
-                                          xyzsrc,
-                                          refinearoundsrc=refinearoundsrc )
+
+
+        
+        if refinearoundsrc==false
+            dus_dsr = calc_dus_dsr(lambda_fmmord_coarse,
+                                   velcart,
+                                   ∂ψ_∂u_s,
+                                   ∂ψ_∂u_p,
+                                   fmmvars.srcboxpar,
+                                   grd,
+                                   xyzsrc )
+            
+        elseif refinearoundsrc
+            dus_dsr = calc_dus_dsr_finegrid(lambda_fmmord_fine,
+                                            grd_fine,
+                                            ∂u_h_dtau_s,
+                                            H_Areg,
+                                            srcrefvars,
+                                            fmmvars_fine.srcboxpar,
+                                            xyzsrc)
+
         end
+
+        #dψ_ds_r = transpose(dus_dsr) * ∂ψ_∂u_p + transpose(dus_dsr) * ∂ψ_∂u_s
+        gradsrcpos1 .= transpose(dus_dsr) * ∂ψ_∂u_p + transpose(dus_dsr) * ∂ψ_∂u_s
+        
     end
 
     
@@ -1108,28 +1107,16 @@ $(TYPEDSIGNATURES)
 
 Calculates the derivative of the misfit function with respect to the traveltime at the initial points around the source ("onsrc").
     """
-function ∂misfit∂srcpos(∂fi_∂us::AbstractMatrix{Float64},
-                        lambda_coarse::AbstractArray{Float64},
-                        velcart_coarse::Array{Float64,N},
-                        ∂ψ_∂u_s::AbstractVector{Float64},
-                        ∂ψ_∂u_p::AbstractVector{Float64},
-                        srcboxpar_coarse,
-                        grd::AbstractGridEik,
-                        xyzsrc::Vector{Float64},
-                        lambda_fmmord_fine=nothing,
-                        grd_fine=nothing,
-                        ∂u_h_dtau_s=nothing,
-                        H_Areg=nothing,
-                        srcrefvars=nothing,
-                        srcboxpar_fine=nothing;
-                        refinearoundsrc::Bool ) where N
-
+function calc_dus_dsr(lambda_coarse::AbstractArray{Float64},
+                      velcart_coarse::Array{Float64,N},
+                      ∂ψ_∂u_s::AbstractVector{Float64},
+                      ∂ψ_∂u_p::AbstractVector{Float64},
+                      srcboxpar_coarse,
+                      grd::AbstractGridEik,
+                      xyzsrc::Vector{Float64} ) where N
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
-    ###################################################################
-    ## Derivative of the misfit w.r.t. the traveltime at source nodes
-    ###################################################################
     npts = length(∂ψ_∂u_s)
     Ndim = ndims(velcart_coarse)
 
@@ -1145,63 +1132,89 @@ function ∂misfit∂srcpos(∂fi_∂us::AbstractMatrix{Float64},
 
     dus_dsr = zeros(npts,Ndim)
 
-    if refinearoundsrc
-        ###################################################################
-        ## WITH REFINEMENT of around the source
-        ###################################################################
-        velcorn  = srcboxpar_fine.velcorn
-        distcorn = srcboxpar_fine.distcorn
-        ijksrc = srcboxpar_fine.ijksrc
+    ###################################################################
+    ## NO REFINEMENT around the source
+    ## Derivative of the misfit w.r.t. the source position (chain rule)
+    ###################################################################
+    velcorn  = srcboxpar_coarse.velcorn
+    distcorn = srcboxpar_coarse.distcorn
+    ijksrc = srcboxpar_coarse.ijksrc
 
-        npts_fine = size(∂u_h_dtau_s,2)
-        dtaus_dsr = zeros(npts_fine,Ndim)
-        @show npts_fine,size(∂u_h_dtau_s)
-        for p=1:npts_fine
-            ## coordinates of point
-            if Ndim==2
-                xyzpt .= (grd_fine.x[ijksrc[p,1]],grd_fine.y[ijksrc[p,2]])
-                ## velocity associated with the above point
-                velsrc = srcrefvars.velcart_fine[ijksrc[p,1],ijksrc[p,2]]
-            elseif Ndim==3
-                xyzpt .= (grd_fine.x[ijksrc[p,1]],grd_fine.y[ijksrc[p,2]],grd_fine.z[ijksrc[p,3]])
-                ## velocity associated with the above point
-                velsrc = srcrefvars.velcart_fine[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
-            end
-            ## get the derivative
-            dtaus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
+    for p=1:npts 
+        ## coordinates of point
+        if Ndim==2
+            xyzpt .= (grd.x[ijksrc[p,1]],grd.y[ijksrc[p,2]])
+            ## velocity associated with the above point
+            velsrc = velcart_coarse[ijksrc[p,1],ijksrc[p,2]]
+        elseif Ndim==3
+            xyzpt .= (grd.x[ijksrc[p,1]],grd.y[ijksrc[p,2]],grd.z[ijksrc[p,3]])
+            ## velocity associated with the above point
+            velsrc = velcart_coarse[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
         end
-
-        trm1 = ∂u_h_dtau_s * dtaus_dsr
-        trm2 = H_Areg * dtaus_dsr
-        
-        dus_dsr .= trm1 .+ trm2
-    else
-        ###################################################################
-        ## NO REFINEMENT around the source
-        ## Derivative of the misfit w.r.t. the source position (chain rule)
-        ###################################################################
-        velcorn  = srcboxpar_coarse.velcorn
-        distcorn = srcboxpar_coarse.distcorn
-        ijksrc = srcboxpar_coarse.ijksrc
-
-        for p=1:npts 
-            ## coordinates of point
-            if Ndim==2
-                xyzpt .= (grd.x[ijksrc[p,1]],grd.y[ijksrc[p,2]])
-                ## velocity associated with the above point
-                velsrc = velcart_coarse[ijksrc[p,1],ijksrc[p,2]]
-            elseif Ndim==3
-                xyzpt .= (grd.x[ijksrc[p,1]],grd.y[ijksrc[p,2]],grd.z[ijksrc[p,3]])
-                ## velocity associated with the above point
-                velsrc = velcart_coarse[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
-            end
-            ## get the derivative
-            dus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
-        end
+        ## get the derivative
+        dus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
     end
 
-    dψ_ds_r = transpose(dus_dsr) * ∂ψ_∂u_p + transpose(dus_dsr) * ∂ψ_∂u_s
-    return dψ_ds_r
+    return dus_dsr
+end
+
+###################################################################
+
+function calc_dus_dsr_finegrid(lambda_fmmord_fine,
+                               grd_fine,
+                               ∂u_h_dtau_s,
+                               H_Areg,
+                               srcrefvars,
+                               srcboxpar_fine,
+                               xyzsrc)
+    
+    #                                                                       #
+    # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
+    #                                                                       #
+
+    ###################################################################
+    ## WITH REFINEMENT of around the source
+    ###################################################################
+    Ndim = ndims(srcrefvars.velcart_fine)
+
+    if Ndim==2
+        ijkpt = MVector(0,0)
+        xyzpt = MVector(0.0,0.0)
+        curijksrc = MVector(0,0)
+    elseif Ndim==2
+        ijkpt = MVector(0,0,0)
+        xyzpt = MVector(0.0,0.0,0.0)
+        curijksrc = MVector(0,0,0)
+    end
+
+    velcorn  = srcboxpar_fine.velcorn
+    distcorn = srcboxpar_fine.distcorn
+    ijksrc = srcboxpar_fine.ijksrc
+
+    npts_fine = size(∂u_h_dtau_s,2)
+    dtaus_dsr = zeros(npts_fine,Ndim)
+
+    for p=1:npts_fine
+        ## coordinates of point
+        if Ndim==2
+            xyzpt .= (grd_fine.x[ijksrc[p,1]],grd_fine.y[ijksrc[p,2]])
+            ## velocity associated with the above point
+            velsrc = srcrefvars.velcart_fine[ijksrc[p,1],ijksrc[p,2]]
+        elseif Ndim==3
+            xyzpt .= (grd_fine.x[ijksrc[p,1]],grd_fine.y[ijksrc[p,2]],grd_fine.z[ijksrc[p,3]])
+            ## velocity associated with the above point
+            velsrc = srcrefvars.velcart_fine[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
+        end
+        ## get the derivative
+        dtaus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
+    end
+
+    trm1 = ∂u_h_dtau_s * dtaus_dsr
+    trm2 = H_Areg * dtaus_dsr
+    
+    dus_dsr = trm1 .+ trm2
+    
+    return dus_dsr
 end
 
 ###########################################################################

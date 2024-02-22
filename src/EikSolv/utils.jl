@@ -129,7 +129,7 @@ function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::AbstractVector{<:Real
         error("smoothgradaroundsrc!(): 'radius'<0 ")
     end
     
-    if typeof(grd)==Grid2D
+    if typeof(grd)==Grid2DCart
         # Cartesian
 
         xsrc,ysrc = xysrc[1],xysrc[2]
