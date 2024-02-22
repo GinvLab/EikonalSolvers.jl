@@ -282,7 +282,8 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     P_Breg = P[:,rq] # remove columns
     rhs = - transpose(P_Breg) * fact2∂ψ∂u
 
-       
+    P_Areg = P[:,adjvars.fmmord.onsrccols]
+    
     ################################
     ##   left hand side adj eq.
     ################################
@@ -341,20 +342,25 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
     ##----------------------------------------------------------
     if whichgrad==:gradsrcloc || whichgrad==:gradvelandsrcloc
         
-        if refinearoundsrc
-            error("Gradient with respect to source location with refinement of the grid currently broken... Aborting.")
-        end
+        # if refinearoundsrc
+        #     error("Gradient with respect to source location with refinement of the grid currently broken... Aborting.")
+        # end
 
         ##############################################
         ##  Derivative with respect to the traveltime
         ##     at the "onsrc" points
         ##  compute gradient
         ##############################################
-        gradsrcpos1 .= ∂misfit∂initsrcpos2D(twoDttDS,
-                                            fmmvars.srcboxpar,
-                                            adjvars.idxconv,lambda_fmmord,velcart,
-                                            adjvars.fmmord.onsrccols,xyzsrc,grd,
-                                            refinearoundsrc=refinearoundsrc ) 
+        gradsrcpos1 .= ∂misfit∂srcpos(P_Areg,
+                                      fact2∂ψ∂u,
+                                      twoDttDS,
+                                      fmmvars.srcboxpar,
+                                      adjvars.idxconv,
+                                      lambda_fmmord,
+                                      velcart,
+                                      adjvars.fmmord.onsrccols,
+                                      xyzsrc,grd,
+                                      refinearoundsrc=refinearoundsrc ) 
     end
 
     
@@ -411,7 +417,6 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
 
         end
 
-
         ##===============================================
         # Gradient with respect to velocity, term T2Va
         ##===============================================
@@ -439,7 +444,6 @@ function solveadjointgetgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},
         ## using fact2∂ψ∂u from the calculations above!
         ## fact2∂ψ∂u = ((P*tt_fmmord).-pickobs)./stdobs.^2
         # pick only columns belonging to the source region
-        P_Areg = P[:,adjvars.fmmord.onsrccols]
         ∂ψ_∂u_s = transpose(P_Areg) * fact2∂ψ∂u
 
         ## add contribution to the gradient       
@@ -1055,15 +1059,17 @@ $(TYPEDSIGNATURES)
 
 Calculates the derivative of the misfit function with respect to the traveltime at the initial points around the source ("onsrc").
 """
-function ∂misfit∂initsrcpos2D(twoDttDS,
-                              srcboxpar,
-                              idxconv,
-                              lambda::AbstractArray{Float64},
-                              velcart::Array{Float64,N},
-                              sourcerows,
-                              xyzsrc,
-                              grd::AbstractGridEik;
-                              refinearoundsrc::Bool ) where N
+function ∂misfit∂srcpos(P_Areg,
+                        fact2∂ψ∂u,
+                        twoDttDS::Vector{SparseMatrixCSC},
+                        srcboxpar,
+                        idxconv,
+                        lambda::AbstractArray{Float64},
+                        velcart::Array{Float64,N},
+                        onsrccols,
+                        xyzsrc,
+                        grd::AbstractGridEik;
+                        refinearoundsrc::Bool ) where N
 
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
@@ -1071,30 +1077,37 @@ function ∂misfit∂initsrcpos2D(twoDttDS,
     ###################################################################
     ## Derivative of the misfit w.r.t. the traveltime at source nodes
     ###################################################################
-    tmp1 = sum( twoDttDS )
-    
+    ∂fi_∂us = sum( twoDttDS )
     npts = size(twoDttDS[1],2)
-    ∂χ∂t_src = zeros(npts)
-    for p=1:npts
-        ∂χ∂t_src[p] = dot(lambda,tmp1[:,p])
-    end
-    ########################################
-    Ndim = ndims(velcart)
-    dχdx_src = zeros(Ndim)
 
+    ∂ψ∂u_p = transpose(∂fi_∂us) * lambda
+
+    Ndim = ndims(velcart)
+    dψds_r = zeros(Ndim)
     
+    ∂ψ_∂u_s = transpose(P_Areg) * fact2∂ψ∂u
+
+
+    if Ndim==2
+        ijkpt = MVector(0,0)
+        xyzpt = MVector(0.0,0.0)
+        curijksrc = MVector(0,0)
+    elseif Ndim==2
+        ijkpt = MVector(0,0,0)
+        xyzpt = MVector(0.0,0.0,0.0)
+        curijksrc = MVector(0,0,0)
+    end
+    dus_dsr = zeros(npts,Ndim)
+
+
     if refinearoundsrc
         ###################################################################
         ## WITH REFINEMENT of around the source
         ###################################################################
-        # # If there is refinement around the source, an extra factor needs
-        # #  to be computed in the chain rule 
-        # #   ∂ψ/∂u_h * ∂u_h/∂u_s * ∂u_s/∂x_s
-        # ∂u_h∂u_s = calc∂u_h∂u_s_finegrid(fmmvars_fine,adjvars_coarse,xysrc,grd)
-        # for d=1:Ndim
-        #     dχdx_src[d] = dot( ∂χ∂t_src, ∂u_h∂x_s[d]) # along x
-        #     #dχdy_src = dot( ∂χ∂t_src, ∂u_h∂y_s) # along y
-        # end
+
+
+        
+
 
         
     else
@@ -1102,18 +1115,6 @@ function ∂misfit∂initsrcpos2D(twoDttDS,
         ## NO REFINEMENT around the source
         ## Derivative of the misfit w.r.t. the source position (chain rule)
         ###################################################################
-        if Ndim==2
-            ijkpt = MVector(0,0)
-            xyzpt = MVector(0.0,0.0)
-            curijksrc = MVector(0,0)
-        elseif Ndim==2
-            ijkpt = MVector(0,0,0)
-            xyzpt = MVector(0.0,0.0,0.0)
-            curijksrc = MVector(0,0,0)
-        end
-        derpos = zeros(npts,Ndim)
-
-        ##
         velcorn  = srcboxpar.velcorn
         distcorn = srcboxpar.distcorn
         ijksrc = srcboxpar.ijksrc
@@ -1130,17 +1131,13 @@ function ∂misfit∂initsrcpos2D(twoDttDS,
                 velsrc = velcart[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
             end
             ## get the derivative
-            derpos[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
-        end
-
-        dχdx_src = zeros(Ndim)
-        for d=1:Ndim
-            dχdx_src[d] = dot( ∂χ∂t_src, derpos[:,d] ) # along x
-            #dχdy_src = dot( ∂χ∂t_src, derpos[:,2] ) # along y
+            dus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
+            
         end
     end
 
-    return dχdx_src
+    dψds_r = transpose(dus_dsr) * ∂ψ∂u_p + transpose(dus_dsr) * ∂ψ_∂u_s
+    return dψds_r
 end
 
 ###########################################################################
