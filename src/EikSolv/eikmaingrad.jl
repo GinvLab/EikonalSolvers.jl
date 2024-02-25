@@ -365,13 +365,9 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
         idxconv = adjvars.idxconv
         Nacc = length(lambda_fmmord_coarse)
         nptsonsrc = count(adjvars.fmmord.onsrccols)
-
-        if Ndim==2
-            # a 2D point
-            ijkpt = MVector(0,0)
-        elseif Ndim==3
-            ijkpt = MVector(0,0,0)
-        end
+        ##
+        ijkpt = MVector{Ndim,Int64}(undef)
+        ijkpt .= 0
 
         #Nall = length(idxconv.lfmm2grid)
         for p=1:Nacc
@@ -922,7 +918,8 @@ function setcoeffderiv!(D::VecSPDerivMat,status::Array,irow::Integer,idxconv::Ma
     iptorig = idxconv.lfmm2grid[irow+nptsfixedtt]
     # get the (i,j) indices in the original grid
     grsize = idxconv.grsize
-    ijkpt = MVector(0,0)
+    Ndim = length(grsize)
+    ijkpt = MVector{Ndim,Int64}(undef)
     lin2cart!(iptorig,grsize,ijkpt)
 
     ##=======================
@@ -950,16 +947,12 @@ function setcoeffderiv!(D::VecSPDerivMat,status::Array,irow::Integer,idxconv::Ma
     colvals .= 0.0
     idxperm .= 0
     
-    # whX::Int=0
-    # whY::Int=0
-    if length(grsize)==2
-        whXYZ = MVector(0,0)
-        ijkcoe = MVector(0,0)
-    elseif length(grsize)==3
-        whXYZ = MVector(0,0,0)
-        ijkcoe = MVector(0,0,0)
-    end
+    ##
+    whXYZ  = MVector{Ndim,Int64}(undef)
+    ijkcoe = MVector{Ndim,Int64}(undef)
 
+    # zero whXYZ!
+    whXYZ  .= 0
     if axis==:X
         if codexyz[1]==0
             ## no derivatives have been used, so no element will
@@ -1119,17 +1112,9 @@ function calc_dus_dsr(lambda_coarse::AbstractArray{Float64},
     #                                                                       #
     npts = length(∂ψ_∂u_s)
     Ndim = ndims(velcart_coarse)
-
-    if Ndim==2
-        ijkpt = MVector(0,0)
-        xyzpt = MVector(0.0,0.0)
-        curijksrc = MVector(0,0)
-    elseif Ndim==2
-        ijkpt = MVector(0,0,0)
-        xyzpt = MVector(0.0,0.0,0.0)
-        curijksrc = MVector(0,0,0)
-    end
-
+    #
+    xyzpt = MVector{Ndim,Float64}(undef)
+    #
     dus_dsr = zeros(npts,Ndim)
 
     ###################################################################
@@ -1177,15 +1162,7 @@ function calc_dus_dsr_finegrid(lambda_fmmord_fine,
     ###################################################################
     Ndim = ndims(srcrefvars.velcart_fine)
 
-    if Ndim==2
-        ijkpt = MVector(0,0)
-        xyzpt = MVector(0.0,0.0)
-        curijksrc = MVector(0,0)
-    elseif Ndim==2
-        ijkpt = MVector(0,0,0)
-        xyzpt = MVector(0.0,0.0,0.0)
-        curijksrc = MVector(0,0,0)
-    end
+    xyzpt = MVector{Ndim,Float64}(undef)
 
     velcorn  = srcboxpar_fine.velcorn
     distcorn = srcboxpar_fine.distcorn

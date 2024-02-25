@@ -106,11 +106,8 @@ function createfinegrid(grd::AbstractGridEik2D,xysrc::AbstractVector{Float64},
     # downscalefactor::Int = 0
     # noderadius::Int = 0
     
-    downscalefactor = grdrefpars.downscalefactor # 3 #5
-    ## if noderadius is not the same for forward and adjoint,
-    ##   then troubles with comparisons with brute-force fin diff
-    ##   will occur...
-    noderadius = grdrefpars.noderadius #2 #2
+    downscalefactor = grdrefpars.downscalefactor 
+    noderadius = grdrefpars.noderadius 
 
     ## find indices of closest node to source in the "big" array
     ## ix, iy will become the center of the refined grid
@@ -144,7 +141,7 @@ function createfinegrid(grd::AbstractGridEik2D,xysrc::AbstractVector{Float64},
     elseif simtype==:spherical
         n1_coarse,n2_coarse = grd.nr,grd.nθ
         ixsrcglob,iysrcglob = findclosestnode_sph(xysrc[1],xysrc[2],grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
-        error(" ttaroundsrc!(): spherical coordinates still work in progress...")
+        error("createfinegrid(): spherical coordinates still work in progress...")
     end
     
     ##

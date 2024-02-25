@@ -14,7 +14,7 @@ $(TYPEDSIGNATURES)
 
 Trinilear interpolation.
 """
-function trilinear_interp(ttime::AbstractArray{Float64,3},grd::AbstractGridEik3D,
+function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
                           xyzpt::AbstractVector{Float64}; return_coeffonly::Bool=false)
  
     xin,yin,zin = xyzpt[1],xyzpt[2],xyzpt[3]
@@ -48,16 +48,22 @@ function trilinear_interp(ttime::AbstractArray{Float64,3},grd::AbstractGridEik3D
     z = zin-zinit
 
     ## if at the edges of domain choose previous square...
-    nx,ny,nz=size(ttime)
+    nx,ny,nz=size(f)
 
     if i==nx
         i=i-1
+    elseif i>nx
+        i=i-2
     end
     if j==ny
         j=j-1
+    elseif j>ny
+        j=j-2
     end
     if k==nz
         k=k-1
+    elseif k>nz
+        k=k-2
     end
 
     if ((i>xh) | (j>yh) | (k>zh)) 
@@ -70,9 +76,6 @@ function trilinear_interp(ttime::AbstractArray{Float64,3},grd::AbstractGridEik3D
         return
     end 
 
-    # @show i,j,k
-    # @show x,y,z
-
     x0=i*dx
     y0=j*dy
     z0=k*dz
@@ -80,19 +83,19 @@ function trilinear_interp(ttime::AbstractArray{Float64,3},grd::AbstractGridEik3D
     y1=(j+1)*dy
     z1=(k+1)*dz
 
-    ## Fortran indices start from 1 while i,j,k from 0
+    ## Julia indices start from 1 while i,j,k from 0
     ii=i+1
     jj=j+1
     kk=k+1
-    f000 = ttime[ii,jj,  kk] 
-    f010 = ttime[ii,jj+1,kk]
-    f001 = ttime[ii,jj,  kk+1]
-    f011 = ttime[ii,jj+1,kk+1]
+    f000 = f[ii,jj,  kk] 
+    f010 = f[ii,jj+1,kk]
+    f001 = f[ii,jj,  kk+1]
+    f011 = f[ii,jj+1,kk+1]
 
-    f100 = ttime[ii+1,jj,  kk] 
-    f110 = ttime[ii+1,jj+1,kk]
-    f101 = ttime[ii+1,jj,  kk+1]
-    f111 = ttime[ii+1,jj+1,kk+1]
+    f100 = f[ii+1,jj,  kk] 
+    f110 = f[ii+1,jj+1,kk]
+    f101 = f[ii+1,jj,  kk+1]
+    f111 = f[ii+1,jj+1,kk+1]
 
     ## On a periodic and cubic lattice, let x_d, y_d, and z_d be the differences between each of x, y, z and the smaller coordinate related, that is:
     xd = (x - x0)/(x1 - x0)
@@ -113,7 +116,6 @@ function trilinear_interp(ttime::AbstractArray{Float64,3},grd::AbstractGridEik3D
     # ## Finally we interpolate these values along z(walking through a line):
     # interpval = c0 * (1 - zd) + c1 * zd
 
-
     # ## Finally we interpolate these values along z(walking through a line):
     # interpval = c0 * (1 - zd) + c1 * zd 
 
@@ -129,6 +131,16 @@ function trilinear_interp(ttime::AbstractArray{Float64,3},grd::AbstractGridEik3D
                           (1-xd)*yd*zd ,
                           xd*yd*(1-zd) ,
                           xd*yd*zd ]
+
+        fcorn = @SVector[f000;
+                         f010;
+                         f001;
+                         f011;
+                         f100;
+                         f110;
+                         f101;
+                         f111]
+
         
         ijs = @SMatrix [ii   jj    kk;
                         ii  jj+1   kk;
@@ -139,94 +151,111 @@ function trilinear_interp(ttime::AbstractArray{Float64,3},grd::AbstractGridEik3D
                         ii+1  jj    kk+1;
                         ii+1  jj+1  kk+1 ]
 
-        return coeff,ijs
+        return coeff,fcorn,ijs
 
     else
 
         interpval = f000 * (1-xd)*(1-yd)*(1-zd) +
-            f100 * xd*(1-yd)*(1-zd) +
-            f010 * (1-xd)*yd*(1-zd) +
-            f001 * (1-xd)*(1-yd)*zd +
-            f101 * xd*(1-yd)*(1-zd) +
-            f011 * (1-xd)*yd*zd +
-            f110 * xd*yd*(1-zd) +
-            f111 * xd*yd*zd
+                    f100 * xd*(1-yd)*(1-zd) +
+                    f010 * (1-xd)*yd*(1-zd) +
+                    f001 * (1-xd)*(1-yd)*zd +
+                    f101 * xd*(1-yd)*(1-zd) +
+                    f011 * (1-xd)*yd*zd +
+                    f110 * xd*yd*(1-zd) +
+                    f111 * xd*yd*zd
 
         return interpval
     end
-    # @show ii,jj,kk
-    # @show ttime[ii,jj,kk],interpval
+
 
     return interpval
 end
 
 #################################################
 
-function createfinegrid(grd::AbstractGridEik3D,xyzsrc::AbstractVector{Float64},
-                        vel::Array{Float64,3},
-                        grdrefpars::GridRefinementPars)
+function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
+                        vel::Array{Float64,N},
+                        grdrefpars::GridRefinementPars) where N
 
-    # if typeof(grd)==Grid2DCart
-    #     simtype=:cartesian
-    # elseif typeof(grd)==Grid2DSphere
-    #     simtype=:spherical
-    # end
-    # # downscalefactor::Int = 0
-    # # noderadius::Int = 0
+    if typeof(grd)==Grid2DCart || typeof(grd)==Grid3DCart 
+        simtype=:cartesian
+    elseif typeof(grd)==Grid2DSphere || typeof(grd)==Grid3DSphere
+        simtype=:spherical
+    end
     
-    # downscalefactor = grdrefpars.downscalefactor # 3 #5
-    # ## if noderadius is not the same for forward and adjoint,
-    # ##   then troubles with comparisons with brute-force fin diff
-    # ##   will occur...
-    # noderadius = grdrefpars.noderadius #2 #2
+    downscalefactor = grdrefpars.downscalefactor 
+    noderadius = grdrefpars.noderadius 
+    Ndim = ndims(vel)
 
-    # ## find indices of closest node to source in the "big" array
-    # ## ix, iy will become the center of the refined grid
-    # if simtype==:cartesian
-    #     n1_coarse,n2_coarse = grd.nx,grd.ny
-    #     ixsrcglob,iysrcglob = findclosestnode(xysrc[1],xysrc[2],grd.xinit,grd.yinit,grd.hgrid)
+    ## find indices of closest node to source in the "big" array
+    ## ix, iy will become the center of the refined grid
+    if simtype==:cartesian
+        #n1_coarse,n2_coarse,n3_coarse = grd.nx,grd.ny,grd.nz
+        grsize_coarse = size(vel)
+        ixyzsrcglob,ijksrccorn = findclosestnode(grd,xyzsrc)
 
-    #     rx = xysrc[1]-grd.x[ixsrcglob]
-    #     ry = xysrc[2]-grd.y[iysrcglob]
+        # rx = xyzsrc[1]-grd.x[ixsrcglob]
+        # ry = xyzsrc[2]-grd.y[iysrcglob]
+        # rz = xyzsrc[3]-grd.z[izsrcglob]
 
-    #     ## four points
-    #     ijsrcpts = @MMatrix zeros(Int64,4,2)
-    #     halfg = 0.0
-    #     if rx>=halfg
-    #         srci = (ixsrcglob,ixsrcglob+1)
-    #     else
-    #         srci = (ixsrcglob-1,ixsrcglob)
-    #     end
-    #     if ry>=halfg
-    #         srcj = (iysrcglob,iysrcglob+1)
-    #     else
-    #         srcj = (iysrcglob-1,iysrcglob)
-    #     end
+        # ## four points
+        # ijksrcpts = @MMatrix zeros(Int64,8,3)
+        # halfg = 0.0
+        # if rx>=halfg
+        #     srci = (ixsrcglob,ixsrcglob+1)
+        # else
+        #     srci = (ixsrcglob-1,ixsrcglob)
+        # end
+        # if ry>=halfg
+        #     srcj = (iysrcglob,iysrcglob+1)
+        # else
+        #     srcj = (iysrcglob-1,iysrcglob)
+        # end
+        # if rz>=halfg
+        #     srck = (izsrcglob,izsrcglob+1)
+        # else
+        #     srck = (izsrcglob-1,izsrcglob)
+        # end
         
-    #     l=1
-    #     for j=1:2, i=1:2
-    #         ijsrcpts[l,:] .= (srci[i],srcj[j])
-    #         l+=1
-    #     end
+        # l=1
+        # for k=1:2, j=1:2, i=1:2
+        #     ijksrcpts[l,:] .= (srci[i],srcj[j],srck[k])
+        #     l+=1
+        # end
         
-    # elseif simtype==:spherical
-    #     n1_coarse,n2_coarse = grd.nr,grd.nθ
-    #     ixsrcglob,iysrcglob = findclosestnode_sph(xysrc[1],xysrc[2],grd.rinit,grd.θinit,grd.Δr,grd.Δθ)
-    #     error(" ttaroundsrc!(): spherical coordinates still work in progress...")
-    # end
+    elseif simtype==:spherical
+        # n1_coarse,n2_coarse,n3_coarse = grd.nr,grd.nθ,grd.φ
+        # ixsrcglob,iysrcglob = findclosestnode_sph(xyzsrc[1],xyzsrc[2],xyzsrc[3],
+        #                                           grd.rinit,grd.θinit,grd.φinit,
+        #                                           grd.Δr,grd.Δθ,grd.Δφ)
+        error("createfinegrid(): spherical coordinates still work in progress...")
+    end
     
-    # ##
-    # ## Define chunck of coarse grid
-    # ##
-    # # i1coarsevirtual = ixsrcglob - noderadius
-    # # i2coarsevirtual = ixsrcglob + noderadius
-    # # j1coarsevirtual = iysrcglob - noderadius
-    # # j2coarsevirtual = iysrcglob + noderadius
-    # i1coarsevirtual = minimum(ijsrcpts[:,1]) - noderadius
-    # i2coarsevirtual = maximum(ijsrcpts[:,1]) + noderadius
-    # j1coarsevirtual = minimum(ijsrcpts[:,2]) - noderadius
-    # j2coarsevirtual = maximum(ijsrcpts[:,2]) + noderadius
-    # # if hitting borders
+    ##
+    ## Define chunck of coarse grid
+    ##
+    ijk1coarsevirtual = MVector{Ndim,Int64}(undef)
+    ijk2coarsevirtual = MVector{Ndim,Int64}(undef)
+    outxyzmin = MVector{Ndim,Bool}(undef)
+    outxyzmax = MVector{Ndim,Bool}(undef)
+
+    for d=1:Ndim
+        ijk1coarsevirtual[d] = minimum(ijksrcpts[:,d]) - noderadius
+        ijk2coarsevirtual[d] = maximum(ijksrcpts[:,d]) + noderadius
+    end
+    # i1coarsevirtual = minimum(ijksrcpts[:,1]) - noderadius
+    # i2coarsevirtual = maximum(ijksrcpts[:,1]) + noderadius
+    # j1coarsevirtual = minimum(ijksrcpts[:,2]) - noderadius
+    # j2coarsevirtual = maximum(ijksrcpts[:,2]) + noderadius
+
+    # if hitting borders
+    for d=1:Ndim
+        outxyzmin[d] = ijk1coarsevirtual[d] < 1
+        outxyzmax[d] = ijk2coarsevirtual[d] > grsize_coarse[d]
+        outxyzmin[d] ? ijk1coarse[d]=1  : i1coarse=i1coarsevirtual
+        outxyzmax[d] ? ijk2coarse=grsize_coarse[d] : ijk2coarse[d]=ijk2coarsevirtual[d]
+    end
+
     # outxmin = i1coarsevirtual<1
     # outxmax = i2coarsevirtual>n1_coarse
     # outymin = j1coarsevirtual<1 
@@ -236,89 +265,88 @@ function createfinegrid(grd::AbstractGridEik3D,xyzsrc::AbstractVector{Float64},
     # outymin ? j1coarse=1         : j1coarse=j1coarsevirtual
     # outymax ? j2coarse=n2_coarse : j2coarse=j2coarsevirtual
     
-    # ##
-    # ## Refined grid parameters
-    # ##
-    # # fine grid size
-    # n1_fine = (i2coarse-i1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
-    # n2_fine = (j2coarse-j1coarse)*downscalefactor+1     #downscalefactor * (2*noderadius) + 1 # odd number
+    ##
+    ## Refined grid parameters
+    ##
+    # fine grid size
+    for d=1:Ndim
+        grsize_fine[d] = (ijk2coarse[d]-ijk1coarse[d])*downscalefactor+1
+    end
+    # n1_fine = (i2coarse-i1coarse)*downscalefactor+1    
+    # n2_fine = (j2coarse-j1coarse)*downscalefactor+1    
    
-    # ##
-    # ## Get the vel around the source on the coarse grid
-    # ##
-    # velcoarsegrd = view(vel,i1coarse:i2coarse,j1coarse:j2coarse)    
+    ##
+    ## Get the vel around the source on the coarse grid
+    ##
+    velcoarsegrd = view(vel,[ijk1coarse[d]:ijk2coarse[d] for d=1:Ndim]...)    
+    #velcoarsegrd = view(vel,i1coarse:i2coarse,j1coarse:j2coarse)    
 
-    # ##
-    # ## Nearest neighbor interpolation for velocity on finer grid
-    # ##
+    ##
+    ## Nearest neighbor interpolation for velocity on finer grid
+    ##
+    grsize_window_coarse = ijk2coarse.-ijk1coarse.+1
     # n1_window_coarse = i2coarse-i1coarse+1
     # n2_window_coarse = j2coarse-j1coarse+1
 
-    # # @show ijsrcpts
-    # # @show (i1coarse,i2coarse),(j1coarse,j2coarse)
-    # # @show n1_fine,n2_fine
-    # # @show 
-    # # @show n1_window_coarse,n2_window_coarse
-    # # @show size(velcoarsegrd)
-
-    # nearneigh_oper = spzeros(n1_fine*n2_fine, n1_window_coarse*n2_window_coarse)
-    # #vel_fine = Array{Float64}(undef,n1_fine,n2_fine)
-    # nearneigh_idxcoarse = zeros(Int64,size(nearneigh_oper,1))
-
-    # for j=1:n2_fine
-    #     for i=1:n1_fine
-    #         di=div(i-1,downscalefactor)
-    #         ri=i-di*downscalefactor
-    #         ii = ri>=downscalefactor/2+1 ? di+2 : di+1
-
-    #         dj=div(j-1,downscalefactor)
-    #         rj=j-dj*downscalefactor
-    #         jj = rj>=downscalefactor/2+1 ? dj+2 : dj+1
-
-    #         # vel_fine[i,j] = velcoarsegrd[ii,jj]
-
-    #         # compute the matrix acting as nearest-neighbor operator (for gradient calculations)
-    #         f = i  + (j-1)*n1_fine
-    #         c = ii + (jj-1)*n1_window_coarse
-    #         nearneigh_oper[f,c] = 1.0
-
-    #         ##
-    #         #@show i,j,f,c
-    #         nearneigh_idxcoarse[f] = c
-    #     end
-    # end
-
-    # ##--------------------------------------------------
-    # ## get the interpolated velocity for the fine grid
-    # tmp_vel_fine = nearneigh_oper * vec(velcoarsegrd)
-    # vel_fine = reshape(tmp_vel_fine,n1_fine,n2_fine)
-    # # @show size(nearneigh_oper)
-    # # @show size(vel_fine)
+    #nearneigh_oper = spzeros(n1_fine*n2_fine, n1_window_coarse*n2_window_coarse)
+    nearneigh_oper = spzeros(prod(grsize_fine), prod(grsize_window_coarse))
+    nearneigh_idxcoarse = zeros(Int64,size(nearneigh_oper,1))
 
 
-    # if simtype==:cartesian
-    #     # set origin of the fine grid
-    #     xinit = grd.x[i1coarse]
-    #     yinit = grd.y[j1coarse]
-    #     dh = grd.hgrid/downscalefactor
-    #     # fine grid
-    #     grdfine = Grid2D(hgrid=dh,xinit=xinit,yinit=yinit,nx=n1_fine,ny=n2_fine)
+    for j=1:n2_fine
+        for i=1:n1_fine
+            di=div(i-1,downscalefactor)
+            ri=i-di*downscalefactor
+            ii = ri>=downscalefactor/2+1 ? di+2 : di+1
 
-    # elseif simtype==:spherical
-    #     # set origin of the fine grid
-    #     rinit = grd.r[i1coarse]
-    #     θinit = grd.θ[j1coarse]
-    #     dr = grd.Δr/downscalefactor
-    #     dθ = grd.Δθ/downscalefactor
-    #     # fine grid
-    #     grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=n1_fine,nθ=n2_fine,rinit=rinit,θinit=θinit)
-    # end
+            dj=div(j-1,downscalefactor)
+            rj=j-dj*downscalefactor
+            jj = rj>=downscalefactor/2+1 ? dj+2 : dj+1
 
-    # srcrefvars = SrcRefinVars2D(downscalefactor,
-    #                             (i1coarse,j1coarse,i2coarse,j2coarse),
-    #                             (n1_window_coarse,n2_window_coarse),
-    #                             (outxmin,outxmax,outymin,outymax),
-    #                             nearneigh_oper,nearneigh_idxcoarse,vel_fine)
+            # vel_fine[i,j] = velcoarsegrd[ii,jj]
+
+            # compute the matrix acting as nearest-neighbor operator (for gradient calculations)
+            f = i  + (j-1)*n1_fine
+            c = ii + (jj-1)*n1_window_coarse
+            nearneigh_oper[f,c] = 1.0
+
+            ##
+            #@show i,j,f,c
+            nearneigh_idxcoarse[f] = c
+        end
+    end
+
+    ##--------------------------------------------------
+    ## get the interpolated velocity for the fine grid
+    tmp_vel_fine = nearneigh_oper * vec(velcoarsegrd)
+    vel_fine = reshape(tmp_vel_fine,grsize_fine...)
+    # @show size(nearneigh_oper)
+    # @show size(vel_fine)
+
+
+    if simtype==:cartesian
+        # set origin of the fine grid
+        xinit = grd.x[i1coarse]
+        yinit = grd.y[j1coarse]
+        dh = grd.hgrid/downscalefactor
+        # fine grid
+        grdfine = Grid2D(hgrid=dh,xinit=xinit,yinit=yinit,nx=n1_fine,ny=n2_fine)
+
+    elseif simtype==:spherical
+        # set origin of the fine grid
+        rinit = grd.r[i1coarse]
+        θinit = grd.θ[j1coarse]
+        dr = grd.Δr/downscalefactor
+        dθ = grd.Δθ/downscalefactor
+        # fine grid
+        grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=n1_fine,nθ=n2_fine,rinit=rinit,θinit=θinit)
+    end
+
+    srcrefvars = SrcRefinVars2D(downscalefactor,
+                                (i1coarse,j1coarse,i2coarse,j2coarse),
+                                (n1_window_coarse,n2_window_coarse),
+                                (outxmin,outxmax,outymin,outymax),
+                                nearneigh_oper,nearneigh_idxcoarse,vel_fine)
 
     return grdfine,srcrefvars
 end
@@ -370,9 +398,9 @@ end
 
 #################################################################################
 
-function createsparsederivativematrices!(grd::AbstractGridEik3D,
-                                         adjvars::AdjointVars3D,
-                                         status::Array{Integer,3})
+# function createsparsederivativematrices!(grd::AbstractGridEik3D,
+#                                          adjvars::AdjointVars3D,
+#                                          status::Array{Integer,3})
 
     # if typeof(grd)==Grid2DCart
     #     simtype = :cartesian
@@ -461,8 +489,8 @@ function createsparsederivativematrices!(grd::AbstractGridEik3D,
         
     # end
 
-    return
-end
+#     return
+# end
 
 
 ###################################################################
@@ -765,7 +793,8 @@ $(TYPEDSIGNATURES)
 
 Find closest node on a grid to a given point.
 """
-function findclosestnode(x::Float64,y::Float64,z::Float64,xinit::Float64,yinit::Float64,zinit::Float64,h::Float64) 
+function findclosestnode(grd::AbstractGridEik,xyzsrc::AbstractVector)
+
     # xini ???
     # yini ???
     ix = floor((x-xinit)/h)

@@ -533,24 +533,19 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     
     ##======================================================
     # MVector size needs to be know at compile time, so...
+    # a 2D point
+    curptijk = MVector{ND,Int64}(undef)
+    accptijk = MVector{ND,Int64}(undef)
+    # derivative codes
+    idD = MVector{ND,Int64}(undef)
+
     if ND==2
-        # a 2D point
-        curptijk = MVector(0,0)
-        accptijk = MVector(0,0)
-        # derivative codes
-        idD = MVector(0,0)
         # neighboring points
         neigh = SA[ 1  0;
                     0  1;
                    -1  0;
                     0 -1]
-        
     elseif ND==3
-        # a 3D point
-        curptijk = MVector(0,0,0)
-        accptijk = MVector(0,0,0)
-        # derivative codes
-        idD = MVector(0,0,0)
         # neighboring points
         neigh = SA[ 1  0  0;
                     0  1  0;
@@ -558,14 +553,10 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                    -1  0  0;
                     0 -1  0;
                     0  0 -1]
-
     end   
 
     ##=========================================
     if dodiscradj
-        # init row stuff
-        colindsonsrc = MVector(0)
-
         ## number of accepted points       
         naccinit = size(ijksrc,1)
         ## total number of traveltimes computed so far
@@ -962,11 +953,8 @@ function createsparsederivativematrices!(grd::AbstractGridEik,
 
     ## init MVectors as 3D even if we are in the 2D case, only
     ##   the first indices will be used...
-    if Ndim==2
-        ijkpt = MVector(0,0)
-    elseif Ndim==3
-        ijkpt = MVector(0,0,0)
-    end
+    ijkpt = MVector{Ndim,Int64}(undef)
+    ijkpt .= 0
     colinds = MVector(0,0,0) # 3 elem because max stencil length is 3
     colvals = MVector(0.0,0.0,0.0) # 3 elem because max stencil length is 3
     idxperm = MVector(0,0,0) # 3 elem because max stencil length is 3

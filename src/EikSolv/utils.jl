@@ -220,7 +220,7 @@ function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::AbstractVector{<:Rea
         error("smoothgradaroundsrc!(): 'radius'<0 ")
     end
 
-    if typeof(grd)==Grid3D
+    if typeof(grd)==Grid3DCart
         # Cartesian
 
         xsrc,ysrc,zsrc = xyzsrc[1],xyzsrc[2],xyzsrc[3]
