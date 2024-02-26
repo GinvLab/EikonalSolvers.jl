@@ -442,20 +442,6 @@ end
 
 ####################################
 
-# struct SourceBoxParams3D
-#     "(i,j,k) positions of the corners surrounding the source location"
-#     ijksrc::MArray
-#      "(x,y,z) position of the source"
-#     xyzsrc::MVector
-#     "coefficient matrix for the interpolation of the velocity"
-#     velcorn::MVector
-#     "distance from the corners to the source location"
-#     distcorn::MVector
-# end
-
-
-####################################
-
 mutable struct SourcePtsFromFineGrid
     ijksrc::Matrix{Int64} 
 end
@@ -511,7 +497,7 @@ struct FMMVars3D <: AbstractFMMVars
     refinearoundsrc::Bool
     "brute-force fix negative saqarg"
     allowfixsqarg::Bool 
-    srcboxpar::SourceBoxParams
+    srcboxpar::Union{SourceBoxParams,SourcePtsFromFineGrid}
     
     function FMMVars3D(n1,n2,n3; amIcoarsegrid::Bool,refinearoundsrc,allowfixsqarg)
         ttime = zeros(Float64,n1,n2,n3)
@@ -524,10 +510,11 @@ struct FMMVars3D <: AbstractFMMVars
         end
 
         if amIcoarsegrid && refinearoundsrc==true
+            ## there is refinement
             srcboxpar = SourcePtsFromFineGrid(Array{Int64,2}(undef,0,3))
         else
             Ncoe = 8
-            srcboxpar = SourceBoxParams(MMatrix{Ncoe,2}(zeros(Int64,Ncoe,3)),
+            srcboxpar = SourceBoxParams(MMatrix{Ncoe,3}(zeros(Int64,Ncoe,3)),
                                         MVector{3}(zeros(3)),
                                         MVector{Ncoe}(zeros(Ncoe)),
                                         MVector{Ncoe}(zeros(Ncoe)) )                                          
@@ -538,25 +525,23 @@ end
 
 ###################################################
 
-struct SrcRefinVars2D <: AbstractSrcRefinVars
+struct SrcRefinVars{M,N} <: AbstractSrcRefinVars
     downscalefactor::Int64
-    ijkcoarse::NTuple{4,Int64}
-    #nxny_window_coarse::NTuple{2,Int64}
-    #outxyminmax::NTuple{4,Bool}
+    ijkorigincoarse::NTuple{M,Int64}
     nearneigh_oper::SparseMatrixCSC{Float64,Int64}
     nearneigh_idxcoarse::Vector{Int64}
-    velcart_fine::Array{Float64,2}
+    velcart_fine::Array{Float64,N}
 end
 
 
-struct SrcRefinVars3D <: AbstractSrcRefinVars
-    downscalefactor::Int64
-    ijkcoarse::NTuple{6,Int64}
-    #nxnynz_window_coarse::NTuple{3,Int64}
-    #outxyminmax::NTuple{6,Bool}
-    nearneigh_oper::SparseMatrixCSC{Float64,Int64}
-    nearneigh_idxcoarse::Vector{Int64}
-    velcart_fine::Array{Float64,3}
-end
+# struct SrcRefinVars3D <: AbstractSrcRefinVars
+#     downscalefactor::Int64
+#     ijkcoarse::NTuple{6,Int64}
+#     #nxnynz_window_coarse::NTuple{3,Int64}
+#     #outxyminmax::NTuple{6,Bool}
+#     nearneigh_oper::SparseMatrixCSC{Float64,Int64}
+#     nearneigh_idxcoarse::Vector{Int64}
+#     velcart_fine::Array{Float64,3}
+# end
 
 ###################################################

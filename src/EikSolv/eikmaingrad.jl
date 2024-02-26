@@ -201,8 +201,8 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
         if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
             ###########################################
             ## smooth gradient (with respect to velocity) around the source
-            smoothgradaroundsrc2D!(gradvel1,view(xyzsrc,s,:),grd,
-                                   radiuspx=extrapars.radiussmoothgradsrc)
+            smoothgradaroundsrc!(gradvel1,view(xyzsrc,s,:),grd,
+                                 radiuspx=extrapars.radiussmoothgradsrc)
             ##########################################
             ## add up gradients from different sources
             gradvelall .+= gradvel1

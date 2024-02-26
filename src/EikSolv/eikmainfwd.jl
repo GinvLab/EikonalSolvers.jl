@@ -73,7 +73,7 @@ function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Arra
             # return traveltime picks at receivers and at all grid points 
             @sync for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttime[igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
+                @async ttime[igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc,wks[s],
                                                                         vel,coordsrc[igrs,:],
                                                                         coordrec[igrs],grd,extraparams,
                                                                         returntt=returntt)
@@ -82,7 +82,7 @@ function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Arra
             # return ONLY traveltime picks at receivers 
             @sync for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc2D,wks[s],
+                @async ttpicks[igrs] = remotecall_fetch(ttforwsomesrc,wks[s],
                                                         vel,coordsrc[igrs,:],
                                                         coordrec[igrs],grd,extraparams,
                                                         returntt=returntt)
@@ -102,7 +102,7 @@ function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Arra
             # return both traveltime picks at receivers and at all grid points
             Threads.@threads for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                ttime[igrs],ttpicks[igrs] = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
+                ttime[igrs],ttpicks[igrs] = ttforwsomesrc(vel,view(coordsrc,igrs,:),
                                                              view(coordrec,igrs),grd,extraparams,
                                                              returntt=returntt )
             end
@@ -111,7 +111,7 @@ function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Arra
             # return ONLY traveltime picks at receivers
             Threads.@threads for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                ttpicks[igrs] = ttforwsomesrc2D(vel,view(coordsrc,igrs,:),
+                ttpicks[igrs] = ttforwsomesrc(vel,view(coordsrc,igrs,:),
                                                  view(coordrec,igrs),grd,extraparams,
                                                  returntt=returntt )
             end
@@ -124,11 +124,11 @@ function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Arra
         ##====================
         if returntt            
             # return both traveltime picks at receivers and at all grid points
-            ttime,ttpicks = ttforwsomesrc2D(vel,coordsrc,coordrec,grd,extraparams,
-                                                   returntt=returntt )
+            ttime,ttpicks = ttforwsomesrc(vel,coordsrc,coordrec,grd,extraparams,
+                                          returntt=returntt )
         else
             # return ONLY traveltime picks at receivers
-            ttpicks = ttforwsomesrc2D(vel,coordsrc,coordrec,grd,extraparams,
+            ttpicks = ttforwsomesrc(vel,coordsrc,coordrec,grd,extraparams,
                                       returntt=returntt )
         end
 
@@ -147,9 +147,9 @@ $(TYPEDSIGNATURES)
 
   Compute the forward problem for a group of sources.
 """
-function ttforwsomesrc2D(vel::Array{Float64,N},coordsrc::Array{Float64,N},
-                         coordrec::Vector{Array{Float64,N}},grd::AbstractGridEik,
-                         extrapars::ExtraParams ; returntt::Bool=false ) where N
+function ttforwsomesrc(vel::Array{Float64,N},coordsrc::Array{Float64,2},
+                       coordrec::Vector{Array{Float64,2}},grd::AbstractGridEik,
+                       extrapars::ExtraParams ; returntt::Bool=false ) where N
     
     nsrc = size(coordsrc,1)
     # init some arrays
@@ -503,7 +503,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     end
     if isthisrefinementsrc
         downscalefactor = srcrefvars.downscalefactor
-        ijkcoarse = srcrefvars.ijkcoarse
+        ijkorigincoarse = srcrefvars.ijkorigincoarse
     end
 
     if adjvars==nothing
@@ -625,8 +625,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
 
         for l=1:naccinit
             curptijk .= ijksrc[l,:]
-
-            oncoa,ijk_coarse = isacoarsegridnode(curptijk,downscalefactor,ijkcoarse)
+            oncoa,ijk_coarse = isacoarsegridnode(curptijk,downscalefactor,ijkorigincoarse)
 
             if oncoa
                 # get the linear index/handle 
@@ -729,7 +728,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
         ##    UPDATE the COARSE GRID
         ##======================================================
         if isthisrefinementsrc
-            oncoa,ijk_coarse = isacoarsegridnode(accptijk,downscalefactor,ijkcoarse)
+            oncoa,ijk_coarse = isacoarsegridnode(accptijk,downscalefactor,ijkorigincoarse)
 
             if oncoa
                 # get the linear index/handle 
@@ -977,3 +976,258 @@ function createsparsederivativematrices!(grd::AbstractGridEik,
 end
 
 ##########################################################################
+
+function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
+                        vel::Array{Float64,N},
+                        grdrefpars::GridRefinementPars) where N
+
+    if typeof(grd)==Grid2DCart || typeof(grd)==Grid3DCart 
+        simtype=:cartesian
+    elseif typeof(grd)==Grid2DSphere || typeof(grd)==Grid3DSphere
+        simtype=:spherical
+    end
+    
+    downscalefactor = grdrefpars.downscalefactor 
+    noderadius = grdrefpars.noderadius 
+    Ndim = ndims(vel)
+
+    ## find indices of closest node to source in the "big" array
+    ## ix, iy will become the center of the refined grid
+    if simtype==:cartesian
+        #n1_coarse,n2_coarse,n3_coarse = grd.nx,grd.ny,grd.nz
+        grsize_coarse = size(vel)
+        ijksrccorn = findenclosingbox(grd,xyzsrc)
+
+            
+    elseif simtype==:spherical
+        # n1_coarse,n2_coarse,n3_coarse = grd.nr,grd.nθ,grd.φ
+        # ixsrcglob,iysrcglob = findclosestnode_sph(xyzsrc[1],xyzsrc[2],xyzsrc[3],
+        #                                           grd.rinit,grd.θinit,grd.φinit,
+        #                                           grd.Δr,grd.Δθ,grd.Δφ)
+        error("createfinegrid(): spherical coordinates still work in progress...")
+    end
+    
+    ##
+    ## Define chunck of coarse grid
+    ##
+    ijk1coarsevirtual = MVector{Ndim,Int64}(undef)
+    ijk2coarsevirtual = MVector{Ndim,Int64}(undef)
+    outxyzmin = MVector{Ndim,Bool}(undef)
+    outxyzmax = MVector{Ndim,Bool}(undef)
+
+    ijk1coarsevirtual = MVector{Ndim,Int64}(undef)
+    ijk2coarsevirtual = MVector{Ndim,Int64}(undef)
+    for d=1:Ndim
+        ijk1coarsevirtual[d] = minimum(ijksrccorn[:,d]) - noderadius
+        ijk2coarsevirtual[d] = maximum(ijksrccorn[:,d]) + noderadius
+    end
+    # i1coarsevirtual = minimum(ijksrcpts[:,1]) - noderadius
+    # i2coarsevirtual = maximum(ijksrcpts[:,1]) + noderadius
+    # j1coarsevirtual = minimum(ijksrcpts[:,2]) - noderadius
+    # j2coarsevirtual = maximum(ijksrcpts[:,2]) + noderadius
+
+    # if hitting borders
+    ijk1coarse = MVector{Ndim,Int64}(undef)
+    ijk2coarse = MVector{Ndim,Int64}(undef)
+    for d=1:Ndim
+        outxyzmin[d] = ijk1coarsevirtual[d] < 1
+        outxyzmax[d] = ijk2coarsevirtual[d] > grsize_coarse[d]
+        outxyzmin[d] ? ijk1coarse[d]=1  : ijk1coarse[d]=ijk1coarsevirtual[d]
+        outxyzmax[d] ? ijk2coarse[d]=grsize_coarse[d] : ijk2coarse[d]=ijk2coarsevirtual[d]
+    end
+
+    # outxmin = i1coarsevirtual<1
+    # outxmax = i2coarsevirtual>n1_coarse
+    # outymin = j1coarsevirtual<1 
+    # outymax = j2coarsevirtual>n2_coarse
+    # outxmin ? i1coarse=1         : i1coarse=i1coarsevirtual
+    # outxmax ? i2coarse=n1_coarse : i2coarse=i2coarsevirtual
+    # outymin ? j1coarse=1         : j1coarse=j1coarsevirtual
+    # outymax ? j2coarse=n2_coarse : j2coarse=j2coarsevirtual
+    
+    ##
+    ## Refined grid parameters
+    ##
+    # fine grid size
+    # grsize_fine = MVector{Ndim,Int64}(undef)
+    # for d=1:Ndim
+    #     grsize_fine[d] = (ijk2coarse[d]-ijk1coarse[d])*downscalefactor+1
+    # end
+    grsize_fine = Tuple((ijk2coarse.-ijk1coarse).*downscalefactor.+1)
+    
+    # n1_fine = (i2coarse-i1coarse)*downscalefactor+1    
+    # n2_fine = (j2coarse-j1coarse)*downscalefactor+1    
+   
+    ##
+    ## Get the vel around the source on the coarse grid
+    ##
+    velcoarsegrd = view(vel,[ijk1coarse[d]:ijk2coarse[d] for d=1:Ndim]...)    
+    #velcoarsegrd = view(vel,i1coarse:i2coarse,j1coarse:j2coarse)    
+
+    ##
+    ## Nearest neighbor interpolation for velocity on finer grid
+    ##
+    grsize_window_coarse = Tuple(ijk2coarse.-ijk1coarse.+1)
+    # n1_window_coarse = i2coarse-i1coarse+1
+    # n2_window_coarse = j2coarse-j1coarse+1
+
+    #nearneigh_oper = spzeros(n1_fine*n2_fine, n1_window_coarse*n2_window_coarse)
+    nearneigh_oper = spzeros(prod(grsize_fine), prod(grsize_window_coarse))
+    nearneigh_idxcoarse = zeros(Int64,size(nearneigh_oper,1))
+
+
+    caind = CartesianIndices(grsize_fine)
+    linind_fine = LinearIndices(grsize_fine)
+    linind_coarse = LinearIndices(grsize_window_coarse)
+    # @show grsize_window_coarse
+    # @show linind_coarse
+    i_coarse = MVector{Ndim,Int64}(undef)
+    Nax = ndims(caind)
+    # @show Nax
+    for ci_fine in caind
+        # loop over dimensions
+        for d=1:Nax
+            i_fine = ci_fine[d]
+            di=div(i_fine-1,downscalefactor)
+            ri=i_fine - di*downscalefactor
+            i_coarse[d] = ri>=downscalefactor/2+1 ? di+2 : di+1           
+        end
+
+        # @show ci_fine
+        # @show i_coarse
+        irow = linind_fine[ci_fine]
+        jcol = linind_coarse[CartesianIndex(i_coarse...)]
+        # @show irow,jcol
+        nearneigh_oper[irow,jcol] = 1.0     
+
+        # track column index for gradient calculations
+        nearneigh_idxcoarse[irow] = jcol
+
+        # f = i  + (j-1)*n1_fine
+        # c = ii + (jj-1)*n1_window_coarse
+        # nearneigh_oper[f,c] = 1.0
+        # nearneigh_idxcoarse[f] = c
+    end
+
+
+    # for j=1:n2_fine
+    #     for i=1:n1_fine
+    #         di=div(i-1,downscalefactor)
+    #         ri=i-di*downscalefactor
+    #         ii = ri>=downscalefactor/2+1 ? di+2 : di+1
+    #         dj=div(j-1,downscalefactor)
+    #         rj=j-dj*downscalefactor
+    #         jj = rj>=downscalefactor/2+1 ? dj+2 : dj+1
+    #         # vel_fine[i,j] = velcoarsegrd[ii,jj]
+    #         # compute the matrix acting as nearest-neighbor operator (for gradient calculations)
+    #         f = i  + (j-1)*n1_fine
+    #         c = ii + (jj-1)*n1_window_coarse
+    #         nearneigh_oper[f,c] = 1.0
+    #         ##
+    #         #@show i,j,f,c
+    #         nearneigh_idxcoarse[f] = c
+    #     end
+    # end
+
+    ##--------------------------------------------------
+    ## get the interpolated velocity for the fine grid
+    tmp_vel_fine = nearneigh_oper * vec(velcoarsegrd)
+    vel_fine = reshape(tmp_vel_fine,grsize_fine...)
+    # @show size(nearneigh_oper)
+    # @show size(vel_fine)
+
+
+    if simtype==:cartesian
+        if Ndim==2
+            # set origin of the fine grid
+            xinit = grd.x[ijk1coarse[1]]
+            yinit = grd.y[ijk1coarse[2]]
+            dh = grd.hgrid/downscalefactor
+            # fine grid
+            grdfine = Grid2DCart(hgrid=dh,xinit=xinit,yinit=yinit,
+                                 nx=grsize_fine[1],ny=grsize_fine[2])
+
+        elseif Ndim==3
+            # set origin of the fine grid
+            xinit = grd.x[ijk1coarse[1]]
+            yinit = grd.y[ijk1coarse[2]]
+            zinit = grd.z[ijk1coarse[3]]
+            dh = grd.hgrid/downscalefactor
+            # fine grid
+            grdfine = Grid3DCart(hgrid=dh,xinit=xinit,yinit=yinit,zinit=zinit,
+                                 nx=grsize_fine[1],ny=grsize_fine[2],nz=grsize_fine[3])
+        end
+
+    elseif simtype==:spherical
+        error("createfinegrid(): spherical coordinates still work in progress...")
+
+        # # set origin of the fine grid
+        # rinit = grd.r[i1coarse]
+        # θinit = grd.θ[j1coarse]
+        # dr = grd.Δr/downscalefactor
+        # dθ = grd.Δθ/downscalefactor
+        # # fine grid
+        # grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=n1_fine,nθ=n2_fine,rinit=rinit,θinit=θinit)
+    end
+
+    ## 
+    srcrefvars = SrcRefinVars(downscalefactor,
+                              Tuple(ijk1coarse),
+                              nearneigh_oper,nearneigh_idxcoarse,vel_fine)
+
+    return grdfine,srcrefvars
+end
+
+###########################################################
+
+
+"""
+$(TYPEDSIGNATURES)
+
+Find closest node on a grid to a given point.
+"""
+function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::AbstractMatrix{<:Int}
+
+    if typeof(grd)==Grid2DCart
+        Ndim = 2
+        grsize = SVector(grd.nx,grd.ny)
+        xyzinit = SVector(grd.xinit,grd.yinit)
+    elseif typeof(grd)==Grid3DCart
+        Ndim = 3
+        grsize = SVector(grd.nx,grd.ny,grd.nz)
+        xyzinit = SVector(grd.xinit,grd.yinit,grd.zinit)
+    else
+        error("findclosestnode(): Not yet implemented for $(typeof(grd))")
+    end
+
+    h = grd.hgrid
+    # make sure to get integers
+    ixyz = floor.(Int64,(xyzsrc.-xyzinit)./h) .+ 1 # .+1 julia indexing...
+
+    ## if at the edges of domain choose previous square...
+    for d=1:Ndim
+        if ixyz[d]==grsize[d]
+            ixyz[d] -= 1 
+        end
+    end
+
+    ## vvvv WRITE the stuff below in a better way!!!  vvvv
+    if Ndim==2
+        ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ixyz';
+                                                 (ixyz .+ (1,0))';
+                                                 (ixyz .+ (0,1))';
+                                                 (ixyz .+ (1,1))'])
+    elseif Ndim==3
+        ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ixyz';
+                                                 (ixyz .+ (1,0,0))';
+                                                 (ixyz .+ (0,1,0))';
+                                                 (ixyz .+ (0,0,1))';
+                                                 (ixyz .+ (1,1,0))';
+                                                 (ixyz .+ (0,1,1))';
+                                                 (ixyz .+ (1,0,1))';
+                                                 (ixyz .+ (1,1,1))'])
+    end
+    return ijksrccorn
+end
+
+#############################################################
