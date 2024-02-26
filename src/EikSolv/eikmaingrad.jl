@@ -640,7 +640,7 @@ function calc_duh_dva_finegrid!(lambda_fmmord_fine,
     ## source box parameters
     velcorn  = fmmvars.srcboxpar.velcorn
     distcorn = fmmvars.srcboxpar.distcorn
-    ijsrcreg = fmmvars.srcboxpar.ijksrc
+    #ijksrcreg = fmmvars.srcboxpar.ijksrc
 
     ## derivative of \tau_s w.r.t. w_a
     dtaus_dwa = - diagm(distcorn) .* (1.0./velcorn.^2) # Hadamard product!

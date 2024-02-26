@@ -75,10 +75,6 @@ for refinesrc in [false,true]
     vel0 = copy(velmod)
     @assert velmod==vel0
     # vel0 = 2.3 .* ones(grd.nx,grd.ny)
-    # increasing velocity with depth...
-    for i=1:grd.ny
-       vel0[:,i] = 0.015 * i .+ vel0[:,i]
-    end
     # nsrc = 1
     coordsrc2 = [hgrid*22.53 hgrid*(grd.ny-38.812)]
     #coordsrc = [hgrid*5.4 hgrid*(grd.ny-3.2)]

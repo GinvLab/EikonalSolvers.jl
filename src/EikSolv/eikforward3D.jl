@@ -123,31 +123,36 @@ function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
 
     if outputcoeff
 
+        ##============================
+        ## !!! ORDERING MATTERS !!!!
+        ##   for gradient computations
+        ## ============================
+
         coeff = @SVector [(1-xd)*(1-yd)*(1-zd) ,
                           xd*(1-yd)*(1-zd) ,
                           (1-xd)*yd*(1-zd) ,
                           (1-xd)*(1-yd)*zd ,
-                          xd*(1-yd)*(1-zd) ,
-                          (1-xd)*yd*zd ,
                           xd*yd*(1-zd) ,
+                          (1-xd)*yd*zd ,
+                          xd*(1-yd)*(1-zd) ,
                           xd*yd*zd ]
 
         fcorn = @SVector[f000;
+                         f100;
                          f010;
                          f001;
-                         f011;
-                         f100;
                          f110;
+                         f011;
                          f101;
                          f111]
 
         
         ijs = @SMatrix [ii   jj    kk;
+                        ii+1  jj    kk;
                         ii  jj+1   kk;
                         ii   jj    kk+1;
+                        ii+1  jj+1  kk;                        
                         ii  jj+1   kk+1;
-                        ii+1  jj    kk;
-                        ii+1  jj+1  kk;
                         ii+1  jj    kk+1;
                         ii+1  jj+1  kk+1 ]
 
@@ -159,9 +164,9 @@ function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
                     f100 * xd*(1-yd)*(1-zd) +
                     f010 * (1-xd)*yd*(1-zd) +
                     f001 * (1-xd)*(1-yd)*zd +
-                    f101 * xd*(1-yd)*(1-zd) +
-                    f011 * (1-xd)*yd*zd +
                     f110 * xd*yd*(1-zd) +
+                    f011 * (1-xd)*yd*zd +
+                    f101 * xd*(1-yd)*(1-zd) +
                     f111 * xd*yd*zd
 
         return interpval
@@ -182,7 +187,6 @@ function sourceboxloctt!(fmmvars::FMMVars3D,vel::Array{Float64,3},srcpos::Abstra
                          grd::Grid3DCart )
 
     ## source location, etc.      
-    mindistsrc = 10.0*eps()
     xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
 
     # get the position and velocity of corners around source
