@@ -505,7 +505,7 @@ function computestuff_finegrid!(fmmvars,adjvars,grd,srcrefvars)
     ##    (The fine grid stop when hitting a boundary...)
     ## number of model parameters (== computed traveltimes)
     Naccpts = adjvars.fmmord.lastcomputedtt[]
-    @assert findfirst( adjvars.fmmord.ttime.==0.0)-1 == Naccpts
+    @assert findfirst( adjvars.fmmord.ttime .< 0.0)-1 == Naccpts
     ## extract computed traveltime values
     tt_fmmord = adjvars.fmmord.ttime[1:Naccpts]
     #@show size(tt_fmmord)

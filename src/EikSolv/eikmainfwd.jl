@@ -314,7 +314,7 @@ function ttFMM_hiord!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},src::Abstra
         adjvars.fmmord.onsrccols .= false
         adjvars.fmmord.onhpoints .= false
         # for safety, zeroes the traveltime
-        adjvars.fmmord.ttime .= 0.0
+        adjvars.fmmord.ttime .= -1.0 #0.0
         # init the valued of last ttime computed
         adjvars.fmmord.lastcomputedtt[] = 0
         # for safety, zeroes the codes for derivatives
@@ -435,7 +435,7 @@ function runrefinementaroundsrc!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
         adjvars_fine.fmmord.onsrccols .= false
         adjvars_fine.fmmord.onhpoints .= false
         # for safety, zeroes the traveltime
-        adjvars_fine.fmmord.ttime .= 0.0
+        adjvars_fine.fmmord.ttime .= -1.0
         # init the valued of last ttime computed
         adjvars_fine.fmmord.lastcomputedtt[] = 0
         # for safety, zeroes the codes for derivatives
@@ -595,7 +595,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
             ##  adjoint equation. Otherwise there will be a row of only zeros in the LHS.
             if ttgrid==0.0
                 adjvars.fmmord.ttime[l] = 0.0 #eps()
-                @warn("Source is exactly on a node, spurious results may appear. Work is in progress to fix the problem.\n Set smoothgradsourceradius>0 to mitigate the issue")
+                @warn("Source is exactly on a node, spurious results may appear. Work is in progress to fix the problem.")
             else
                 adjvars.fmmord.ttime[l] = ttgrid
             end

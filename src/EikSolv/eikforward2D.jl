@@ -42,7 +42,6 @@ function bilinear_interp(f::AbstractArray{Float64,2},grd::AbstractGridEik2D,
     j=floor(Int64,yh+1) # indices starts from 1
   
     ## if at the edges of domain choose previous square...
-    #@show "1",i,j,nx,ny
     if i==nx
         i=i-1
     elseif i>nx
@@ -53,7 +52,6 @@ function bilinear_interp(f::AbstractArray{Float64,2},grd::AbstractGridEik2D,
     elseif j>ny
         j=j-2
     end 
-    #@show "2",i,j,nx,ny
 
     xd=xh-(i-1) # indices starts from 1
     yd=yh-(j-1) # indices starts from 1

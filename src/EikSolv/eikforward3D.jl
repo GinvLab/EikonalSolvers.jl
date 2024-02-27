@@ -40,16 +40,18 @@ function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
     xh = (xin-xinit)/dx
     yh = (yin-yinit)/dy
     zh = (zin-zinit)/dz
-    i = floor(Int64,xh)
-    j = floor(Int64,yh)
-    k = floor(Int64,zh)
     x = xin-xinit  
     y = yin-yinit
     z = zin-zinit
+    i = floor(Int64,xh+1) # indices starts from 1
+    j = floor(Int64,yh+1) # indices starts from 1
+    k = floor(Int64,zh+1) # indices starts from 1
 
     ## if at the edges of domain choose previous square...
     nx,ny,nz=size(f)
 
+    ## Julia indices start from 1 while i,j,k from 0
+ 
     if i==nx
         i=i-1
     elseif i>nx
@@ -66,60 +68,27 @@ function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
         k=k-2
     end
 
-    if ((i>xh) | (j>yh) | (k>zh)) 
-        println("trilinear_interp(): Interpolation failed...")
-        println("$i,$xh,$j,$yh,$k,$zh")
-        return
-    elseif ((i+1<xh)|(j+1<yh)|(k+1<zh))
-        println("trilinear_interp(): Interpolation failed...")
-        println("$i,$xh,$j,$yh,$k,$zh")
-        return
-    end 
+    x0=(i-1)*dx
+    y0=(j-1)*dy
+    z0=(k-1)*dz
+    x1=i*dx
+    y1=j*dy
+    z1=k*dz
 
-    x0=i*dx
-    y0=j*dy
-    z0=k*dz
-    x1=(i+1)*dx
-    y1=(j+1)*dy
-    z1=(k+1)*dz
+    f000 = f[i,j,  k] 
+    f010 = f[i,j+1,k]
+    f001 = f[i,j,  k+1]
+    f011 = f[i,j+1,k+1]
 
-    ## Julia indices start from 1 while i,j,k from 0
-    ii=i+1
-    jj=j+1
-    kk=k+1
-    f000 = f[ii,jj,  kk] 
-    f010 = f[ii,jj+1,kk]
-    f001 = f[ii,jj,  kk+1]
-    f011 = f[ii,jj+1,kk+1]
+    f100 = f[i+1,j,  k] 
+    f110 = f[i+1,j+1,k]
+    f101 = f[i+1,j,  k+1]
+    f111 = f[i+1,j+1,k+1]
 
-    f100 = f[ii+1,jj,  kk] 
-    f110 = f[ii+1,jj+1,kk]
-    f101 = f[ii+1,jj,  kk+1]
-    f111 = f[ii+1,jj+1,kk+1]
-
-    ## On a periodic and cubic lattice, let x_d, y_d, and z_d be the differences between each of x, y, z and the smaller coordinate related, that is:
     xd = (x - x0)/(x1 - x0)
     yd = (y - y0)/(y1 - y0)
     zd = (z - z0)/(z1 - z0)
     
-    # ## where x_0 indicates the lattice point below x , and x_1 indicates the lattice point above x and similarly for y_0, y_1, z_0 and z_1.
-    # ## First we interpolate along x (imagine we are pushing the front face of the cube to the back), giving:
-    # c00 = f000 * (1 - xd) + f100 * xd 
-    # c10 = f010 * (1 - xd) + f110 * xd 
-    # c01 = f001 * (1 - xd) + f101 * xd 
-    # c11 = f011 * (1 - xd) + f111 * xd 
-
-    # ## Where V[x_0,y_0, z_0] means the function value of (x_0,y_0,z_0). Then we interpolate these values (along y, as we were pushing the top edge to the bottom), giving:
-    # c0 = c00 * (1 - yd) + c10 *yd
-    # c1 = c01 * (1 - yd) + c11 *yd
-
-    # ## Finally we interpolate these values along z(walking through a line):
-    # interpval = c0 * (1 - zd) + c1 * zd
-
-    # ## Finally we interpolate these values along z(walking through a line):
-    # interpval = c0 * (1 - zd) + c1 * zd 
-
-    ##########################################################33
 
     if outputcoeff
 
@@ -147,15 +116,14 @@ function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
                          f111]
 
         
-        ijs = @SMatrix [ii   jj    kk;
-                        ii+1  jj    kk;
-                        ii  jj+1   kk;
-                        ii   jj    kk+1;
-                        ii+1  jj+1  kk;                        
-                        ii  jj+1   kk+1;
-                        ii+1  jj    kk+1;
-                        ii+1  jj+1  kk+1 ]
-
+        ijs = @SMatrix [i   j    k;
+                        i+1  j    k;
+                        i  j+1   k;
+                        i   j    k+1;
+                        i+1  j+1  k;                        
+                        i  j+1   k+1;
+                        i+1  j    k+1;
+                        i+1  j+1  k+1 ]
         return coeff,fcorn,ijs
 
     else
@@ -171,7 +139,6 @@ function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
 
         return interpval
     end
-
 
     return interpval
 end

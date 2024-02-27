@@ -337,7 +337,7 @@ struct VarsFMMOrder
     function VarsFMMOrder(nijk::Tuple) 
         npts = prod(nijk)
         ndim = length(nijk)
-        ttime = zeros(npts)
+        ttime = -1.0 .* ones(npts)
         ## nxy*3 because of the stencils in the second-order fast marching (max 3 points)
         ## Nsize=[npts,npts] will be changed while the algo is running...
         Deriv = Vector{VecSPDerivMat}(undef,ndim)
@@ -353,30 +353,6 @@ struct VarsFMMOrder
         return new(ttime,lastcomputedtt,Deriv,onsrccols,onhpoints)
     end
 end
-
-###################################################
-
-# struct VarsFMMOrder3D
-#     ttime::Vector{Float64}
-#      "Last computed traveltime"
-#     lastcomputedtt::Base.RefValue{Int64}
-#     vecDx::VecSPDerivMat
-#     vecDy::VecSPDerivMat
-#     vecDz::VecSPDerivMat
-
-#     function VarsFMMOrder3D(nx,ny,nz)
-#         nxyz =  nx*ny*nz
-#         ttime = zeros(nxyz)
-#         vecDx = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
-#                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-#         vecDy = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
-#                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-#         vecDz = VecSPDerivMat( iptr=zeros(Int64,nxyz+1), j=zeros(Int64,nxyz*3),
-#                                v=zeros(nxyz*3), Nsize=[nxyz,nxyz] )
-#         lastcomputedtt = Ref(0)
-#         return new(ttime,vecDx,vecDy,vecDz)
-#     end
-# end
 
 ###################################################
 
