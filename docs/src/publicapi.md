@@ -3,37 +3,32 @@
 
 
 # API, exported functions
-```@meta
-Author = "Andrea Zunino"
-```
+
 
 ```@docs
 EikonalSolvers.EikonalSolvers
 ```
 
-## Cartesian/spherical grid 2D functions
+## Cartesian/spherical grids structures
 ```@docs
-Grid2D
+Grid2DCart
+Grid3DCart
 Grid2DSphere
-traveltime2D
-gradttime2D
-```
-##  Cartesian/spherical grid 3D functions
-```@docs
-Grid3D
 Grid3DSphere
-traveltime3D
-gradttime3D
 ```
+
+
+## Forward, gradient and misfit calculation functions
+```@docs
+eiktraveltime
+eikgradient
+eikttimemisfit
+```
+
 
 ## Extra parameters
 ```@docs
 ExtraParams
-```
-
-## Misfit functional
-```@docs
-ttmisfitfunc
 ```
 
 ## HMCsampler wrapper
@@ -45,8 +40,8 @@ EikonalSolvers.HMCtraveltimes.EikonalProb
 
 ## Alternative algorithms
 ```@docs
-traveltime2Dalt
-gradttime2Dalt
-traveltime3Dalt
-gradttime3Dalt
+eiktraveltime2Dalt
+eikgradient2Dalt
+eiktraveltime3Dalt
+eikgradient3Dalt
 ```

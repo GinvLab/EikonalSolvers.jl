@@ -9,7 +9,8 @@ makedocs(modules = [EikonalSolvers],
              "Home" => "index.md",
              "API" => "publicapi.md",
              "Private stuff" => "privatestuff.md"
-         ]
+         ],
+         warnonly = true
          )
 
 deploydocs(
@@ -17,7 +18,7 @@ deploydocs(
     #repo="../../EikonalSolvers.jl",
     devbranch = "main",
     deploy_config = Documenter.GitLab(),
-    branch = "gl-pages"
+    branch = "gl-pages",
 )
 
 

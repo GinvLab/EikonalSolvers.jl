@@ -23,11 +23,12 @@ module EikonalSolvers
 export Grid2DCart,Grid2DSphere
 export Grid3DCart,Grid3DSphere
 export eiktraveltime,eikgradient
+export eikttimemisfit
 
-export traveltime2Dalt,gradttime2Dalt
-export traveltime3Dalt,gradttime3Dalt
+export eiktraveltime2Dalt,eikgradient2Dalt
+export eiktraveltime3Dalt,eikgradient3Dalt
 
-export ttmisfitfunc
+
 export EikonalProb
 
 export ExtraParams

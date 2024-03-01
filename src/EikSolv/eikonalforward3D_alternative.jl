@@ -40,9 +40,9 @@ The computations are run in parallel depending on the number of workers (nworker
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 
 """
-function traveltime3Dalt(vel::Array{Float64,3},grd::Grid3DCart,coordsrc::Array{Float64,2},
-                      coordrec::Vector{Array{Float64,2}}; ttalgo::String,
-                      returntt::Bool=false) 
+function eiktraveltime3Dalt(vel::Array{Float64,3},grd::Grid3DCart,coordsrc::Array{Float64,2},
+                            coordrec::Vector{Array{Float64,2}}; ttalgo::String,
+                            returntt::Bool=false) 
     
     #println("Check the source/rec to be in bounds!!!")
     @assert size(coordsrc,2)==3

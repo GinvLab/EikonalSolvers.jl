@@ -133,15 +133,14 @@ function smoothgradaroundsrc!(grad::AbstractArray,xysrc::AbstractVector{<:Real},
         # Cartesian
 
         xsrc,ysrc = xysrc[1],xysrc[2]
-        isr,jsr = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid)
+        ijsrccorn = findenclosingbox(grd,xysrc)
         nx,ny = grd.nx,grd.ny
 
-
         rmax = radiuspx*grd.hgrid
-        imin = isr-radiuspx
-        imax = isr+radiuspx
-        jmin = jsr-radiuspx
-        jmax = jsr+radiuspx
+        imin = ijsrccorn[1,1]-radiuspx
+        imax = ijsrccorn[2,1]+radiuspx
+        jmin = ijsrccorn[1,2]-radiuspx
+        jmax = ijsrccorn[3,2]+radiuspx
 
         for j=jmin:jmax
             for i=imin:imax
@@ -167,18 +166,18 @@ function smoothgradaroundsrc!(grad::AbstractArray,xysrc::AbstractVector{<:Real},
         # Spherical
 
         rsrc,θsrc = xysrc[1],xysrc[2]
-        isr,jsr = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,
-                                      grd.Δr,grd.Δθ)
+        ijsrccorn = findenclosingbox(grd,xysrc)
+       
         nr,nθ = grd.nr,grd.nθ
         xsrc,ysrc = sphericaldeg2cartesian(rsrc,θsrc)
 
-
         ## for simplicity rmax is defined in terms of the radius only
         rmax = radiuspx*grd.Δr
-        imin = isr-radiuspx
-        imax = isr+radiuspx
-        jmin = jsr-radiuspx
-        jmax = jsr+radiuspx
+        imin = ijsrccorn[1,1]-radiuspx
+        imax = ijsrccorn[2,1]+radiuspx
+        jmin = ijsrccorn[1,2]-radiuspx
+        jmax = ijsrccorn[3,2]+radiuspx
+
 
         for j=jmin:jmax
             for i=imin:imax
@@ -200,7 +199,7 @@ function smoothgradaroundsrc!(grad::AbstractArray,xysrc::AbstractVector{<:Real},
         end
 
     else
-        error("smoothgradaroundsrc2D!(): Wrong grid type.")
+        error("smoothgradaroundsrc!(): Wrong grid type.")
 
     end # if
     
@@ -224,16 +223,16 @@ function smoothgradaroundsrc!(grad::AbstractArray,xyzsrc::AbstractVector{<:Real}
         # Cartesian
 
         xsrc,ysrc,zsrc = xyzsrc[1],xyzsrc[2],xyzsrc[3]
-        isr,jsr,ksr = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
+        ijksrccorn = findenclosingbox(grd,xysrc)
         nx,ny,nz = grd.nx,grd.ny,grd.nz
 
         rmax = radiuspx*grd.hgrid
-        imin = isr-radiuspx
-        imax = isr+radiuspx
-        jmin = jsr-radiuspx
-        jmax = jsr+radiuspx
-        kmin = ksr-radiuspx
-        kmax = ksr+radiuspx
+        imin = ijksrccorn[1,1]-radiuspx
+        imax = ijksrccorn[2,1]+radiuspx
+        jmin = ijksrccorn[1,2]-radiuspx
+        jmax = ijksrccorn[3,2]+radiuspx
+        kmin = ijksrccorn[1,1]-radiuspx
+        kmax = ijksrccorn[4,1]+radiuspx
 
         for k=kmin:kmax
             for j=jmin:jmax
@@ -262,20 +261,19 @@ function smoothgradaroundsrc!(grad::AbstractArray,xyzsrc::AbstractVector{<:Real}
     elseif typeof(grd)==Grid3DSphere
         # Spherical
         rsrc,θsrc,φsrc = xyzsrc[1],xyzsrc[2],xyzsrc[3]
-        isr,jsr,ksr = findclosestnode_sph(rsrc,θsrc,φsrc,grd.rinit,grd.θinit,grd.φinit,
-                                          grd.Δr,grd.Δθ,grd.Δφ)
+        ijksrccorn = findenclosingbox(grd,xysrc)
+     
         nr,nθ,nφ = grd.nr,grd.nθ,grd.nφ
         xsrc,ysrc,zsrc = sphericaldeg2cartesian(rsrc,θsrc,φsrc)
 
-
         ## for simplicity rmax is defined in terms of the radius only
         rmax = radiuspx*grd.Δr
-        imin = isr-radiuspx
-        imax = isr+radiuspx
-        jmin = jsr-radiuspx
-        jmax = jsr+radiuspx
-        kmin = ksr-radiuspx
-        kmax = ksr+radiuspx
+        imin = ijksrccorn[1,1]-radiuspx
+        imax = ijksrccorn[2,1]+radiuspx
+        jmin = ijksrccorn[1,2]-radiuspx
+        jmax = ijksrccorn[3,2]+radiuspx
+        kmin = ijksrccorn[1,1]-radiuspx
+        kmax = ijksrccorn[4,1]+radiuspx
 
         for k=kmin:kmax
             for j=jmin:jmax
@@ -299,7 +297,7 @@ function smoothgradaroundsrc!(grad::AbstractArray,xyzsrc::AbstractVector{<:Real}
         end
 
     else
-        error("smoothgradaroundsrc3D!(): Wrong grid type.")
+        error("smoothgradaroundsrc!(): Wrong grid type.")
 
     end # if
 

@@ -9,32 +9,34 @@
 """
 $(TYPEDSIGNATURES)
 
-Calculate traveltime for 2D or 3D velocity models. 
-Returns the traveltime at receivers and optionally the array(s) of traveltime on the entire gridded model.
-The computations are run in parallel depending on the value of `extraparams.parallelkind`.
+Calculate the traveltime for 2D or 3D velocity models at requested receivers locations.
+Optionally return the array(s) of traveltime on the entire gridded model.
+
+The computations may be run in parallel depending on the value of `extraparams.parallelkind`.
 
 # Arguments
-- `vel`: the 2D/3D velocity model
-- `grd`: a struct specifying the geometry and size of the model
+- `vel`: the 2D or 3D velocity model
+- `grd`: a struct specifying the geometry and size of the model (e.g., Grid3DCart)
 - `coordsrc`: the coordinates of the source(s) (x,y[,z]), a 2-column (3-column) array
-- `coordrec`: the coordinates of the receiver(s) (x,y[,z]) for each single source, a vector of 2-column (3-column) arrays 
+- `coordrec`: the coordinates of the receiver(s) (x,y[,z]) for each single source, a vector of 2-column (3-column) arrays. An array of receivers' coordinates is needed for each source (they can be different). 
 - `returntt` (optional): whether to return the 3D array(s) of traveltimes for the entire model
-- `extraparams` (optional) : a struct containing some "extra" parameters, namely
+- `extraparams` (optional): a struct containing some "extra" parameters, namely
     * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
     * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
     * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
-    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this.
+    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this!
     * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
-- `ttpicks`: array(nrec,nsrc) the traveltimes at receivers
+- `ttpicks`: a vector of vectors containing traveltimes at the receivers for each source 
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
-
-    """
-
-function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Array{Float64,2},
-                       coordrec::Vector{Array{Float64,2}} ; returntt::Bool=false,
-                       extraparams::Union{ExtraParams,Nothing}=nothing  ) where N
+"""
+function eiktraveltime(vel::Array{Float64,N},
+                       grd::AbstractGridEik,
+                       coordsrc::Array{Float64,2},
+                       coordrec::Vector{Array{Float64,2}} ;
+                       returntt::Bool=false,
+                       extraparams::Union{ExtraParams,Nothing}=nothing ) where N
         
     if extraparams==nothing
         extraparams =  ExtraParams()
@@ -74,9 +76,9 @@ function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Arra
             @sync for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async ttime[igrs],ttpicks[igrs] = remotecall_fetch(ttforwsomesrc,wks[s],
-                                                                        vel,coordsrc[igrs,:],
-                                                                        coordrec[igrs],grd,extraparams,
-                                                                        returntt=returntt)
+                                                                    vel,coordsrc[igrs,:],
+                                                                    coordrec[igrs],grd,extraparams,
+                                                                    returntt=returntt)
             end
         else
             # return ONLY traveltime picks at receivers 
@@ -102,8 +104,8 @@ function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Arra
             # return both traveltime picks at receivers and at all grid points
             Threads.@threads for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                ttime[igrs],ttpicks[igrs] = ttforwsomesrc(vel,view(coordsrc,igrs,:),
-                                                             view(coordrec,igrs),grd,extraparams,
+                ttime[igrs],ttpicks[igrs] = ttforwsomesrc(vel,coordsrc[igrs,:],
+                                                          coordrec[igrs],grd,extraparams,
                                                              returntt=returntt )
             end
 
@@ -111,8 +113,8 @@ function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Arra
             # return ONLY traveltime picks at receivers
             Threads.@threads for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
-                ttpicks[igrs] = ttforwsomesrc(vel,view(coordsrc,igrs,:),
-                                                 view(coordrec,igrs),grd,extraparams,
+                ttpicks[igrs] = ttforwsomesrc(vel,coordsrc[igrs,:],
+                                                 view[coordrec,igrs],grd,extraparams,
                                                  returntt=returntt )
             end
         end
@@ -129,7 +131,7 @@ function eiktraveltime(vel::Array{Float64,N},grd::AbstractGridEik,coordsrc::Arra
         else
             # return ONLY traveltime picks at receivers
             ttpicks = ttforwsomesrc(vel,coordsrc,coordrec,grd,extraparams,
-                                      returntt=returntt )
+                                    returntt=returntt )
         end
 
     end
@@ -187,7 +189,8 @@ function ttforwsomesrc(vel::Array{Float64,N},coordsrc::Array{Float64,2},
         if returntt
             ## Compute traveltime and interpolation at receivers in one go for parallelization
             #ttGRPSRC[:,:,s] .= fmmvars.ttime
-            ttGRPSRC = fmmvars.ttime
+            ttGRPSRC[s] = copy(fmmvars.ttime) ## copy!!!
+            @show s,extrema(ttGRPSRC[s])
         end
     end
 
@@ -1212,6 +1215,7 @@ function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::Abstract
     end
 
     ## vvvv WRITE the stuff below in a better way!!!  vvvv
+    ## ORDER MATTERS for the rest of the algorithm!!
     if Ndim==2
         ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ixyz';
                                                  (ixyz .+ (1,0))';

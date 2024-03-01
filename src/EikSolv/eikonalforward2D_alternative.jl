@@ -27,9 +27,9 @@ The computations are run in parallel depending on the number of workers (nworker
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 
 """
-function traveltime2Dalt(vel::Array{Float64,2},grd::Grid2DCart,coordsrc::Array{Float64,2},
-                         coordrec::Vector{Array{Float64,2}} ; ttalgo::String, ##  ="ttFMM_hiord",
-                         returntt::Bool=false) 
+function eiktraveltime2Dalt(vel::Array{Float64,2},grd::Grid2DCart,coordsrc::Array{Float64,2},
+                            coordrec::Vector{Array{Float64,2}} ; ttalgo::String, ##  ="ttFMM_hiord",
+                            returntt::Bool=false) 
         
     @assert size(coordsrc,2)==2
     @assert all(vel.>0.0)

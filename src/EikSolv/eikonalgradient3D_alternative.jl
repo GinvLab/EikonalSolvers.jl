@@ -26,9 +26,9 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 3D array
 
     """
-function gradttime3Dalt(vel::Array{Float64,3},grd::AbstractGridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
-                        pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
-                        gradttalgo::String="gradFMM_hiord",smoothgradsourceradius::Integer=0,smoothgrad::Bool=true)
+function eikgradient3Dalt(vel::Array{Float64,3},grd::AbstractGridEik3D,coordsrc::Array{Float64,2},coordrec::Vector{Matrix{Float64}},
+                          pickobs::Vector{Vector{Float64}},stdobs::Vector{Vector{Float64}} ;
+                          gradttalgo::String="gradFMM_hiord",smoothgradsourceradius::Integer=0,smoothgrad::Bool=true)
     
     if typeof(grd)==Grid3DCart
         simtype = :cartesian

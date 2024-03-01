@@ -27,10 +27,10 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 2D array
 
 """
-function gradttime2Dalt(vel::Array{Float64,2}, grd::AbstractGridEik2D,coordsrc::Array{Float64,2},
-                        coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
-                        stdobs::Vector{Vector{Float64}} ;    gradttalgo::String,
-                        smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
+function eikgradient2Dalt(vel::Array{Float64,2}, grd::AbstractGridEik2D,coordsrc::Array{Float64,2},
+                          coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
+                          stdobs::Vector{Vector{Float64}} ;    gradttalgo::String,
+                          smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
 
     if typeof(grd)==Grid2DCart
         simtype = :cartesian

@@ -4,32 +4,37 @@
 """
 $(TYPEDSIGNATURES)
 
-Calculate the gradient using the adjoint state method for 2D velocity models. 
-Returns the gradient of the misfit function with respect to velocity calculated at the given point (velocity model). 
-The gradient is calculated using the adjoint state method.
-The computations are run in parallel depending on the value of `extraparams.parallelkind`.
+Calculate the gradient of the misfit function w.r.t. either velocity or source location (or both) using the adjoint state method for 2D or 3D problems. 
+
+The computations may be run in parallel depending on the value of `extraparams.parallelkind`.
 
 # Arguments
-- `vel`: the 2D velocity model 
-- `grd`: a struct specifying the geometry and size of the model
+- `vel`: the 2D or 3D velocity model 
+- `grd`: a struct specifying the geometry and size of the model (e.g., Grid3DCart)
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array 
 - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays 
 - `pickobs`: observed traveltime picks
 - `stdobs`: standard deviation of error on observed traveltime picks, an array with same shape than `pickobs`
+- `whichgrad`: one of :gradvel, :gradsrcloc, :gradvelandsrcloc, specifies which gradient should be computed
+- `extraparams` (optional): a struct containing some "extra" parameters, namely
     * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
     * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
-    * `radiussmoothgradsrc`: radius for smoothing the gradient around the source. Zero means no smoothing.
-    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this.
-    * `smoothgradkern`: smooth the gradient with a kernel of size (in pixels). Zero means no smoothing.
+    * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
+    * `radiussmoothgradsrc`: radius for smoothing each individual gradient *only* around the source. Zero means no smoothing.
+    * `smoothgradkern`: smooth the final gradient with a kernel of size `smoothgradkern` (in grid nodes). Zero means no smoothing.
+    * `allowfixsqarg`: brute-force fix negative sqarg. Don't use this!
     * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
-- `grad`: the gradient as a 2D array
-
+- `grad`: the gradient w.r.t. velocity as a 2D or 3D array and the gradient w.r.t source location. In case only one of them is requested with `whichgrad`, the other will be of type Nothing.
 """
-function eikgradient(vel::Array{Float64,N}, grd::AbstractGridEik,coordsrc::Array{Float64,2},
-                     coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
-                     stdobs::Vector{Vector{Float64}},whichgrad::Symbol=:gradvel ;
+function eikgradient(vel::Array{Float64,N},
+                     grd::AbstractGridEik,
+                     coordsrc::Array{Float64,2},
+                     coordrec::Vector{Array{Float64,2}},
+                     pickobs::Vector{Vector{Float64}},
+                     stdobs::Vector{Vector{Float64}},
+                     whichgrad::Symbol ;
                      extraparams::Union{ExtraParams,Nothing}=nothing) where N
 
     @assert (whichgrad in (:gradvel, :gradsrcloc, :gradvelandsrcloc)) "whichgrad not in (:vel, :srcloc, :velandsrcloc)"
@@ -55,19 +60,19 @@ function eikgradient(vel::Array{Float64,N}, grd::AbstractGridEik,coordsrc::Array
         ## array of workers' ids
         wks = workers()
         ## do the calculations
-        ∂χ∂vel_all = Vector{Array{Float64,ndims(vel)}}(undef,nchu)
-        ∂χ∂xysrc = Vector{Vector{Float64}}(undef,nsrc)
+        ∂ψ∂vel_all = Vector{Array{Float64,ndims(vel)}}(undef,nchu)
+        ∂ψ∂xyzsrc = Vector{Vector{Float64}}(undef,nsrc)
         @sync begin 
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async begin
-                    ∂χ∂vel_all[s],∂χ∂xysrc[igrs] .= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
+                    ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs] .= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
                                                                        coordsrc[igrs,:],coordrec[igrs],
                                                                        grd,stdobs[igrs],pickobs[igrs],
                                                                        whichgrad,extraparams )
                 end
             end
-            ∂χ∂vel = sum(∂χ∂vel_all)
+            ∂ψ∂vel = sum(∂ψ∂vel_all)
         end
 
 
@@ -79,31 +84,31 @@ function eikgradient(vel::Array{Float64,N}, grd::AbstractGridEik,coordsrc::Array
         grpsrc = distribsrcs(nsrc,nth)
         nchu = size(grpsrc,1)            
         ##  do the calculations
-        ∂χ∂vel_all = Vector{Array{Float64,ndims(vel)}}(undef,nchu)
-        ∂χ∂xysrc = Vector{Vector{Float64}}(undef,nsrc)
+        ∂ψ∂vel_all = Vector{Array{Float64,ndims(vel)}}(undef,nchu)
+        ∂ψ∂xyzsrc = Vector{Vector{Float64}}(undef,nsrc)
         
         Threads.@threads for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
             @show igrs
-            ∂χ∂vel_all[s],∂χ∂xysrc[igrs] = calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
+            ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs] = calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
                                                                grd,view(stdobs,igrs),view(pickobs,igrs),
                                                                whichgrad,extraparams )
         end
-        ∂χ∂vel = sum(∂χ∂vel_all)
+        ∂ψ∂vel = sum(∂ψ∂vel_all)
 
 
     elseif extraparams.parallelkind==:serial
         ##====================================
         ## Serial run
         ##====================
-        ∂χ∂vel,∂χ∂xysrc = calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
+        ∂ψ∂vel,∂ψ∂xyzsrc = calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
                                             whichgrad,extraparams )
 
     end
 
     ## smooth gradient
     if extraparams.smoothgradkern>0
-        ∂χ∂vel = smoothgradient(extraparams.smoothgradkern,∂χ∂vel)
+        ∂ψ∂vel = smoothgradient(extraparams.smoothgradkern,∂ψ∂vel)
     end
 
     if extraparams.manualGCtrigger
@@ -111,7 +116,15 @@ function eikgradient(vel::Array{Float64,N}, grd::AbstractGridEik,coordsrc::Array
         #println("Triggering GC")
         GC.gc()
     end
-    return ∂χ∂vel,∂χ∂xysrc 
+
+    if whichgrad==:gradvel
+        return ∂ψ∂vel
+    elseif whichgrad==:gradsrcloc
+        return ∂ψ∂xyzsrc
+    elseif whichgrad==:gradvelandsrcloc
+        return ∂ψ∂vel,∂ψ∂xyzsrc
+    end
+    return
 end
 
 ######################################################################

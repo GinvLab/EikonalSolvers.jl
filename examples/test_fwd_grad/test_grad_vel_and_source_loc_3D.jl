@@ -70,7 +70,7 @@ function runexample()
         else
             println("  Source NOT on a grid point")
             #coordsrc1 = [hgrid*(grd.nx÷2)+0.99*grd.hgrid/2  hgrid*(grd.ny÷2)+0.99*grd.hgrid/2 hgrid*(grd.nz÷2)+0.99*grd.hgrid/2]
-            coordsrc1 = [hgrid*(grd.nx-1.75)  hgrid*(grd.ny-2.4) hgrid*(grd.nz-2.3)]
+            coordsrc1 = [hgrid*(grd.nx-3.75)  hgrid*(grd.ny-4.4) hgrid*(grd.nz-2.3)]
         end
 
         println("\n-------------- forward  ----------------")

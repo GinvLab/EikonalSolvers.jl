@@ -17,6 +17,8 @@ $(TYPEDEF)
 
 A structure holding the 2D grid parameters, geometry and size.
 
+$(TYPEDFIELDS)
+
 The fields are:    
 - `hgrid`: spacing of the grid nodes (same for x and y)
 - `xinit, yinit`: origin of the coordinates of the grid
@@ -26,7 +28,7 @@ The fields are:
 
 # Example
 ```julia-repl
-julia> Grid2D(hgrid=5.0,xinit=0.0,yinit=0.0,nx=300,ny=250)
+julia> Grid2DCart(hgrid=5.0,xinit=0.0,yinit=0.0,nx=300,ny=250)
 ```
 """
 struct Grid2DCart <: AbstractGridEik2D
@@ -69,7 +71,7 @@ The fields are:
 
 # Example
 ```julia-repl
-julia> Grid3D(hgrid=5.0,xinit=0.0,yinit=0.0,zinit=0.0,nx=60,ny=60,nz=40)
+julia> Grid3DCart(hgrid=5.0,xinit=0.0,yinit=0.0,zinit=0.0,nx=60,ny=60,nz=40)
 ```
 """
 struct Grid3DCart <: AbstractGridEik3D
@@ -106,6 +108,8 @@ end
 $(TYPEDSIGNATURES)
 
 A structure holding the 2D SPHERICAL grid parameters, geometry and size.
+
+$(TYPEDFIELDS)
 
 The fields are:    
 - `Δr`: spacing of the grid nodes along the radial coordinate r
@@ -150,6 +154,8 @@ $(TYPEDSIGNATURES)
 
 A structure holding the 3D SPHERICAL grid parameters, geometry and size.
 
+$(TYPEDFIELDS)
+
 The fields are:    
 - `Δr`: spacing of the grid nodes along the radial coordinate r
 - `Δθ`: spacing of the grid nodes along the θ coordinate
@@ -159,7 +165,7 @@ The fields are:
 
 # Example
 ```julia-repl
-    julia> Grid3DSphere(Δr=15.0,Δθ=2.0,Δφ=1.5,nr=10,nθ=15,nφ=12,rinit=500.0,θinit=20.0,φinit=0.0)
+julia> Grid3DSphere(Δr=15.0,Δθ=2.0,Δφ=1.5,nr=10,nθ=15,nφ=12,rinit=500.0,θinit=20.0,φinit=0.0)
 ```
 """
 struct Grid3DSphere <: AbstractGridEik3D
@@ -229,7 +235,7 @@ struct ExtraParams
     function ExtraParams(; allowfixsqarg::Bool=false,
                          refinearoundsrc::Bool=true,
                          manualGCtrigger::Bool=false,
-                         parallelkind::Symbol=:sharedmem,
+                         parallelkind::Symbol=:serial,
                          radiussmoothgradsrc::Integer=3,
                          smoothgradkern::Integer=0,
                          grdrefpars::GridRefinementPars=GridRefinementPars(downscalefactor=3,noderadius=3) )
@@ -260,41 +266,6 @@ struct MapOrderGridFMM{N}
         return new{Ndim}(lfmm2grid,lgrid2fmm,nxnynz)
     end
 end
-
-
-#abstract type AbstractMapOrderGridFMM end
-
-# struct MapOrderGridFMM2D <: AbstractMapOrderGridFMM
-#     "Linear grid indices in FMM order (as visited by FMM)"
-#     lfmm2grid::Vector{Int64} # idx_fmmord
-#     "Linear FMM indices in grid order"
-#     lgrid2fmm::Vector{Int64} # idx_gridord
-#     grsize::NTuple{2,Int64}
-
-#     function MapOrderGridFMM2D(nx,ny)
-#         nxy = nx*ny
-#         lfmm2grid = zeros(Int64,nxy)
-#         lgrid2fmm = zeros(Int64,nxy)
-#         return new(lfmm2grid,lgrid2fmm,(nx,ny))
-#     end
-# end
-
-
-# struct MapOrderGridFMM3D <: AbstractMapOrderGridFMM
-#     "Linear grid indices in FMM order (as visited by FMM)"
-#     lfmm2grid::Vector{Int64} # idx_fmmord
-#     "Linear FMM indices in grid order"
-#     lgrid2fmm::Vector{Int64} # idx_gridord
-#     grsize::NTuple{3,Int64}
-
-#     function MapOrderGridFMM3D(nx,ny,nz)
-#         nxyz = nx*ny*nz
-#         lfmm2grid = zeros(Int64,nxyz)
-#         lgrid2fmm = zeros(Int64,nxyz)
-#         return new(lfmm2grid,lgrid2fmm,(nx,ny,nz))
-#     end
-# end
-
 
 ########################################################
 
