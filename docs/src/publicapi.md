@@ -29,6 +29,7 @@ eikttimemisfit
 ## Extra parameters
 ```@docs
 ExtraParams
+GridRefinementPars
 ```
 
 ## HMCsampler wrapper

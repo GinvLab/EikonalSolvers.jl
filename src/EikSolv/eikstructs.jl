@@ -202,8 +202,17 @@ end
 
 ###############################################################
 
+"""
+$(TYPEDEF)
+
+# Fields 
+
+$(TYPEDFIELDS)
+"""
 Base.@kwdef struct GridRefinementPars
+    "Downscaling factor for refined grid around the source"
     downscalefactor::Int64
+    "Number of (coarse) grid nodes (radius) within which to refine the grid"
     noderadius::Int64
 end
 

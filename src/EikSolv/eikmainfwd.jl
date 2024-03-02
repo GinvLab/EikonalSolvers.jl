@@ -188,9 +188,7 @@ function ttforwsomesrc(vel::Array{Float64,N},coordsrc::Array{Float64,2},
 
         if returntt
             ## Compute traveltime and interpolation at receivers in one go for parallelization
-            #ttGRPSRC[:,:,s] .= fmmvars.ttime
             ttGRPSRC[s] = copy(fmmvars.ttime) ## copy!!!
-            @show s,extrema(ttGRPSRC[s])
         end
     end
 

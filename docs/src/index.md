@@ -12,13 +12,18 @@ Depth = 2
 
 # EikonalSolvers's documentation
 
-A library to perform seismic traveltime computations by solving the eikonal equation in two (2D) and three dimensions (3D) with the possibility of computing the gradient of a misfit function with respect to the velocity model. The coordinate system can be either regular Cartesian or spherical. The forward algorithm is based on a fast marching (FMM) method (2nd order) with a refinement of the grid around the source location. The computation of the gradient relies on the discrete adjoint method.
+A library to perform seismic traveltime computations by solving the eikonal equation in two (2D) and three dimensions (3D) with the possibility of computing the gradient of a misfit function with respect to the velocity model and the source location. The coordinate system can be either regular Cartesian or spherical. The forward algorithm is based on a fast marching (FMM) method (2nd order) with a refinement of the grid around the source location. The computation of the gradient relies on the discrete adjoint method.
 
 For historical reasons, alternative solvers are available (poorly maintained), including a first order FMM method and the fast sweeping (FS) method for global updates with different kinds of local stencils. Additionally, a continuos adjoint method to calculate the gradient is also provided.
 
 Both forward and gradient (adjoint) computations can be run in paralle using either Julia's distributed computing functions for distributed memory or threads for multicore processor. The parallelisation scheme is "by source", distributing calculations for different seismic sources to different processors.
 
-This code is part of a larger project `HMCLab` ([^ZuninoGebraadetal2023]) targeting probabilistic geophysical inverse problems.
+This code is part of a larger project `HMCLab` ([^ZuninoGebraadetal2023]) targeting probabilistic geophysical inverse problems. Please cite the following papers if you use this code:
+
+* Andrea Zunino, Scott Keating, Andreas Fichtner, **Eikonal tomography using the discrete adjoint state method**, in preparation.
+
+* Andrea Zunino, Lars Gebraad, Alessandro Ghirotto, Andreas Fichtner, **HMCLab: a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo method**, Geophysical Journal International, Volume 235, Issue 3, December 2023, Pages 2979–2991  [https://doi.org/10.1093/gji/ggad403](https://doi.org/10.1093/gji/ggad403)
+
 
 ## Installation
 
@@ -61,9 +66,9 @@ Regarding the gradient of the misfit function with respect to velocity, the misf
 ```math
 S = \dfrac{1}{2} \sum_i \dfrac{\left( \mathbf{\tau}_i^{\rm{calc}}(\mathbf{v})-\mathbf{\tau}_i^{\rm{obs}} \right)^2}{\sigma_i^2} \, .
 ```
-The gradient of the above functional with respect to the velocity model ``\dfrac{\partial S}{\partial \mathbf{v}}`` can be calculated efficiently using the _adjoint_ state method (e.g., [^LeungQian2006]). 
+The gradient of the above functional with respect to the velocity model ``\dfrac{d S}{d \mathbf{v}}`` can be calculated efficiently using the _adjoint_ state method (e.g., [^LeungQian2006], [^TreisterHaber2016]]). 
 
-Gradient computations performed in this code using the __discrete adjoint state method__ , which takes into account the non-linearity of the forward problem - _no_ linearisation of the forward model and _no_ rays are employed. The computational cost is almost independent of the number of receivers and, because of the discretization, the result is a "diffuse" sensitivity around the theoretical rays (see an example in the following). 
+In this package we employ the __discrete adjoint state method__ to compute both gradients with respect to velocity and source location [^Zuninoetal2024], which takes into account the non-linearity of the forward problem - i.e., _no_ linearisation of the forward model and _no_ rays are employed. The computational cost is almost independent of the number of receivers and, because of the discretization, the result is a "diffuse" sensitivity around the theoretical rays (see an example in the following). 
 
 
 ## Exported functions / API
@@ -87,11 +92,13 @@ Finally, the misfit functional calculation:
 
 Moreover, a convenience module `HMCTraveltimes` (see [`EikonalSolvers.HMCtraveltimes`](@ref)) is provided to facilitate the use of `EikonalSolvers` within the framework of Hamiltonian Monte Carlo inversion (see e.g. [^ZuninoMosegaard2018]) by employing the package `HMCsampler`. 
 
+[`ExtraParams`](@ref) also may play an important role in certain user cases.
+
+
 Additional functions are provided to perform forward and inverse calculations using different methods than the defaults. These functions are there for historical reasons and are pooly maintained. Do not rely on them.
 * [`eiktraveltime2Dalt`](@ref) and [`eiktraveltime3Dalt`](@ref) which compute traveltimes using either a fast marching method ([^Sethian1996], [^SethianPopovici1999]) using Podvin-Lecomte stencils ([^PodvinLecomte1991]) or a fast sweeping method (FSM) ([^LeungQian2006]) using Podvin-Lecomte stencils ([^PodvinLecomte1991]) ;
 * [`eikgradient2Dalt`](@ref) and [`eikgradient3Dalt`](@ref), which computes the 3D gradient of the misfit function with respect to velocity using either FMM or FSM ([^LeungQian2006],[^Taillandieretal2009]) and different stencils depending on user choices.
 
-[`ExtraParams`](@ref) also may play an important role in certain user cases.
 
 
 ## Parallelisation
@@ -110,12 +117,12 @@ Let's start with a complete example:
 
 ```@example full
 using EikonalSolvers
-grd = Grid2DCart(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)       # create the Grid2D struct
+grd = Grid2DCart(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)  # create the Grid2D struct
 nsrc = 4
 nrec = 10
 coordsrc = [grd.hgrid.*LinRange(10,290,nsrc)  grd.hgrid.*200.0.*ones(nsrc)] # coordinates of the sources (4 sources)
 coordrec = [ [grd.hgrid.*LinRange(8,294,nrec) grd.hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
-velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
+velmod = 2.5 .* ones(grd.nx,grd.ny)   # velocity model
 
 # run the traveltime computation with default algorithm ("ttFMM_hiord")
 ttimepicks = eiktraveltime(velmod,grd,coordsrc,coordrec)
@@ -165,7 +172,7 @@ fig = Figure(size=(800,300))
 
 ax1 = Axis(fig[1,1][1,1],title="Velocity model, sources and receivers",xlabel="x [Km]",ylabel="y [Km]")
 hm = heatmap!(ax1,grd.x,grd.y,velmod,colormap=:rainbow1) 
-Colorbar(fig[1,1][1,2],hm)
+Colorbar(fig[1,1][1,2],hm,label="Velocity [km/s]")
 for cr in coordrec
 	scatter!(ax1,cr[:,1],cr[:,2],marker=:dtriangle,color=:black)
 end
@@ -201,7 +208,7 @@ fig = Figure(size=(800,300))
 s = 1
 ax1 = Axis(fig[1,1][1,1],title="Traveltime for source #$s",xlabel="x [Km]",ylabel="y [Km]")
 hm = heatmap!(ax1,grd.x,grd.y,ttimegrid[s],colormap=:rainbow1) 
-Colorbar(fig[1,1][1,2],hm)
+Colorbar(fig[1,1][1,2],hm,label="Traveltime [s]")
 contour!(ax1,grd.x,grd.y,ttimegrid[s],color=:black)
 for cr in coordrec
 	scatter!(ax1,cr[:,1],cr[:,2],marker=:dtriangle,color=:black)
@@ -212,7 +219,7 @@ ax1.yreversed=true
 s = 3
 ax2 = Axis(fig[1,2][1,1],title="Traveltime for source #$s",xlabel="x [Km]",ylabel="y [Km]")
 hm = heatmap!(ax2,grd.x,grd.y,ttimegrid[s],colormap=:rainbow1) 
-Colorbar(fig[1,2][1,2],hm)
+Colorbar(fig[1,2][1,2],hm,label="Traveltime [s]")
 contour!(ax2,grd.x,grd.y,ttimegrid[s],color=:black)
 for cr in coordrec
 	scatter!(ax2,cr[:,1],cr[:,2],marker=:dtriangle,color=:black)
@@ -257,7 +264,7 @@ The resulting traveltime array on the grid is returned as a three-dimensional ar
 <!-- ![sph2dttgrad](./images/sph2dttgrad.png) -->
 
 
-## Example of gradient calculation
+## Example of gradient w.r.t velocity calculation
 
 ### Cartesian coordinates
 
@@ -268,8 +275,8 @@ hgrid=0.5
 grd = Grid2DCart(hgrid=hgrid,xinit=0.0,yinit=0.0,nx=300,ny=220)         # create the Grid2D struct
 nsrc = 4
 nrec = 10
-coordsrc = [hgrid.*LinRange(10.0,290.0,nsrc)   hgrid.*200.0.*ones(nsrc)] # coordinates of the sources (4 sources)
-coordrec = [[hgrid.*LinRange(8.0,200.0,nrec)  hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
+coordsrc = [0.95*hgrid.*LinRange(12,290,nsrc)   hgrid.*207.0.*ones(nsrc)] # coordinates of the sources (4 sources)
+coordrec = [[hgrid.*LinRange(8.0,290.0,nrec)  hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
 velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
 # increasing velocity with depth...
 for i=1:grd.ny
@@ -291,7 +298,7 @@ dobs = ttpicks .+ noise
 nothing # hide
 ```
 
-Now we can finally compute the gradient of the misfit functional (see above) at a given point, i.e., the gradient is computed at a given velocity model: ``\dfrac{\partial S}{\partial \mathbf{v}} \Big|_{\mathbf{v}_0}``.
+Now we can finally compute the gradient of the misfit functional (see above) at a given point, i.e., the gradient is computed at a given velocity model: ``\dfrac{d S}{d \mathbf{v}} \Big|_{\mathbf{v}_0}``.
 ```@example grad1
 # create a guess/"current" model
 vel0 = 2.3 .* ones(grd.nx,grd.ny)
@@ -304,10 +311,38 @@ end
 gradvel = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel)
 nothing # hide
 ```
-![ttarrays](./images/gradient.png)
+Finally, plot the rsults 
+```@example grad1
+using CairoMakie
+
+fig = Figure(size=(800,300))
+
+ax1 = Axis(fig[1,1][1,1],title="Reference velocity model",xlabel="x [Km]",ylabel="y [Km]")
+hm = heatmap!(ax1,grd.x,grd.y,vel0,colormap=:rainbow1) 
+Colorbar(fig[1,1][1,2],hm,label="Velocity [km/s]")
+for cr in coordrec
+	scatter!(ax1,cr[:,1],cr[:,2],marker=:dtriangle,color=:black)
+end
+scatter!(ax1,coordsrc[:,1],coordsrc[:,2],marker=:circle,color=:black)
+ax1.yreversed=true
+
+ax2 = Axis(fig[1,2][1,1],title="Gradient w.r.t. velocity",xlabel="x [Km]",ylabel="y [Km]")
+vmax = maximum(abs.(gradvel))
+hm = heatmap!(ax2,grd.x,grd.y,gradvel,colormap=:seismic,colorrange=(-vmax,vmax)) 
+Colorbar(fig[1,2][1,2],hm,label="Gradient")
+for cr in coordrec
+	scatter!(ax2,cr[:,1],cr[:,2],marker=:dtriangle,color=:black)
+end
+scatter!(ax2,coordsrc[:,1],coordsrc[:,2],marker=:circle,color=:black)
+ax2.yreversed=true
+
+save("images/grad-vel.png",fig) # hide
+nothing # hide
+```
+![ttarrays](./images/grad-vel.png)
 The calculated gradient is an array with the same shape than the velocity model.
 ```@example grad1
-size(gradvel)
+@show size(gradvel)
 ``` 
 
 <!-- ### Spherical coordinates -->
@@ -342,12 +377,60 @@ size(gradvel)
 <!-- An example of a (thresholded) sensitivity kernel and contouring of traveltimes in 3D, using spherical coordinates, is depicted in the following plot: -->
 <!-- ![grad3D](./images/examplegrad3Dcarsph.png) -->
 
+## Example of gradient w.r.t source location calculation
+
+Here a synthetic example of 2D gradient computation w.r.t. source location in Cartesian coordinates is illustrated. In reality, traveltime data are "measured" from recorded seismograms, however, here we first create some synthetic "observed" traveltimes using a given velocity model. First the grid and velocity model are set up, then forward calculations are performed, as in the section above [Example of forward calculations](@ref).
+```@example gradsrcloc
+using EikonalSolvers
+hgrid=0.5
+grd = Grid2DCart(hgrid=hgrid,xinit=0.0,yinit=0.0,nx=300,ny=220)         # create the Grid2D struct
+nsrc = 4
+nrec = 10
+coordsrc = [0.95*hgrid.*LinRange(12,290,nsrc)   hgrid.*207.0.*ones(nsrc)] # coordinates of the sources (4 sources)
+coordrec = [[hgrid.*LinRange(8.0,290.0,nrec)  hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
+velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
+# increasing velocity with depth...
+for i=1:grd.ny
+  velmod[:,i] = 0.034 * i .+ velmod[:,i]
+end
+
+# run the traveltime computation with default algorithm ("ttFMM_hiord")
+ttpicks = eiktraveltime(velmod,grd,coordsrc,coordrec)
+nothing # hide
+```
+Then the "observed" traveltime data are created by adding some Gaussian noise to the traveltimes computed above to simulate real measurements.
+```@example gradsrcloc
+# standard deviation of error on observed data
+stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc]
+# generate a "noise" array to simulate real data
+noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
+# add the noise to the synthetic traveltime data
+dobs = ttpicks .+ noise 
+nothing # hide
+```
+Now the gradient w.r.t. source location, ``\dfrac{d S}{d \mathbf{x}^{\rm src}}``, can be computed as follows
+```@example gradsrcloc
+# calculate the gradient of the misfit function w.r.t. source location
+#   notice the last argument :gradsrcloc
+gradsrcloc = eikgradient(velmod,grd,coordsrc,coordrec,dobs,stdobs,:gradsrcloc)
+nothing # hide
+```
+The gradient is returned as an array where each row contains the partial derivatives for each source:
+```@example gradsrcloc
+# now print the partial derivatives
+@show(gradsrcloc)
+```
+
 
 # References
 
-[^ZuninoGebraadetal2023]: Zunino A., Gebraad, L., Ghirotto, A. and Fichtner, A., (2023). HMCLab a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo algorithm, submitted, JGR.
+[^ZuninoGebraadetal2023]: Zunino A., Gebraad, L., Ghirotto, A. and Fichtner, A., (2023). HMCLab a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo algorithm, Geophysical Journal International, Volume 235, Issue 3, December 2023, Pages 2979–2991, https://doi.org/10.1093/gji/ggad403.
 
+[^Zuninoetal2024]: Andrea Zunino, Scott Keating, Andreas Fichtner, Eikonal tomography using the discrete adjoint state method, in preparation.
+ 
 [^LeungQian2006]: Leung, S. and Qian, J. (2006). An adjoint state method for three-dimensional transmission traveltime tomography using first-arrivals. Communications in Mathematical Sciences, 4(1), 249-266.
+
+[^TreisterHaber2016]: Treister, Eran & Haber, Eldad. (2016). A fast marching algorithm for the factored eikonal equation. Journal of Computational Physics. 324. 210–225. 10.1016/j.jcp.2016.08.012. 
 
 [^PodvinLecomte1991]: Podvin, P. and Lecomte, I. (1991). Finite difference computation of traveltimes in very contrasted velocity models: a massively parallel approach and its associated tools. Geophysical Journal International, 105, 271-284.
 

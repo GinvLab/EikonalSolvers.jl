@@ -31,7 +31,7 @@ export eiktraveltime3Dalt,eikgradient3Dalt
 
 export EikonalProb
 
-export ExtraParams
+export ExtraParams,GridRefinementPars
 
 
 # println("Hello -> using TimerOutputs")
