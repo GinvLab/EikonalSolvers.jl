@@ -14,9 +14,9 @@ function test_fwdtt_2D_constvel()
     constvelmod = 2500.0 .* ones(grd.nx,grd.ny)
     coordrec = [[grd.x[2] grd.y[3]]]
 
-    coordsrc = [grd.hgrid/2+grd.x[grd.nx÷2]  grd.hgrid/2+grd.y[grd.ny÷2]]
+    coordsrc = [grd.hgrid/5+grd.x[grd.nx÷2]  grd.hgrid/1.2+grd.y[grd.ny÷2]]
    
-    extrapars = ExtraParams(refinearoundsrc=true)
+    extrapars = ExtraParams(refinearoundsrc=false)
     println("Refinement around source? $(extrapars.refinearoundsrc) ")
     _,ttime = eiktraveltime(constvelmod,grd,coordsrc,coordrec,
                             returntt=true,extraparams=extrapars)

@@ -662,9 +662,10 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
         ##  Loop over same min values
         ##    (pop all at the same time...)
         ##
-        accptijk_ls = MMatrix{totnpts,ND,Int64}(undef)
+        maxnpop = 16 ##  ???
+        accptijk_ls = MMatrix{maxnpop,ND,Int64}(undef)
         sameminval = true
-        ipopped::Int64 = 0
+        npopped::Int64 = 0
         while sameminval
             
             ## if no top left exit the game...
@@ -774,13 +775,14 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
             end # if isthisrefinementsrc      
             ##===================================
             
-            ipopped += 1
-            accptijk_ls[ipopped,:] .= accptijk
+            npopped += 1
+            accptijk_ls[npopped,:] .= accptijk
         end ## while sameminval
         ##===================================
 
-        npoppts = ipopped
-        for ipop=1:npoppts
+
+        ## loop over all the popped points
+        for ipop=1:npopped
             
             ##===========================================
             ## try all neighbors of newly accepted point
