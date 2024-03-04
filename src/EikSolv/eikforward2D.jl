@@ -101,21 +101,33 @@ function sourceboxloctt!(fmmvars::FMMVars2D,vel::Array{Float64,2},srcpos::Abstra
                          grd::Grid2DCart )
 
     ## source location, etc.      
-    mindistsrc = 10.0*eps()
+    #mindistsrc = 10.0*eps()
     xsrc,ysrc=srcpos[1],srcpos[2]
 
     # get the position and velocity of corners around source
-    _,velcorn,ijsrc = bilinear_interp(vel,grd,srcpos,outputcoeff=true)
-    
-    ## Set srcboxpar
-    Ncorn = size(ijsrc,1)
-    fmmvars.srcboxpar.ijksrc .= ijsrc
-    fmmvars.srcboxpar.xyzsrc .= srcpos
-    fmmvars.srcboxpar.velcorn .= velcorn
+    ijcorn = findenclosingbox(grd,srcpos)
+    Ncorn = size(ijcorn,1)
 
-    ## set ttime around source ONLY FOUR points!!!
+    if size(ijcorn,1)==1
+        ##
+        ## Source on a grid point, re-allocate some arrays...
+        ##        
+        fmmvars.srcboxpar.ijksrc   = MMatrix{Ncorn,2,Int64}(undef)
+        fmmvars.srcboxpar.velcorn  = MVector{Ncorn,Float64}(undef)
+        fmmvars.srcboxpar.distcorn = MVector{Ncorn,Float64}(undef)
+    end
+
+    ## Set srcboxpar fields
+    for i=1:Ncorn
+        fmmvars.srcboxpar.velcorn[i] = vel[ijcorn[i,1],ijcorn[i,2]]
+    end
+    fmmvars.srcboxpar.ijksrc .= ijcorn
+    fmmvars.srcboxpar.xyzsrc .= srcpos
+
+
+    ## set ttime around source 
     for l=1:Ncorn
-        i,j = ijsrc[l,:]
+        i,j = ijcorn[l,:]
 
         ## set status = accepted == 2
         fmmvars.status[i,j] = 2
@@ -131,9 +143,13 @@ function sourceboxloctt!(fmmvars::FMMVars2D,vel::Array{Float64,2},srcpos::Abstra
         # set the traveltime to corner
         fmmvars.ttime[i,j] = distcorn / vel[i,j] #velsrc
 
+        @show (i,j)
+        @show distcorn,fmmvars.ttime[i,j]
+        @show (xp,yp),(xsrc,ysrc)
+
     end
 
-    return #ijsrc
+    return
 end 
 
 ##########################################################################

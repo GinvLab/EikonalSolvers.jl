@@ -230,39 +230,6 @@ function createFMMvars(grd::AbstractGridEik3D;
     return fmmvars
 end
 
-
-######################################################
-
-# function createAdjointVars(grd::AbstractGridEik2D;
-#                            amIcoarsegrid::Bool,
-#                            refinearoundsrc::Bool,
-#                            allowfixsqarg::Bool)
-#     if typeof(grd)==Grid2DCart
-#         n1,n2 = grd.nx,grd.ny
-#     elseif typeof(grd)==Grid2DSphere
-#         n1,n2 = grd.r,grd.θ
-#     end  
-#     adjvars = FMMVars2D(n1,n2,amIcoarsegrid=true,
-#                         refinearoundsrc=refinearoundsrc,
-#                         allowfixsqarg=allowfixsqarg)
-#     return adjvars
-# end
-
-# function createAdjointVars(grd::AbstractGridEik3D;
-#                            amIcoarsegrid::Bool,
-#                            refinearoundsrc::Bool,
-#                            allowfixsqarg::Bool)
-#     if typeof(grd)==Grid3DCart
-#         n1,n2,n3 = grd.nx,grd.ny,grd.nz
-#     elseif typeof(grd)==Grid3DSphere
-#         n1,n2,n3 = grd.r,grd.θ,grd.φ
-#     end 
-#     adjvars = FMMVars3D(n1,n2,n3,amIcoarsegrid=true,
-#                         refinearoundsrc=refinearoundsrc,
-#                         allowfixsqarg=allowfixsqarg)
-#     return adjvars
-# end
-
 #######################################################
 
 # Default constructor for forward calculations (adjvars=nothing)
@@ -333,7 +300,6 @@ function ttFMM_hiord!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},src::Abstra
         #  because the size of the grid may change when hitting borders, etc.
         runrefinementaroundsrc!(fmmvars,vel,src,grd,adjvars,extrapars)
 
-        #@show size(fmmvars.srcboxpar.ijsrc)
 
     elseif fmmvars.refinearoundsrc && dodiscradj
         ##===================================================
@@ -395,18 +361,7 @@ function runrefinementaroundsrc!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
     ## create the refined grid
     grd_fine,srcrefvars = createfinegrid(grd,xyzsrc,vel,
                                          extrapars.grdrefpars)
-    # @show grd_fine
-    # @show srcrefvars.ijcoarse
-    # @show srcrefvars.outxyminmax
-    # @show size(srcrefvars.nearneigh_oper)
-    # @show grd_fine.nx,grd_fine.ny
-
-    # if simtype==:cartesian
-    #     n1_fine,n2_fine = grd_fine.nx,grd_fine.ny
-    # elseif simtype==:spherical
-    #     n1_fine,n2_fine = grd_fine.nr,grd_fine.nθ
-    # end
-    
+  
     ## pre-allocate ttime and status arrays plus the binary heap
     # fmmvars_fine = FMMVars2D(n1_fine,n2_fine,amIcoarsegrid=false,
     #                          refinearoundsrc=false,
@@ -447,8 +402,7 @@ function runrefinementaroundsrc!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
 
     end
     ##==================================================
-
-    ## source location, etc.      
+    ## source location, etc.
     sourceboxloctt!(fmmvars_fine,srcrefvars.velcart_fine,xyzsrc,grd_fine)
 
     ##==================================================================
@@ -530,7 +484,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     vlen = prod(grsize)
     ND = ndims(vel)
     @assert ND==N
-
     
     ##======================================================
     # MVector size needs to be know at compile time, so...
@@ -546,6 +499,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                     0  1;
                    -1  0;
                     0 -1]
+
     elseif ND==3
         # neighboring points
         neigh = SA[ 1  0  0;
@@ -702,6 +656,10 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
         if fmmvars.bheap.Nh[]<1
             break
         end
+
+        @show fmmvars.bheap.nodes[1:10]
+        error()
+        
         # pop value from min-heap
         acchan,tmptt = pop_minheap!(fmmvars.bheap)
         # get the indices
@@ -998,7 +956,6 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
         #n1_coarse,n2_coarse,n3_coarse = grd.nx,grd.ny,grd.nz
         grsize_coarse = size(vel)
         ijksrccorn = findenclosingbox(grd,xyzsrc)
-
             
     elseif simtype==:spherical
         # n1_coarse,n2_coarse,n3_coarse = grd.nr,grd.nθ,grd.φ
@@ -1201,35 +1158,60 @@ function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::Abstract
         error("findclosestnode(): Not yet implemented for $(typeof(grd))")
     end
 
-    h = grd.hgrid
-    # make sure to get integers
-    ixyz = floor.(Int64,(xyzsrc.-xyzinit)./h) .+ 1 # .+1 julia indexing...
+    # xyzres = (xyzsrc.-xyzinit)./grd.hgrid
+    # # make sure to get integers
+    # ixyz = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...
 
-    ## if at the edges of domain choose previous square...
+    xyzres = MVector{Ndim,Float64}(undef)
+    remainder = MVector{Ndim,Float64}(undef)
     for d=1:Ndim
-        if ixyz[d]==grsize[d]
-            ixyz[d] -= 1 
-        end
+        xyzres[d],remainder[d] = divrem(xyzsrc[d]-xyzinit[d],grd.hgrid)
     end
+    ixyz = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...            
 
-    ## vvvv WRITE the stuff below in a better way!!!  vvvv
-    ## ORDER MATTERS for the rest of the algorithm!!
-    if Ndim==2
-        ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ixyz';
-                                                 (ixyz .+ (1,0))';
-                                                 (ixyz .+ (0,1))';
-                                                 (ixyz .+ (1,1))'])
-    elseif Ndim==3
-        ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ixyz';
-                                                 (ixyz .+ (1,0,0))';
-                                                 (ixyz .+ (0,1,0))';
-                                                 (ixyz .+ (0,0,1))';
-                                                 (ixyz .+ (1,1,0))';
-                                                 (ixyz .+ (0,1,1))';
-                                                 (ixyz .+ (1,0,1))';
-                                                 (ixyz .+ (1,1,1))'])
+    ## set an absolute tolerance for the remainder
+    atol = sqrt(eps())
+    if all(isapprox.(remainder,0.0,atol=1e-8))   #all(remainder.==0.0)
+        #####################################################
+        ##
+        ##  The point COINCIDES with a grid point
+        ##
+        ijksrccorn = SMatrix{1,Ndim,Int64}(ixyz')
+        return ijksrccorn
+
+    else
+        #####################################################
+        ##
+        ##  The point does NOT coincide with a grid point
+        ##
+
+        ## if at the edges of domain choose previous square...
+        for d=1:Ndim
+            if ixyz[d]==grsize[d]
+                ixyz[d] -= 1 
+            end
+        end
+
+        ## vvvv WRITE the stuff below in a better way!!!  vvvv
+        ## ORDER MATTERS for the rest of the algorithm!!
+        if Ndim==2
+            ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ixyz';
+                                                     (ixyz .+ (1,0))';
+                                                     (ixyz .+ (0,1))';
+                                                     (ixyz .+ (1,1))'])
+        elseif Ndim==3
+            ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ixyz';
+                                                     (ixyz .+ (1,0,0))';
+                                                     (ixyz .+ (0,1,0))';
+                                                     (ixyz .+ (0,0,1))';
+                                                     (ixyz .+ (1,1,0))';
+                                                     (ixyz .+ (0,1,1))';
+                                                     (ixyz .+ (1,0,1))';
+                                                     (ixyz .+ (1,1,1))'])
+        end
+        return ijksrccorn
+        
     end
-    return ijksrccorn
 end
 
 #############################################################

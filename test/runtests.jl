@@ -7,7 +7,9 @@ using EikonalSolvers
 # Run tests
 
 # get all the functions
-include("test_suite.jl")
+include("test_utils.jl")
+include("test_cartesian.jl")
+include("test_spherical.jl")
 
 
 testname = ["forward traveltime 2D FMM 2nd order (Cartesian coord.)", "forward traveltime 2D alternative (Cartesian coord.)",

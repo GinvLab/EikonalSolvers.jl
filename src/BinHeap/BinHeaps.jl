@@ -105,7 +105,6 @@ function swap_nodes_heap!(h::Union{BinHeapMax,BinHeapMin},p::Integer,q::Integer)
 
     # @show  h.handles[p],h.idxhan[p]
     # @show  h.handles[q],h.idxhan[q]
-    
     return   
 end
 

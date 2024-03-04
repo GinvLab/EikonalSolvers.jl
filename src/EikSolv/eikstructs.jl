@@ -247,7 +247,7 @@ struct ExtraParams
                          parallelkind::Symbol=:serial,
                          radiussmoothgradsrc::Integer=3,
                          smoothgradkern::Integer=0,
-                         grdrefpars::GridRefinementPars=GridRefinementPars(downscalefactor=3,noderadius=3) )
+                         grdrefpars::GridRefinementPars=GridRefinementPars(downscalefactor=5,noderadius=3) )
         
         if !(parallelkind in [:serial,:sharedmem,:distribmem])
             error("ExtraParams(): 'parallelkind' must be one of :serial, :sharedmem or :distribmem")
@@ -385,7 +385,7 @@ end
 
 ####################################
 
-struct SourceBoxParams
+mutable struct SourceBoxParams
     "(i,j) positions of the corners surrounding the source location"
     ijksrc::MArray
     "(x,y) position of the source"
@@ -401,9 +401,6 @@ end
 mutable struct SourcePtsFromFineGrid
     ijksrc::Matrix{Int64} 
 end
-
-######################################################
-
 
 ######################################################
 
