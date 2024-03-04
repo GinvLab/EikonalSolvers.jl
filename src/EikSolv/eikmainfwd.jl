@@ -651,156 +651,181 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     firstwarning=true
     totnpts = vlen
     for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
-
+   
         ## if no top left exit the game...
         if fmmvars.bheap.Nh[]<1
             break
         end
 
-        @show fmmvars.bheap.nodes[1:10]
-        error()
-        
-        # pop value from min-heap
-        acchan,tmptt = pop_minheap!(fmmvars.bheap)
-        # get the indices
-        lin2cart!(acchan,grsize,accptijk)
-        # set status to accepted
-        fmmvars.status[acchan] = 2 # 2=accepted
-        # set traveltime of the new accepted point
-        fmmvars.ttime[acchan] = tmptt
-
-        
         ##===================================
-        # Discrete adjoint stuff
-        if dodiscradj
-            # store the linear index of FMM order
-            adjvars.idxconv.lfmm2grid[node] = acchan #cart2lin(accptijk,grsize)
-            # store arrival time for first points in FMM order
-            adjvars.fmmord.ttime[node] = tmptt
-            ## total number of traveltimes computed so far
-            adjvars.fmmord.lastcomputedtt[] = node 
-        end
+        ##
+        ##  Loop over same min values
+        ##    (pop all at the same time...)
+        ##
+        accptijk_ls = MMatrix{totnpts,ND,Int64}(undef)
+        sameminval = true
+        ipopped::Int64 = 0
+        while sameminval
+            
+            ## if no top left exit the game...
+            if fmmvars.bheap.Nh[]<1
+                break
+            end
+            
+            # pop value from min-heap
+            acchan,tmptt = pop_minheap!(fmmvars.bheap)
+            if topval_heap(fmmvars.bheap)[1] == tmptt
+                sameminval = true
+            else
+                sameminval = false
+            end
+            # get the indices
+            lin2cart!(acchan,grsize,accptijk)
+            # set status to accepted
+            fmmvars.status[acchan] = 2 # 2=accepted
+            # set traveltime of the new accepted point
+            fmmvars.ttime[acchan] = tmptt
 
-        
-        ##======================================================
-        ## Are we running a refinement around the source? If so, 
-        ##    UPDATE the COARSE GRID
-        ##======================================================
-        if isthisrefinementsrc
-            oncoa,ijk_coarse = isacoarsegridnode(accptijk,downscalefactor,ijkorigincoarse)
-
-            if oncoa
-                # get the linear index/handle 
-                pthan_coarse = cart2lin(ijk_coarse,size(fmmvars_coarse.status))
-                # update stuff
-                fmmvars_coarse.ttime[pthan_coarse]  = fmmvars.ttime[acchan]
-                fmmvars_coarse.status[pthan_coarse] = fmmvars.status[acchan]
-                ijksrc_coarse[counter_ijksrccoarse,:] .= ijk_coarse
-                                
-                ## update counter
-                counter_ijksrccoarse += 1
-                
-                if dodiscradj
-                    ## next line on FINE grid
-                    adjvars.fmmord.onhpoints[node] = true ## adjvars of FINE grid
-                    # Discrete adjoint on COARSE grid
-                    # go from cartesian (i,j) to linear
-                    adjvars_coarse.idxconv.lfmm2grid[counter_adjcoarse] = pthan_coarse
-                                      # cart2lin(ijk_coarse,adjvars_coarse.idxconv.grsize)
-                    # store arrival time for first points in FMM order
-                    adjvars_coarse.fmmord.ttime[counter_adjcoarse] = fmmvars.ttime[acchan]
-                    ## update counter
-                    counter_adjcoarse += 1
-                end
+            ##===================================
+            # Discrete adjoint stuff
+            if dodiscradj
+                # store the linear index of FMM order
+                adjvars.idxconv.lfmm2grid[node] = acchan #cart2lin(accptijk,grsize)
+                # store arrival time for first points in FMM order
+                adjvars.fmmord.ttime[node] = tmptt
+                ## total number of traveltimes computed so far
+                adjvars.fmmord.lastcomputedtt[] = node 
             end
 
-            ##########################################################
-            ##
-            ## If the the accepted point is on the edge of the
-            ##  fine grid, stop computing and jump to coarse grid
-            ##
-            ##########################################################
-            #  if (ia==n1) || (ia==1) || (ja==n2) || (ja==1)
-            #if (ia==1 && !outxmin) || (ia==n1 && !outxmax) || (ja==1 && !outymin) || (ja==n2 && !outymax)
-            if any(accptijk.==1) || any(accptijk.==grsize)
             
-                ## Prevent the difficult case of traveltime hitting the borders but
-                ##   not the coarse grid, which would produce an empty "statuscoarse" and an empty "ttimecoarse".
-                ## Probably needs a better fix..."
-                if count(fmmvars_coarse.status.>0)<1
-                    if firstwarning
-                        @warn("Traveltime hitting the borders but not the coarse grid, continuing.")
-                        firstwarning=false
+            ##======================================================
+            ## Are we running a refinement around the source? If so, 
+            ##    UPDATE the COARSE GRID
+            ##======================================================
+            if isthisrefinementsrc
+                oncoa,ijk_coarse = isacoarsegridnode(accptijk,downscalefactor,ijkorigincoarse)
+
+                if oncoa
+                    # get the linear index/handle 
+                    pthan_coarse = cart2lin(ijk_coarse,size(fmmvars_coarse.status))
+                    # update stuff
+                    fmmvars_coarse.ttime[pthan_coarse]  = fmmvars.ttime[acchan]
+                    fmmvars_coarse.status[pthan_coarse] = fmmvars.status[acchan]
+                    ijksrc_coarse[counter_ijksrccoarse,:] .= ijk_coarse
+                    
+                    ## update counter
+                    counter_ijksrccoarse += 1
+                    
+                    if dodiscradj
+                        ## next line on FINE grid
+                        adjvars.fmmord.onhpoints[node] = true ## adjvars of FINE grid
+                        # Discrete adjoint on COARSE grid
+                        # go from cartesian (i,j) to linear
+                        adjvars_coarse.idxconv.lfmm2grid[counter_adjcoarse] = pthan_coarse
+                        # cart2lin(ijk_coarse,adjvars_coarse.idxconv.grsize)
+                        # store arrival time for first points in FMM order
+                        adjvars_coarse.fmmord.ttime[counter_adjcoarse] = fmmvars.ttime[acchan]
+                        ## update counter
+                        counter_adjcoarse += 1
                     end
+                end
+
+                ##########################################################
+                ##
+                ## If the the accepted point is on the edge of the
+                ##  fine grid, stop computing and jump to coarse grid
+                ##
+                ##########################################################
+                #  if (ia==n1) || (ia==1) || (ja==n2) || (ja==1)
+                #if (ia==1 && !outxmin) || (ia==n1 && !outxmax) || (ja==1 && !outymin) || (ja==n2 && !outymax)
+                if any(accptijk.==1) || any(accptijk.==grsize)
+                    
+                    ## Prevent the difficult case of traveltime hitting the borders but
+                    ##   not the coarse grid, which would produce an empty "statuscoarse" and an empty "ttimecoarse".
+                    ## Probably needs a better fix..."
+                    if count(fmmvars_coarse.status.>0)<1
+                        if firstwarning
+                            @warn("Traveltime hitting the borders but not the coarse grid, continuing.")
+                            firstwarning=false
+                        end
+                        continue
+                    end
+
+                    ##==============================================================
+                    ##  Create the derivative matrices before quitting (sparse)
+                    if dodiscradj
+                        createsparsederivativematrices!(grd,adjvars,fmmvars.status)
+                    end
+                    ##==============================================================
+
+                    ## delete current narrow band to avoid problems when returned to coarse grid
+                    fmmvars_coarse.status[fmmvars_coarse.status.==1] .= 0
+
+                    ###############################################
+                    ##  Save SOURCE points for the COARSE grid!
+                    ##############################################
+                    ## re-allocate srcboxpar.ijksrc of type SourcePtsFromFineGrid (mutable struct)
+                    fmmvars_coarse.srcboxpar.ijksrc = ijksrc_coarse[1:counter_ijksrccoarse-1,:]
+
+                    #println("\n === Hello, quitting the refinement at node $node === ")
+                    return 
+                end
+                
+            end # if isthisrefinementsrc      
+            ##===================================
+            
+            ipopped += 1
+            accptijk_ls[ipopped,:] .= accptijk
+        end ## while sameminval
+        ##===================================
+
+        npoppts = ipopped
+        for ipop=1:npoppts
+            
+            ##===========================================
+            ## try all neighbors of newly accepted point
+            for ne=1:size(neigh,1) 
+                curptijk .= accptijk_ls[ipop,:] .+ neigh[ne,:]
+                # get the linear index/handle 
+                curpthan = cart2lin(curptijk,grsize)
+
+                ## if the point is out of bounds skip this iteration
+                #if (i>n1) || (i<1) || (j>n2) || (j<1)
+                if any(curptijk.<1) || any(curptijk.>grsize)
                     continue
                 end
 
-                ##==============================================================
-                ##  Create the derivative matrices before quitting (sparse)
-                if dodiscradj
-                    createsparsederivativematrices!(grd,adjvars,fmmvars.status)
+                if fmmvars.status[curpthan]==0 ## far, active
+
+                    ## add tt of point to binary heap and give handle
+                    tmptt = calcttpt_2ndord!(fmmvars,vel,grd,curptijk,idD)
+                    # insert new point into min-heap
+                    insert_minheap!(fmmvars.bheap,tmptt,curpthan)
+                    # change status, add to narrow band
+                    fmmvars.status[curpthan]=1
+
+                    if dodiscradj
+                        # codes of chosen derivatives for adjoint
+                        adjvars.codeDeriv[curpthan,:] .= idD
+                    end
+
+                elseif fmmvars.status[curpthan]==1 ## narrow band                
+
+                    # update the traveltime for this point
+                    tmptt = calcttpt_2ndord!(fmmvars,vel,grd,curptijk,idD)
+                    # update the traveltime for this point in the heap
+                    update_node_minheap!(fmmvars.bheap,tmptt,curpthan)
+
+                    if dodiscradj
+                        # codes of chosen derivatives for adjoint
+                        adjvars.codeDeriv[curpthan,:] .= idD
+                    end
+
                 end
-                ##==============================================================
-
-                ## delete current narrow band to avoid problems when returned to coarse grid
-                fmmvars_coarse.status[fmmvars_coarse.status.==1] .= 0
-
-                ###############################################
-                ##  Save SOURCE points for the COARSE grid!
-                ##############################################
-                ## re-allocate srcboxpar.ijksrc of type SourcePtsFromFineGrid (mutable struct)
-                fmmvars_coarse.srcboxpar.ijksrc = ijksrc_coarse[1:counter_ijksrccoarse-1,:]
-
-                #println("\n === Hello, quitting the refinement at node $node === ")
-                return 
-            end
+            end # for ne=1:4
             
-        end # if isthisrefinementsrc      
-        ##===================================
+        end # for ipop=1:npoppts
         
-
-        ##===========================================
-        ## try all neighbors of newly accepted point
-        for ne=1:size(neigh,1) 
-            curptijk .= accptijk .+ neigh[ne,:]
-            # get the linear index/handle 
-            curpthan = cart2lin(curptijk,grsize)
-
-            ## if the point is out of bounds skip this iteration
-            #if (i>n1) || (i<1) || (j>n2) || (j<1)
-            if any(curptijk.<1) || any(curptijk.>grsize)
-                continue
-            end
-
-            if fmmvars.status[curpthan]==0 ## far, active
-
-                ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,curptijk,idD)
-                # insert new point into min-heap
-                insert_minheap!(fmmvars.bheap,tmptt,curpthan)
-                # change status, add to narrow band
-                fmmvars.status[curpthan]=1
-
-                if dodiscradj
-                    # codes of chosen derivatives for adjoint
-                    adjvars.codeDeriv[curpthan,:] .= idD
-                end
-
-            elseif fmmvars.status[curpthan]==1 ## narrow band                
-
-                # update the traveltime for this point
-                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,curptijk,idD)
-                # update the traveltime for this point in the heap
-                update_node_minheap!(fmmvars.bheap,tmptt,curpthan)
-
-                if dodiscradj
-                    # codes of chosen derivatives for adjoint
-                    adjvars.codeDeriv[curpthan,:] .= idD
-                end
-
-            end
-        end # for ne=1:4
-
     end # for node=naccinit+1:totnpts 
 
     ##======================================================

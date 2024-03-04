@@ -143,10 +143,9 @@ function sourceboxloctt!(fmmvars::FMMVars2D,vel::Array{Float64,2},srcpos::Abstra
         # set the traveltime to corner
         fmmvars.ttime[i,j] = distcorn / vel[i,j] #velsrc
 
-        @show (i,j)
-        @show distcorn,fmmvars.ttime[i,j]
-        @show (xp,yp),(xsrc,ysrc)
-
+        # @show (i,j)
+        # @show distcorn,fmmvars.ttime[i,j]
+        # @show (xp,yp),(xsrc,ysrc)
     end
 
     return
