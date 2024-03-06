@@ -90,67 +90,6 @@ function bilinear_interp(f::AbstractArray{Float64,2},grd::AbstractGridEik2D,
     return 
 end
 
-#############################################################
-
-"""
-$(TYPEDSIGNATURES)
-
- Define the "box" of nodes around/including the source.
-"""
-function sourceboxloctt!(fmmvars::FMMVars2D,vel::Array{Float64,2},srcpos::AbstractVector,
-                         grd::Grid2DCart )
-
-    ## source location, etc.      
-    #mindistsrc = 10.0*eps()
-    xsrc,ysrc=srcpos[1],srcpos[2]
-
-    # get the position and velocity of corners around source
-    ijcorn = findenclosingbox(grd,srcpos)
-    Ncorn = size(ijcorn,1)
-
-    if size(ijcorn,1)==1
-        ##
-        ## Source on a grid point, re-allocate some arrays...
-        ##        
-        fmmvars.srcboxpar.ijksrc   = MMatrix{Ncorn,2,Int64}(undef)
-        fmmvars.srcboxpar.velcorn  = MVector{Ncorn,Float64}(undef)
-        fmmvars.srcboxpar.distcorn = MVector{Ncorn,Float64}(undef)
-    end
-
-    ## Set srcboxpar fields
-    for i=1:Ncorn
-        fmmvars.srcboxpar.velcorn[i] = vel[ijcorn[i,1],ijcorn[i,2]]
-    end
-    fmmvars.srcboxpar.ijksrc .= ijcorn
-    fmmvars.srcboxpar.xyzsrc .= srcpos
-
-
-    ## set ttime around source 
-    for l=1:Ncorn
-        i,j = ijcorn[l,:]
-
-        ## set status = accepted == 2
-        fmmvars.status[i,j] = 2
-
-        ## corner position 
-        xp = grd.x[i] 
-        yp = grd.y[j]
-
-        # set the distance from corner to origin
-        distcorn = sqrt((xsrc-xp)^2+(ysrc-yp)^2)
-        fmmvars.srcboxpar.distcorn[l] = distcorn
-
-        # set the traveltime to corner
-        fmmvars.ttime[i,j] = distcorn / vel[i,j] #velsrc
-
-        # @show (i,j)
-        # @show distcorn,fmmvars.ttime[i,j]
-        # @show (xp,yp),(xsrc,ysrc)
-    end
-
-    return
-end 
-
 ##########################################################################
 
 """
@@ -253,7 +192,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
 
                     # save derivative choices
                     axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
-                    
+
                     ##==== 2nd order ================
                     ish2::Int64 = 2*ish
                     jsh2::Int64 = 2*jsh

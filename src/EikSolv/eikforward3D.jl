@@ -145,49 +145,49 @@ end
 
 ###########################################################################
 
-"""
-$(TYPEDSIGNATURES)
+# """
+# $(TYPEDSIGNATURES)
 
- Define the "box" of nodes around/including the source.
-"""
-function sourceboxloctt!(fmmvars::FMMVars3D,vel::Array{Float64,3},srcpos::AbstractVector,
-                         grd::Grid3DCart )
+#  Define the "box" of nodes around/including the source.
+# """
+# function sourceboxloctt!(fmmvars::FMMVars3D,vel::Array{Float64,3},srcpos::AbstractVector,
+#                          grd::Grid3DCart )
 
-    ## source location, etc.      
-    xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
+#     ## source location, etc.      
+#     xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
 
-    # get the position and velocity of corners around source
-    _,velcorn,ijsrc = trilinear_interp(vel,grd,srcpos,outputcoeff=true)
+#     # get the position and velocity of corners around source
+#     _,velcorn,ijsrc = trilinear_interp(vel,grd,srcpos,outputcoeff=true)
     
-    ## Set srcboxpar
-    Ncorn = size(ijsrc,1)
-    fmmvars.srcboxpar.ijksrc .= ijsrc
-    fmmvars.srcboxpar.xyzsrc .= srcpos
-    fmmvars.srcboxpar.velcorn .= velcorn
+#     ## Set srcboxpar
+#     Ncorn = size(ijsrc,1)
+#     fmmvars.srcboxpar.ijksrc .= ijsrc
+#     fmmvars.srcboxpar.xyzsrc .= srcpos
+#     fmmvars.srcboxpar.velcorn .= velcorn
 
-    ## set ttime around source ONLY FOUR points!!!
-    for l=1:Ncorn
-        i,j,k = ijsrc[l,:]
+#     ## set ttime around source ONLY FOUR points!!!
+#     for l=1:Ncorn
+#         i,j,k = ijsrc[l,:]
 
-        ## set status = accepted == 2
-        fmmvars.status[i,j,k] = 2
+#         ## set status = accepted == 2
+#         fmmvars.status[i,j,k] = 2
 
-        ## corner position 
-        xp = grd.x[i] 
-        yp = grd.y[j]
-        zp = grd.z[k]
+#         ## corner position 
+#         xp = grd.x[i] 
+#         yp = grd.y[j]
+#         zp = grd.z[k]
 
-        # set the distance from corner to origin
-        distcorn = sqrt((xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2)
-        fmmvars.srcboxpar.distcorn[l] = distcorn
+#         # set the distance from corner to origin
+#         distcorn = sqrt((xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2)
+#         fmmvars.srcboxpar.distcorn[l] = distcorn
 
-        # set the traveltime to corner
-        fmmvars.ttime[i,j,k] = distcorn / vel[i,j,k]
+#         # set the traveltime to corner
+#         fmmvars.ttime[i,j,k] = distcorn / vel[i,j,k]
 
-    end
+#     end
   
-    return
-end 
+#     return
+# end 
 
 ##########################################################################
 

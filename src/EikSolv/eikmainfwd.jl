@@ -481,7 +481,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
 
     ## Establish a mapping between linear and Cartesian indexing 
     grsize = size(vel)
-    vlen = prod(grsize)
+    totnpts = prod(grsize)
     ND = ndims(vel)
     @assert ND==N
     
@@ -546,14 +546,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
             ######################################
             # store arrival time for first points in FMM order
             ttgrid = fmmvars.ttime[curpthan]
-            ## The following to avoid a singular upper triangular matrix in the
-            ##  adjoint equation. Otherwise there will be a row of only zeros in the LHS.
-            if ttgrid==0.0
-                adjvars.fmmord.ttime[l] = 0.0 #eps()
-                @warn("Source is exactly on a node, spurious results may appear. Work is in progress to fix the problem.")
-            else
-                adjvars.fmmord.ttime[l] = ttgrid
-            end
+            adjvars.fmmord.ttime[l] = ttgrid
 
             ##======================================================
             ##  We are on a source node
@@ -574,7 +567,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     ##======================================================
     if isthisrefinementsrc
         # init source indices array and some counters
-        ijksrc_coarse = Matrix{Int64}(undef,vlen,ND)
+        ijksrc_coarse = Matrix{Int64}(undef,totnpts,ND)
         counter_ijksrccoarse::Int64 = 1
         counter_adjcoarse::Int64 = 1
 
@@ -633,7 +626,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                 insert_minheap!(fmmvars.bheap,tmptt,curpthan)
                 # change status, add to narrow band
                 fmmvars.status[curpthan]=1
-
+@show curptijk,tmptt
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
@@ -644,14 +637,17 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
         end ## for ne=1:size(neigh,1)
     end
 
-    
+
+
+
     ######################################################
     ## main FMM loop
     ######################################################
     firstwarning=true
-    totnpts = vlen
-    for node=naccinit+1:totnpts ## <<<<===| CHECK !!!!
-   
+    node = naccinit
+
+    for iter=1:totnpts-naccinit  #naccinit+1:totnpts ## <<<<===| CHECK !!!!
+
         ## if no top left exit the game...
         if fmmvars.bheap.Nh[]<1
             break
@@ -666,7 +662,13 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
         accptijk_ls = MMatrix{maxnpop,ND,Int64}(undef)
         sameminval = true
         npopped::Int64 = 0
+
         while sameminval
+
+            ##
+            ## Update node index/counter!
+            ##  ( starts from naccinit+1 )
+            node += 1
             
             ## if no top left exit the game...
             if fmmvars.bheap.Nh[]<1
@@ -675,6 +677,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
             
             # pop value from min-heap
             acchan,tmptt = pop_minheap!(fmmvars.bheap)
+            # check if there are other values with same tt
             if topval_heap(fmmvars.bheap)[1] == tmptt
                 sameminval = true
             else
@@ -723,7 +726,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                         # Discrete adjoint on COARSE grid
                         # go from cartesian (i,j) to linear
                         adjvars_coarse.idxconv.lfmm2grid[counter_adjcoarse] = pthan_coarse
-                        # cart2lin(ijk_coarse,adjvars_coarse.idxconv.grsize)
                         # store arrival time for first points in FMM order
                         adjvars_coarse.fmmord.ttime[counter_adjcoarse] = fmmvars.ttime[acchan]
                         ## update counter
@@ -768,22 +770,23 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                     ## re-allocate srcboxpar.ijksrc of type SourcePtsFromFineGrid (mutable struct)
                     fmmvars_coarse.srcboxpar.ijksrc = ijksrc_coarse[1:counter_ijksrccoarse-1,:]
 
-                    #println("\n === Hello, quitting the refinement at node $node === ")
                     return 
                 end
                 
             end # if isthisrefinementsrc      
             ##===================================
             
-            npopped += 1
-            accptijk_ls[npopped,:] .= accptijk
+             npopped += 1
+             accptijk_ls[npopped,:] .= accptijk
+
         end ## while sameminval
         ##===================================
 
 
+        #############################################
         ## loop over all the popped points
         for ipop=1:npopped
-            
+
             ##===========================================
             ## try all neighbors of newly accepted point
             for ne=1:size(neigh,1) 
@@ -826,9 +829,10 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                 end
             end # for ne=1:4
             
-        end # for ipop=1:npoppts
-        
-    end # for node=naccinit+1:totnpts 
+       end # for ipop=1:npoppts
+
+#if node>20 error() end
+    end # for iter=totnpts-naccinit
 
     ##======================================================
     if dodiscradj
@@ -1006,10 +1010,6 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
         ijk1coarsevirtual[d] = minimum(ijksrccorn[:,d]) - noderadius
         ijk2coarsevirtual[d] = maximum(ijksrccorn[:,d]) + noderadius
     end
-    # i1coarsevirtual = minimum(ijksrcpts[:,1]) - noderadius
-    # i2coarsevirtual = maximum(ijksrcpts[:,1]) + noderadius
-    # j1coarsevirtual = minimum(ijksrcpts[:,2]) - noderadius
-    # j2coarsevirtual = maximum(ijksrcpts[:,2]) + noderadius
 
     # if hitting borders
     ijk1coarse = MVector{Ndim,Int64}(undef)
@@ -1021,28 +1021,11 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
         outxyzmax[d] ? ijk2coarse[d]=grsize_coarse[d] : ijk2coarse[d]=ijk2coarsevirtual[d]
     end
 
-    # outxmin = i1coarsevirtual<1
-    # outxmax = i2coarsevirtual>n1_coarse
-    # outymin = j1coarsevirtual<1 
-    # outymax = j2coarsevirtual>n2_coarse
-    # outxmin ? i1coarse=1         : i1coarse=i1coarsevirtual
-    # outxmax ? i2coarse=n1_coarse : i2coarse=i2coarsevirtual
-    # outymin ? j1coarse=1         : j1coarse=j1coarsevirtual
-    # outymax ? j2coarse=n2_coarse : j2coarse=j2coarsevirtual
-    
     ##
     ## Refined grid parameters
     ##
-    # fine grid size
-    # grsize_fine = MVector{Ndim,Int64}(undef)
-    # for d=1:Ndim
-    #     grsize_fine[d] = (ijk2coarse[d]-ijk1coarse[d])*downscalefactor+1
-    # end
     grsize_fine = Tuple((ijk2coarse.-ijk1coarse).*downscalefactor.+1)
     
-    # n1_fine = (i2coarse-i1coarse)*downscalefactor+1    
-    # n2_fine = (j2coarse-j1coarse)*downscalefactor+1    
-   
     ##
     ## Get the vel around the source on the coarse grid
     ##
@@ -1088,39 +1071,12 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
         # track column index for gradient calculations
         nearneigh_idxcoarse[irow] = jcol
 
-        # f = i  + (j-1)*n1_fine
-        # c = ii + (jj-1)*n1_window_coarse
-        # nearneigh_oper[f,c] = 1.0
-        # nearneigh_idxcoarse[f] = c
     end
-
-
-    # for j=1:n2_fine
-    #     for i=1:n1_fine
-    #         di=div(i-1,downscalefactor)
-    #         ri=i-di*downscalefactor
-    #         ii = ri>=downscalefactor/2+1 ? di+2 : di+1
-    #         dj=div(j-1,downscalefactor)
-    #         rj=j-dj*downscalefactor
-    #         jj = rj>=downscalefactor/2+1 ? dj+2 : dj+1
-    #         # vel_fine[i,j] = velcoarsegrd[ii,jj]
-    #         # compute the matrix acting as nearest-neighbor operator (for gradient calculations)
-    #         f = i  + (j-1)*n1_fine
-    #         c = ii + (jj-1)*n1_window_coarse
-    #         nearneigh_oper[f,c] = 1.0
-    #         ##
-    #         #@show i,j,f,c
-    #         nearneigh_idxcoarse[f] = c
-    #     end
-    # end
 
     ##--------------------------------------------------
     ## get the interpolated velocity for the fine grid
     tmp_vel_fine = nearneigh_oper * vec(velcoarsegrd)
     vel_fine = reshape(tmp_vel_fine,grsize_fine...)
-    # @show size(nearneigh_oper)
-    # @show size(vel_fine)
-
 
     if simtype==:cartesian
         if Ndim==2
@@ -1242,3 +1198,69 @@ function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::Abstract
 end
 
 #############################################################
+
+
+"""
+$(TYPEDSIGNATURES)
+
+ Define the "box" of nodes around/including the source.
+"""
+function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::AbstractVector,
+                         grd::AbstractGridEik ) where N
+
+    Ndim = length(srcpos)
+    # get the position and velocity of corners around source
+    ijkcorn = findenclosingbox(grd,srcpos)
+    Ncorn = size(ijkcorn,1)
+
+    if Ncorn==1
+        ##
+        ## Source on a grid point, re-allocate some arrays...
+        ##        
+        fmmvars.srcboxpar.ijksrc   = MMatrix{Ncorn,Ndim,Int64}(undef)
+        fmmvars.srcboxpar.velcorn  = MVector{Ncorn,Float64}(undef)
+        fmmvars.srcboxpar.distcorn = MVector{Ncorn,Float64}(undef)
+    end
+
+    ## Set some srcboxpar fields
+    fmmvars.srcboxpar.ijksrc .= ijkcorn
+    fmmvars.srcboxpar.xyzsrc .= srcpos
+
+    ## set ttime around source 
+    for l=1:Ncorn
+        #i,j = ijcorn[l,:]
+        ijkpt = CartesianIndex(Tuple(ijkcorn[l,:]))
+
+        ## set status = accepted == 2
+        fmmvars.status[ijkpt] = 2
+
+        ## corner position
+        if Ndim==2
+            xyzpt = SVector(grd.x[ijkpt[1]],grd.y[ijkpt[2]])
+        elseif Ndim==3
+            xyzpt = SVector(grd.x[ijkpt[1]],grd.y[ijkpt[2]],grd.z[ijkpt[3]])
+        end    
+
+        # set the distance from corner to origin
+        distcorn = sqrt(sum((xyzpt.-srcpos).^2)) # sqrt((xsrc-xp)^2+(ysrc-yp)^2)
+
+        ## Set some srcboxpar fields
+        fmmvars.srcboxpar.velcorn[l]  = vel[ijkpt]
+        fmmvars.srcboxpar.distcorn[l] = distcorn
+
+        # set the traveltime to corner
+        fmmvars.ttime[ijkpt] = distcorn / vel[ijkpt]
+
+        # if l==1
+        #     @show ijkpt
+        #     fmmvars.ttime[ijkpt] *= 0.99998
+        # end
+
+        @show ijkpt,vel[ijkpt]
+        @show distcorn,fmmvars.ttime[ijkpt]
+    end
+
+    return
+end 
+
+#############################################

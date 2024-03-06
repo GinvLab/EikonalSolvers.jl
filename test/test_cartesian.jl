@@ -5,7 +5,7 @@ function test_fwdtt_2D_constvel()
     
 
     # Create a grid and a velocity model
-    grd = Grid2DCart(hgrid=250.0,xinit=0.0,yinit=0.0,nx=101,ny=121)
+    grd = Grid2DCart(hgrid=250.0,xinit=0.0,yinit=0.0,nx=111,ny=121)
 
     #--------------------------------------
     ## Traveltime forward
@@ -14,9 +14,9 @@ function test_fwdtt_2D_constvel()
     constvelmod = 2500.0 .* ones(grd.nx,grd.ny)
     coordrec = [[grd.x[2] grd.y[3]]]
 
-    coordsrc = [grd.hgrid/5+grd.x[grd.nx÷2]  grd.hgrid/1.2+grd.y[grd.ny÷2]]
+    coordsrc = [grd.hgrid+grd.x[grd.nx÷2]  grd.hgrid+grd.y[grd.ny÷2]]
    
-    extrapars = ExtraParams(refinearoundsrc=false)
+    extrapars = ExtraParams(refinearoundsrc=true)
     println("Refinement around source? $(extrapars.refinearoundsrc) ")
     _,ttime = eiktraveltime(constvelmod,grd,coordsrc,coordrec,
                             returntt=true,extraparams=extrapars)
