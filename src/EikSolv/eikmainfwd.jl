@@ -626,7 +626,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                 insert_minheap!(fmmvars.bheap,tmptt,curpthan)
                 # change status, add to narrow band
                 fmmvars.status[curpthan]=1
-@show curptijk,tmptt
 
                 if dodiscradj
                     # codes of chosen derivatives for adjoint
@@ -1251,13 +1250,8 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
         # set the traveltime to corner
         fmmvars.ttime[ijkpt] = distcorn / vel[ijkpt]
 
-        # if l==1
-        #     @show ijkpt
-        #     fmmvars.ttime[ijkpt] *= 0.99998
-        # end
-
-        @show ijkpt,vel[ijkpt]
-        @show distcorn,fmmvars.ttime[ijkpt]
+        # @show ijkpt,vel[ijkpt]
+        # @show distcorn,fmmvars.ttime[ijkpt]
     end
 
     return
