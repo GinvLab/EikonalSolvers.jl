@@ -10,6 +10,7 @@ before_script:
     - julia --project=@. -e 'import Pkg; Pkg.Registry.status()'
     - julia --project=@. -e 'import Pkg; Pkg.build()'
     - apt-get -qq update; apt-get -y install git rsync
+ 
 
 default:
   stage: test
