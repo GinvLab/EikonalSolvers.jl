@@ -17,7 +17,9 @@ default:
     - julia --project=@. -e "import Pkg; Pkg.test(; coverage = false)"
     # - julia --project=test/coverage -e 'import Pkg; Pkg.instantiate()'
     # - julia --project=test/coverage test/coverage/coverage-summary.jl
-
+  rules:
+    - if: ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG ) && $DOCUMENTER_KEY    
+    
 
 pages:
   stage: deploy
