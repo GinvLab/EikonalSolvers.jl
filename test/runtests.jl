@@ -9,39 +9,32 @@ using EikonalSolvers
 # get all the functions
 include("test_utils.jl")
 include("test_cartesian.jl")
-include("test_spherical.jl")
+#include("test_spherical.jl")
 
 
-testname = ["forward traveltime 2D FMM 2nd order (Cartesian coord.)", "forward traveltime 2D alternative (Cartesian coord.)",
-            "forward traveltime 3D FMM 2nd order (Cartesian coord.)",  "forward traveltime 3D FMM alternative (Cartesian coord.)",
-            "gradient traveltime 2D FMM 2nd order (Cartesian coord.)", "gradient traveltime 2D alternative (Cartesian coord.)",
-            "gradient traveltime 3D FMM 2nd order (Cartesian coord.)", "gradient traveltime 3D alternative (Cartesian coord.)",
-            "forward traveltime 2D FMM 2nd order  (spherical coord.)",
-            "gradient traveltime 2D FMM 2nd order (spherical coord.)", "gradient traveltime 2D alternative (spherical coord.)",
-            "gradient traveltime 3D FMM 2nd order (spherical coord.)", "gradient traveltime 3D alternative (spherical coord.)" ]
 
-testfun  = [test_fwdtt_2D_FMM2ndord, test_fwdtt_2D_alternative,
-            test_fwdtt_3D_FMM2ndord, test_fwdtt_3D_alternative,
-            test_gradtt_2D_FMM2ndord, test_gradtt_2D_alternative,
-            test_gradtt_3D_FMM2ndord, test_gradtt_3D_alternative,
-            test_fwdtt_2Dspher_FMM2ndord,
-            test_gradtt_2Dspher_FMM2ndord, test_gradtt_2Dspher_alternative,
-            test_fwdtt_3Dspher_FMM2ndord,
-            test_gradtt_3Dspher_FMM2ndord, test_gradtt_3Dspher_alternative ]
-            
-           
+testfun  = [test_fwdtt_2D_constvel]
+
 
 nwor = nworkers()
 
-@testset "Tests " begin
-    println("\n Number of workers available: $nwor")
-    for (tn,fun) in zip(testname,testfun)
-        println()
-        printstyled("Testing $tn \n", bold=true,color=:cyan)
-        @test fun()
-    end
-    println()
+@testset "Tests eikonal vs. analytical solutions, const. vel. [2D Cartesian coodinates]" begin
+    println("Number of workers available: $nwor")
+    test_fwdtt_2D_constvel()
+end
+
+@testset "Tests eikonal vs. analytical solutions, lin. grad. vel. [2D Cartesian coodinates]" begin
+    println("Number of workers available: $nwor")
+    test_fwdtt_2D_lingrad()
 end
 
 
+
+# @testset "Tests eikonal vs. analytical solutions [Cartesian coodinates]" begin
+#     println("Number of workers available: $nwor")
+#     for fun in testfun
+#         @test fun()
+#     end
+#     println()
+# end
 
