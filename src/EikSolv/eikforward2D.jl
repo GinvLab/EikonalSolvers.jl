@@ -101,7 +101,7 @@ $(TYPEDSIGNATURES)
 """
 function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                           grd::AbstractGridEik2D,ij::MVector{2,Int64},
-                          codeD::MVector{2,<:Integer})
+                          codeD::MVector{2,<:Integer} )
     
     #######################################################
     ##  Local solver Sethian et al., Rawlison et al.  ???##
@@ -186,12 +186,16 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                 testval1 = fmmvars.ttime[i+ish,j+jsh]
 
                 ## pick the lowest value of the two
-                if testval1<chosenval1 ## < only!!!
+                if testval1 < chosenval1 ## < only!!!
                     chosenval1 = testval1
                     use1stord = true
 
                     # save derivative choices
-                    axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+                    if axis==1
+                        codeD[axis]= -ish
+                    else
+                        codeD[axis]= -jsh
+                    end
 
                     ##==== 2nd order ================
                     ish2::Int64 = 2*ish
@@ -200,14 +204,19 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                         # second test value
                         testval2 = fmmvars.ttime[i+ish2,j+jsh2]
                         ## pick the lowest value of the two
-                        ##    compare to chosenval 1, *not* 2!!
+                        ##  compare to chosenval 1, *not* 2!!
                         ## This because the direction has already been chosen
                         ##  at the line "testval1<chosenval1"
-                        if testval2<chosenval1 ## < only!!!
+                        if testval2 <= chosenval1                             
                             chosenval2 = testval2
                             use2ndord = true 
                             # save derivative choices
-                            axis==1 ? (codeD[axis]=2*ish) : (codeD[axis]=2*jsh)
+                            if axis==1
+                                codeD[axis]= -2*ish
+                            else
+                                codeD[axis]= -2*jsh
+                            end
+                            
                         else
                             chosenval2=HUGE
                             # below in case first direction gets 2nd ord
@@ -215,7 +224,11 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                             #   does *not* get a second order
                             use2ndord=false # this is needed!
                             # save derivative choices
-                            axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+                            if axis==1
+                                codeD[axis]= -ish
+                            else
+                                codeD[axis]= -jsh
+                            end
                         end
 
                     end ##==== END 2nd order ================
@@ -223,12 +236,10 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                 end 
             end ##==== END 1st order ================
 
-
-        end # end two sides
+        end # end for l=1:2 (two sides)
 
         ## spacing
         deltah = Δh[axis]
-
         
         if use2ndord && use1stord # second order
             tmpa2 = 1.0/3.0 * (4.0*chosenval1-chosenval2)
@@ -264,7 +275,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
     ## If discriminant is negative (probably because of sharp contrasts in
     ##  velocity) revert to 1st order for both x and y
     if sqarg<0.0
-
+        @warn "sqarg<0.0"
         begin    
             codeD[:] .= 0 # integers
             alpha = 0.0
@@ -303,12 +314,16 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                     if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
                         testval1 = fmmvars.ttime[i+ish,j+jsh]
                         ## pick the lowest value of the two
-                        if testval1<chosenval1 ## < only
+                        if testval1<=chosenval1 ## < only
                             chosenval1 = testval1
                             use1stord = true
 
                             # save derivative choices
-                            axis==1 ? (codeD[axis]=ish) : (codeD[axis]=jsh)
+                            if axis==1
+                                codeD[axis]= -ish
+                            else
+                                codeD[axis]= -jsh
+                            end
 
                         end
                     end

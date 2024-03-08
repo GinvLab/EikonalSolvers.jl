@@ -476,6 +476,9 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     ##
     ijksrc = fmmvars.srcboxpar.ijksrc
 
+    ## source coordinates
+    xyzsrc = fmmvars.srcboxpar.xyzsrc
+    
     ## number of accepted points       
     naccinit = size(ijksrc,1)  
 
@@ -499,7 +502,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                     0  1;
                    -1  0;
                     0 -1]
-
+ 
     elseif ND==3
         # neighboring points
         neigh = SA[ 1  0  0;
@@ -600,12 +603,12 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     ######################################################
                 
     ##-----------------------------------------
-    ## construct initial narrow band
+    ## Construct INITIAL narrow band
     for l=1:naccinit ##
-        
+
+
         for ne=1:size(neigh,1) ## four potential neighbors
-            # i = ijksrc[l,1] + neigh[ne,1]
-            # j = ijksrc[l,2] + neigh[ne,2]
+            #
             curptijk .= ijksrc[l,:] .+ neigh[ne,:]
             # get the linear index/handle 
             curpthan = cart2lin(curptijk,grsize)
@@ -615,13 +618,12 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
             if any(curptijk.<1) || any(curptijk.>grsize)
                 continue
             end
-
+            
+                
             if fmmvars.status[curpthan]==0 ## far
 
                 ## add tt of point to binary heap and give handle
-                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,curptijk,idD) 
-                # get handle
-                #han = cart2lin(curptijk,grsize)
+                tmptt = calcttpt_2ndord!(fmmvars,vel,grd,curptijk,idD)                              
                 # insert into heap
                 insert_minheap!(fmmvars.bheap,tmptt,curpthan)
                 # change status, add to narrow band
@@ -635,8 +637,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
             end ## if fmmvars.status[i,j]==0 ## far
         end ## for ne=1:size(neigh,1)
     end
-
-
+        
 
 
     ######################################################
@@ -699,8 +700,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                 ## total number of traveltimes computed so far
                 adjvars.fmmord.lastcomputedtt[] = node 
             end
-
-            
+           
             ##======================================================
             ## Are we running a refinement around the source? If so, 
             ##    UPDATE the COARSE GRID
@@ -775,20 +775,25 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
             end # if isthisrefinementsrc      
             ##===================================
             
-             npopped += 1
-             accptijk_ls[npopped,:] .= accptijk
+            npopped += 1
+            accptijk_ls[npopped,:] .= accptijk
 
         end ## while sameminval
         ##===================================
 
+ 
+        # println("\n $iter fmmvars.ttime'")
+        # display(transpose(fmmvars.ttime))
 
+        
         #############################################
         ## loop over all the popped points
         for ipop=1:npopped
 
             ##===========================================
             ## try all neighbors of newly accepted point
-            for ne=1:size(neigh,1) 
+            for ne=1:size(neigh,1)
+                #
                 curptijk .= accptijk_ls[ipop,:] .+ neigh[ne,:]
                 # get the linear index/handle 
                 curpthan = cart2lin(curptijk,grsize)
@@ -799,8 +804,9 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                     continue
                 end
 
+    
                 if fmmvars.status[curpthan]==0 ## far, active
-
+                    
                     ## add tt of point to binary heap and give handle
                     tmptt = calcttpt_2ndord!(fmmvars,vel,grd,curptijk,idD)
                     # insert new point into min-heap
@@ -825,12 +831,9 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                         adjvars.codeDeriv[curpthan,:] .= idD
                     end
 
-                end
-            end # for ne=1:4
-            
+                end ## if far or active
+            end # for ne=1:size(neigh,1)
        end # for ipop=1:npoppts
-
-#if node>20 error() end
     end # for iter=totnpts-naccinit
 
     ##======================================================
@@ -1142,14 +1145,14 @@ function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::Abstract
 
     # xyzres = (xyzsrc.-xyzinit)./grd.hgrid
     # # make sure to get integers
-    # ixyz = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...
+    # ijkpt = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...
 
     xyzres = MVector{Ndim,Float64}(undef)
     remainder = MVector{Ndim,Float64}(undef)
     for d=1:Ndim
         xyzres[d],remainder[d] = divrem(xyzsrc[d]-xyzinit[d],grd.hgrid)
     end
-    ixyz = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...            
+    ijkpt = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...            
 
     ## set an absolute tolerance for the remainder
     atol = sqrt(eps())
@@ -1158,7 +1161,7 @@ function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::Abstract
         ##
         ##  The point COINCIDES with a grid point
         ##
-        ijksrccorn = SMatrix{1,Ndim,Int64}(ixyz')
+        ijksrccorn = SMatrix{1,Ndim,Int64}(ijkpt')
         return ijksrccorn
 
     else
@@ -1169,27 +1172,27 @@ function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::Abstract
 
         ## if at the edges of domain choose previous square...
         for d=1:Ndim
-            if ixyz[d]==grsize[d]
-                ixyz[d] -= 1 
+            if ijkpt[d]==grsize[d]
+                ijkpt[d] -= 1 
             end
         end
 
         ## vvvv WRITE the stuff below in a better way!!!  vvvv
         ## ORDER MATTERS for the rest of the algorithm!!
         if Ndim==2
-            ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ixyz';
-                                                     (ixyz .+ (1,0))';
-                                                     (ixyz .+ (0,1))';
-                                                     (ixyz .+ (1,1))'])
+            ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ijkpt';
+                                                     (ijkpt .+ (1,0))';
+                                                     (ijkpt .+ (0,1))';
+                                                     (ijkpt .+ (1,1))'])
         elseif Ndim==3
-            ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ixyz';
-                                                     (ixyz .+ (1,0,0))';
-                                                     (ixyz .+ (0,1,0))';
-                                                     (ixyz .+ (0,0,1))';
-                                                     (ixyz .+ (1,1,0))';
-                                                     (ixyz .+ (0,1,1))';
-                                                     (ixyz .+ (1,0,1))';
-                                                     (ixyz .+ (1,1,1))'])
+            ijksrccorn = SMatrix{2^Ndim,Ndim,Int64}([ijkpt';
+                                                     (ijkpt .+ (1,0,0))';
+                                                     (ijkpt .+ (0,1,0))';
+                                                     (ijkpt .+ (0,0,1))';
+                                                     (ijkpt .+ (1,1,0))';
+                                                     (ijkpt .+ (0,1,1))';
+                                                     (ijkpt .+ (1,0,1))';
+                                                     (ijkpt .+ (1,1,1))'])
         end
         return ijksrccorn
         
@@ -1241,7 +1244,7 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
         end    
 
         # set the distance from corner to origin
-        distcorn = sqrt(sum((xyzpt.-srcpos).^2)) # sqrt((xsrc-xp)^2+(ysrc-yp)^2)
+        distcorn = sqrt(sum((xyzpt.-srcpos).^2)) 
 
         ## Set some srcboxpar fields
         fmmvars.srcboxpar.velcorn[l]  = vel[ijkpt]
@@ -1250,8 +1253,34 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
         # set the traveltime to corner
         fmmvars.ttime[ijkpt] = distcorn / vel[ijkpt]
 
-        # @show ijkpt,vel[ijkpt]
-        # @show distcorn,fmmvars.ttime[ijkpt]
+    end
+
+    
+    ## If the source is exactly in the middle of four corners, move it by a bit...
+    if Ncorn>1
+        atol = 1e3*sqrt(eps())
+        #@show atol
+        #diff = fmmvars.srcboxpar.distcorn.-fmmvars.srcboxpar.distcorn[1]
+        #@show fmmvars.srcboxpar.distcorn
+        nuni = length(unique(fmmvars.srcboxpar.distcorn))
+        if nuni<Ncorn #all(isapprox.(diff, 0.0, atol=atol))
+            @warn "Moving the source position by $atol"
+
+            new_srcpos = srcpos .+ atol
+            fmmvars.srcboxpar.xyzsrc .= new_srcpos
+
+            for l=1:Ncorn
+                ijkpt = CartesianIndex(Tuple(ijkcorn[l,:]))
+                ## corner position
+                if Ndim==2
+                    xyzpt = SVector(grd.x[ijkpt[1]],grd.y[ijkpt[2]])
+                elseif Ndim==3
+                    xyzpt = SVector(grd.x[ijkpt[1]],grd.y[ijkpt[2]],grd.z[ijkpt[3]])
+                end 
+                fmmvars.srcboxpar.distcorn[l] = sqrt(sum((xyzpt.-fmmvars.srcboxpar.xyzsrc).^2))
+                fmmvars.ttime[ijkpt] = fmmvars.srcboxpar.distcorn[l] / vel[ijkpt]
+            end
+        end
     end
 
     return

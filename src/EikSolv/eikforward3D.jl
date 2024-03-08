@@ -307,11 +307,11 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
 
                     # save derivative choices
                     if axis==1
-                        codeD[axis]=ish
+                        codeD[axis]= -ish
                     elseif axis==2
-                        codeD[axis]=jsh
+                        codeD[axis]= -jsh
                     else
-                        codeD[axis]=ksh
+                        codeD[axis]= -ksh
                     end
                     
                     ##==== 2nd order ================
@@ -325,16 +325,16 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                         ##    compare to chosenval 1, *not* 2!!
                         ## This because the direction has already been chosen
                         ##  at the line "testval1<chosenval1"
-                        if testval2<chosenval1 ## < only!!!
+                        if testval2 <= chosenval1 
                             chosenval2 = testval2
                             use2ndord = true 
                             # save derivative choices
                             if axis==1
-                                codeD[axis]=2*ish
+                                codeD[axis]= -2*ish
                             elseif axis==2
-                                codeD[axis]=2*jsh
+                                codeD[axis]= -2*jsh
                             else
-                                codeD[axis]=2*ksh
+                                codeD[axis]= -2*ksh
                             end
                         else
                             chosenval2=HUGE
@@ -344,11 +344,11 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                             use2ndord=false # this is needed!
                             # save derivative choices
                             if axis==1
-                                codeD[axis]=ish
+                                codeD[axis]= -ish
                             elseif axis==2
-                                codeD[axis]=jsh
+                                codeD[axis]= -jsh
                             else
-                                codeD[axis]=ksh
+                                codeD[axis]= -ksh
                             end
                         end
 
@@ -398,7 +398,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
     ## If discriminant is negative (probably because of sharp contrasts in
     ##  velocity) revert to 1st order for both x and y
     if sqarg<0.0
-
+        @warn "sqarg<0.0"
         begin    
             codeD[:] .= 0 # integers
             alpha = 0.0
@@ -449,7 +449,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                     if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
                            testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
                         ## pick the lowest value of the two
-                        if testval1<chosenval1 ## < only
+                        if testval1<=chosenval1 ## < only
                             chosenval1 = testval1
                             use1stord = true
 

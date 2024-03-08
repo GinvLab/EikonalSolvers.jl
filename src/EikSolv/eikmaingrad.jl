@@ -1014,7 +1014,7 @@ function setcoeffderiv!(D::VecSPDerivMat,status::Array,irow::Integer,idxconv::Ma
     # at this point abs(code) can only be 1 or 2
     abscode = abs(code)
     nnzcol = abscode+1 # max 3
-    signcod = sign(code)
+    signcod = -sign(code) ## - ???
     ## select first or second order coefficients
     if abscode==1
         coeff = allcoeff.firstord
