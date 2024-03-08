@@ -476,9 +476,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     ##
     ijksrc = fmmvars.srcboxpar.ijksrc
 
-    ## source coordinates
-    xyzsrc = fmmvars.srcboxpar.xyzsrc
-    
     ## number of accepted points       
     naccinit = size(ijksrc,1)  
 
