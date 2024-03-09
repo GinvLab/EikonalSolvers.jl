@@ -1,5 +1,5 @@
 
-###################################
+#####################################################
 
 function test_fwdtt_2D_constvel()
 
@@ -108,73 +108,59 @@ end
 function test_fwdtt_2D_lingrad()
 
     
-    Ntests = 2
+    Ntests = 4
     Ndim = 2
     
     maxerr = Vector{Float64}(undef,Ntests)
 
-    tolerr = [58.05695,
-              73.78549]
+    tolerr = [1.69,
+              1.69,
+              2.65,
+              4.70]
+
+    tolnorm = [67.0,
+               67.0,
+               182.0,
+               166.0]
                   
     #--------------------------------------
     # Create a grid and a velocity model
-    grd = Grid2DCart(hgrid=250.0,xinit=0.0,yinit=0.0,nx=111,ny=121)
+    grd = Grid2DCart(hgrid=15.0,xinit=0.0,yinit=0.0,nx=111,ny=121)
     
 
     #########################
     # Analytical solution
     #
     ## source must be *on* the top surface for analytic solution
-    coordsrc=[grd.x[end÷2]+grd.hgrid*2.423  0.0]
-    ansol2d,velanaly = analyticalsollingrad2D(grd,coordsrc[1,1],coordsrc[1,2])
+    coordsrcs = [[grd.x[end÷2]+grd.hgrid  0.0],
+                 [grd.x[end÷2]+0.253*grd.hgrid  0.0]]
 
     coordrec = [[2.0 3.0]]
 
     r=0
-    for refinearoundsrc in [false,true]
-        
-        extrapars = ExtraParams(refinearoundsrc=refinearoundsrc)
+    for coordsrc in coordsrcs
 
-        _,ttime = eiktraveltime(velanaly,grd,coordsrc,coordrec,
-                                returntt=true,extraparams=extrapars)
+        ansol2d,velanaly = analyticalsollingrad2D(grd,coordsrc[1,1],coordsrc[1,2])
 
-        @show extrema(ansol2d)
-        @show extrema(ttime[1])
+        for refinearoundsrc in [false,true]
+            
+            extrapars = ExtraParams(refinearoundsrc=refinearoundsrc)
 
-        r+=1
-        maxerr[r] = maximum(abs.(ttime[1].-ansol2d))
-        @show maxerr[r],tolerr[r]
-        
-        @test maxerr[r]<=tolerr[r]
-    end
+            _,ttime = eiktraveltime(velanaly,grd,coordsrc,coordrec,
+                                    returntt=true,extraparams=extrapars)
 
-    if all( maximum.(maxerr) .<= tolerr )
-        return true
-    else
-        return false
+            r+=1
+            maxerr = maximum(abs.(ttime[1].-ansol2d))
+            normerr = norm(abs.(ttime[1].-ansol2d))
+
+            # @show r,maxerr,tolerr[r]
+            # @show r,normerr,tolnorm[r]
+            @test all((maxerr<=tolerr[r], normerr<=tolnorm[r]))
+        end
     end
     return
 end
 
-#     ## Numerical traveltime
-#     #mae = Dict()
-#     # colors = ["red","blue","green"]
-#     println("Traveltime 2D using default algo versus analytic solution")
-#     ttpicks,ttime2 = eiktraveltime(velanaly,grd,coordsrc[1:1,:],coordrec[1:1],returntt=true)
-
-#     display(ttime2[1])
-#     display(ansol2d)
-#     # mean average error
-#     mae = (sum(abs.(ttime2[1]-ansol2d)))/length(ansol2d)
-
-#     @show (abs.(ttime2[1].-ansol2d))./abs.(ansol2d) * 100
-#     @show mae
-#     if mae<=0.21
-#         return true
-#     else
-#         return false
-#     end
-# end
 
 # ###################################
 
