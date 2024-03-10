@@ -14,20 +14,22 @@ include("test_cartesian.jl")
 
 
 
-testfun  = [test_fwdtt_2D_constvel]
-
-
 nwor = nworkers()
+println("Number of workers available: $nwor")
 
 @testset "Eikonal vs. analytical solutions const. vel. [2D Cart. coord.]" begin
-    println("Number of workers available: $nwor")
     test_fwdtt_2D_constvel()
 end
 
-@testset "Eikonal vs. analytical solutions, lin. grad. vel. [2D Cart. coord.]" begin
-    println("Number of workers available: $nwor")
+@testset "Eikonal vs. analytical sol., lin. grad. vel. [2D Cart. coord.]" begin
     test_fwdtt_2D_lingrad()
 end
+
+@testset "Gradients adjoint vs. finite differences [2D Cart. coord.]" begin
+    test_gradvel_2D()
+    test_gradsrc_2D()
+end
+
 
 
 

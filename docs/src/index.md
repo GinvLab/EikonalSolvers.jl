@@ -123,6 +123,10 @@ nrec = 10
 coordsrc = [grd.hgrid.*LinRange(10,290,nsrc)  grd.hgrid.*200.0.*ones(nsrc)] # coordinates of the sources (4 sources)
 coordrec = [ [grd.hgrid.*LinRange(8,294,nrec) grd.hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
 velmod = 2.5 .* ones(grd.nx,grd.ny)   # velocity model
+# increasing velocity with depth...
+for i=1:grd.ny 
+  velmod[:,i] = 0.034 * i .+ velmod[:,i] 
+end
 
 # run the traveltime computation with default algorithm ("ttFMM_hiord")
 ttimepicks = eiktraveltime(velmod,grd,coordsrc,coordrec)

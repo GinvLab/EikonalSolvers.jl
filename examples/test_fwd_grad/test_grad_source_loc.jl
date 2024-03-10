@@ -88,25 +88,23 @@ for refinesrc in [false,true]
 
 
     println("\n-------------- misfit  ----------------")
-    misf_ref = ttmisfitfunc(vel0,dobs,stdobs,coordsrc2,coordrec,grd;
-                            extraparams=extraparams)
 
     dh = 0.00001
 
     coordsrc_plusdx = coordsrc2 .+ [dh 0.0]
-    misf_pdx = ttmisfitfunc(vel0,dobs,stdobs,coordsrc_plusdx,coordrec,grd;
+    misf_pdx = eikttimemisfit(vel0,dobs,stdobs,coordsrc_plusdx,coordrec,grd;
                             extraparams=extraparams)
 
     coordsrc_minusdx = coordsrc2 .+ [-dh 0.0]
-    misf_mdx = ttmisfitfunc(vel0,dobs,stdobs,coordsrc_minusdx,coordrec,grd;
+    misf_mdx = eikttimemisfit(vel0,dobs,stdobs,coordsrc_minusdx,coordrec,grd;
                             extraparams=extraparams)
     
     coordsrc_plusdy = coordsrc2 .+ [0.0 dh]
-    misf_pdy = ttmisfitfunc(vel0,dobs,stdobs,coordsrc_plusdy,coordrec,grd;
+    misf_pdy = eikttimemisfit(vel0,dobs,stdobs,coordsrc_plusdy,coordrec,grd;
                             extraparams=extraparams)
     
     coordsrc_minusdy = coordsrc2 .+ [0.0 -dh]
-    misf_mdy = ttmisfitfunc(vel0,dobs,stdobs,coordsrc_minusdy,coordrec,grd;
+    misf_mdy = eikttimemisfit(vel0,dobs,stdobs,coordsrc_minusdy,coordrec,grd;
                             extraparams=extraparams)
 
 

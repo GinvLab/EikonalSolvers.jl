@@ -1230,6 +1230,9 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
     fmmvars.srcboxpar.ijksrc .= ijkcorn
     fmmvars.srcboxpar.xyzsrc .= srcpos
 
+    ## corner position
+    xyzpt = MVector{Ndim,Float64}(undef)
+
     ## set ttime around source 
     for l=1:Ncorn
         #i,j = ijcorn[l,:]
@@ -1238,11 +1241,10 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
         ## set status = accepted == 2
         fmmvars.status[ijkpt] = 2
 
-        ## corner position
         if Ndim==2
-            xyzpt = SVector(grd.x[ijkpt[1]],grd.y[ijkpt[2]])
+            xyzpt .= (grd.x[ijkpt[1]],grd.y[ijkpt[2]])
         elseif Ndim==3
-            xyzpt = SVector(grd.x[ijkpt[1]],grd.y[ijkpt[2]],grd.z[ijkpt[3]])
+            xyzpt .= (grd.x[ijkpt[1]],grd.y[ijkpt[2]],grd.z[ijkpt[3]])
         end    
 
         # set the distance from corner to origin
@@ -1260,15 +1262,36 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
     
     ## If the source is exactly in the middle of four corners, move it by a bit...
     if Ncorn>1
-        atol = 1e3*sqrt(eps())
-        #@show atol
-        #diff = fmmvars.srcboxpar.distcorn.-fmmvars.srcboxpar.distcorn[1]
-        #@show fmmvars.srcboxpar.distcorn
-        nuni = length(unique(fmmvars.srcboxpar.distcorn))
-        if nuni<Ncorn #all(isapprox.(diff, 0.0, atol=atol))
-            @warn "Moving the source position by $atol"
+        ## amount to move the source position
+        srcshift = 1e3*sqrt(eps())
 
-            new_srcpos = srcpos .+ atol
+        if Ndim==2
+            xyzinit = SVector(grd.xinit,grd.yinit)
+        elseif Ndim==3
+            xyzinit = SVector(grd.xinit,grd.yinit,grd.zinit)
+        end
+        # check if the source position is halfway between grid points
+        #   in each direction
+        remainder = MVector{Ndim,Float64}(undef)
+        for d=1:Ndim
+            remainder[d] = rem(srcpos[d]-xyzinit[d],grd.hgrid)
+        end
+        issrchalfway = remainder.≈grd.hgrid/2.0
+
+        # if any source coordinate is halfway, shift the source
+        if any(issrchalfway)
+
+            new_srcpos = copy(srcpos)
+            for d=1:Ndim
+                if issrchalfway[d]
+                    ## if the source position is halfway between nodes
+                    ##   along current direction [d], shift it away
+                    new_srcpos[d] = srcpos[d] .+ srcshift
+                end
+            end
+   
+            whichdir = findall(issrchalfway)
+            @warn "Shifting the source position along dimension(s) $(whichdir) by $(round(srcshift,sigdigits=3)) "
             fmmvars.srcboxpar.xyzsrc .= new_srcpos
 
             for l=1:Ncorn

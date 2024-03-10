@@ -166,8 +166,198 @@ function test_fwdtt_2D_lingrad()
     return
 end
 
+###################################
 
-# ###################################
+function test_gradvel_2D()
+
+    # create the Grid2D struct
+    grd = Grid2DCart(hgrid=20.0,
+                     xinit=0.0,
+                     yinit=0.0,
+                     nx=50,
+                     ny=30)
+
+    nrec = 7
+    coordrec = [[grd.hgrid.*LinRange(3.73,grd.nx-4.34,nrec)  grd.hgrid.*3.7.*ones(nrec);
+                 grd.hgrid*(grd.nx÷2)+0.6*grd.hgrid/2  grd.hgrid*(grd.ny÷2)+0.5*grd.hgrid/2;
+                 grd.hgrid.*LinRange(2.73,grd.nx-3.34,nrec)  grd.hgrid.*(grd.ny-4)*ones(nrec)]]
+
+    velmod = 2500.0 .* ones(grd.nx,grd.ny)
+    for i=1:grd.ny
+        velmod[:,i] = 23.6 * i .+ velmod[:,i]
+    end
+
+    coordsrc1 = [grd.hgrid*(grd.nx÷2)+0.23*grd.hgrid  grd.hgrid*(grd.ny÷2)-0.6*grd.hgrid]
+
+    tolerr = [7.04e-6,
+              7.57e-6]
+
+    tolnorm = [4.02e-5
+               4.35e-5]
+
+    r=0
+    for refinesrc in [false,true]
+    
+        extraparams=ExtraParams(refinearoundsrc=refinesrc,
+                                radiussmoothgradsrc = 0 )
+
+        ttpicks = eiktraveltime(velmod,grd,coordsrc1,coordrec,
+                                extraparams=extraparams)
+
+        # standard deviation of error on observed data
+        stdobs = [0.0001.*ones(size(ttpicks[1])) for i=1:size(coordsrc1,1)]
+        # generate a "noise" array to simulate real data
+        #noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
+        # add the noise to the synthetic traveltime data
+        dobs = ttpicks #.+ noise
+
+        # # create a guess/"current" model
+        vel0 = 2200.0 .* ones(grd.nx,grd.ny)
+        ## increasing velocity with depth...
+        for i=1:grd.ny
+           vel0[:,i] = 32.5 * i .+ vel0[:,i]
+        end
+
+        coordsrc2 = copy(coordsrc1)
+
+        ## calculate the gradient of the misfit function
+        gradvel = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
+                              :gradvel,extraparams=extraparams)
+
+
+        dh = 0.001
+
+        gradvel_FD = similar(gradvel)
+        for j=1:grd.ny
+            for i=1:grd.nx
+                velpdh = copy(vel0)
+                velpdh[i,j] += dh
+                velmdh = copy(vel0)
+                velmdh[i,j] -= dh
+                misf_pdh = eikttimemisfit(velpdh,dobs,stdobs,coordsrc2,coordrec,grd;
+                                        extraparams=extraparams)
+                misf_mdh = eikttimemisfit(velmdh,dobs,stdobs,coordsrc2,coordrec,grd;
+                                        extraparams=extraparams)
+                gradvel_FD[i,j] = (misf_pdh-misf_mdh)/(2*dh)
+            end
+        end
+
+        r+=1
+        normerr = norm(abs.(gradvel.-gradvel_FD))
+        maxerr = maximum(abs.(gradvel.-gradvel_FD))
+        # @show normerr
+        # @show maxerr
+
+        @test all((maxerr<=tolerr[r] && normerr<=tolnorm[r] ))
+    end
+
+    return
+end
+
+
+###################################
+
+function test_gradsrc_2D()
+
+    # create the Grid2D struct
+    grd = Grid2DCart(hgrid=20.0,
+                     xinit=0.0,
+                     yinit=0.0,
+                     nx=50,
+                     ny=30)
+
+    nrec = 7
+    coordrec = [[grd.hgrid.*LinRange(3.73,grd.nx-4.34,nrec)  grd.hgrid.*3.7.*ones(nrec);
+                 grd.hgrid*(grd.nx÷2)+0.6*grd.hgrid/2  grd.hgrid*(grd.ny÷2)+0.5*grd.hgrid/2;
+                 grd.hgrid.*LinRange(2.73,grd.nx-3.34,nrec)  grd.hgrid.*(grd.ny-4)*ones(nrec)]]
+
+    velmod = 2500.0 .* ones(grd.nx,grd.ny)
+
+    for i=1:grd.ny
+        velmod[:,i] = 23.6 * i .+ velmod[:,i]
+    end
+
+
+    coordsrc1 = [grd.hgrid*(grd.nx÷2)+0.23*grd.hgrid  grd.hgrid*(grd.ny÷2)-0.6*grd.hgrid]
+
+    tolerr = [3.83e-4,
+              2.26e-4]
+
+    tolnorm = [5.23e-4
+               3.13e-4]
+
+
+    r=0
+    for refinesrc in [false,true]
+    
+        extraparams=ExtraParams(refinearoundsrc=refinesrc,
+                                radiussmoothgradsrc = 0 )
+
+        ttpicks = eiktraveltime(velmod,grd,coordsrc1,coordrec,
+                                extraparams=extraparams)
+
+        # standard deviation of error on observed data
+        stdobs = [0.0001.*ones(size(ttpicks[1])) for i=1:size(coordsrc1,1)]
+        # generate a "noise" array to simulate real data
+        #noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
+        # add the noise to the synthetic traveltime data
+        dobs = ttpicks #.+ noise
+
+        # # create a guess/"current" model
+        vel0 = 2200.0 .* ones(grd.nx,grd.ny)
+        ## increasing velocity with depth...
+        for i=1:grd.ny
+           vel0[:,i] = 32.5 * i .+ vel0[:,i]
+        end
+
+        coordsrc2 = similar(coordsrc1)
+        for s=1:size(coordsrc2,1)
+            coordsrc2[s,:] = coordsrc1[s,:] .+ [3.45*grd.hgrid, -9.45*grd.hgrid]
+        end
+
+        ## calculate the gradient of the misfit function
+        gradsrcloc = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
+                                 :gradsrcloc,extraparams=extraparams)
+
+        dh = 0.0001
+
+        gradsrcloc_FD = similar(gradsrcloc)
+        Ndim = 2
+        ∂ψ∂xysrc = zeros(size(coordsrc2,1),Ndim)
+        for s=1:size(coordsrc2,1)
+            for axis=1:2
+                coordsrc_plusdx  = copy(coordsrc2[s:s,:])
+                coordsrc_minusdx = copy(coordsrc2[s:s,:])
+
+                coordsrc_plusdx[axis] += dh
+                misf_pdx = eikttimemisfit(vel0,dobs,stdobs,coordsrc_plusdx,
+                                          coordrec,grd;
+                                          extraparams=extraparams)
+                coordsrc_minusdx[axis] -= dh
+                misf_mdx = eikttimemisfit(vel0,dobs,stdobs,coordsrc_minusdx,
+                                          coordrec,grd;
+                                          extraparams=extraparams)
+                gradsrcloc_FD[s,axis] = (misf_pdx-misf_mdx)/(2*dh)
+            end
+        end
+               
+
+        r+=1
+        normerr = norm(abs.(gradsrcloc.-gradsrcloc_FD))
+        maxerr = maximum(abs.(gradsrcloc.-gradsrcloc_FD))
+
+        # @show gradsrcloc
+        # @show gradsrcloc_FD
+        # @show normerr #-tolnorm[r]
+        # @show maxerr #-tolerr[r]
+
+        @test all((maxerr<=tolerr[r] && normerr<=tolnorm[r] ))
+    end
+
+    return
+end
+
+###################################
 
 # function test_fwdtt_2D_alternative()
     
