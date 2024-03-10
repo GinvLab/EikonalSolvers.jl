@@ -459,6 +459,8 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     if isthisrefinementsrc
         downscalefactor = srcrefvars.downscalefactor
         ijkorigincoarse = srcrefvars.ijkorigincoarse
+        outijk_min = srcrefvars.outijk_min
+        outijk_max = srcrefvars.outijk_max
     end
 
     if adjvars==nothing
@@ -469,7 +471,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
 
     ##----------------------------------------------------------------------
     ## fmmvars.srcboxpar.ijksrc can be a field of either
-    ##  - a SrcRefinVars2D if we are in the coarse grid with no refinement,
+    ##  - a SrcRefinVars if we are in the coarse grid with no refinement,
     ##     or in the fine grid
     ##  - a SourcePtsFromFineGrid if we are in the coarse grid after the
     ##     FMM has been already run in the fine grid (multiple source points)
@@ -735,9 +737,9 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
                 ##  fine grid, stop computing and jump to coarse grid
                 ##
                 ##########################################################
-                #  if (ia==n1) || (ia==1) || (ja==n2) || (ja==1)
                 #if (ia==1 && !outxmin) || (ia==n1 && !outxmax) || (ja==1 && !outymin) || (ja==n2 && !outymax)
-                if any(accptijk.==1) || any(accptijk.==grsize)
+                ## outijkmin/max determine if we are touching the edges of the model
+                if (any(accptijk.==1 .&& .!outijk_min)) || (any(accptijk.==grsize .&& .!outijk_max))
                     
                     ## Prevent the difficult case of traveltime hitting the borders but
                     ##   not the coarse grid, which would produce an empty "statuscoarse" and an empty "ttimecoarse".
@@ -1000,8 +1002,8 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
     ##
     ijk1coarsevirtual = MVector{Ndim,Int64}(undef)
     ijk2coarsevirtual = MVector{Ndim,Int64}(undef)
-    outxyzmin = MVector{Ndim,Bool}(undef)
-    outxyzmax = MVector{Ndim,Bool}(undef)
+    outijkmin = MVector{Ndim,Bool}(undef)
+    outijkmax = MVector{Ndim,Bool}(undef)
 
     ijk1coarsevirtual = MVector{Ndim,Int64}(undef)
     ijk2coarsevirtual = MVector{Ndim,Int64}(undef)
@@ -1014,10 +1016,12 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
     ijk1coarse = MVector{Ndim,Int64}(undef)
     ijk2coarse = MVector{Ndim,Int64}(undef)
     for d=1:Ndim
-        outxyzmin[d] = ijk1coarsevirtual[d] < 1
-        outxyzmax[d] = ijk2coarsevirtual[d] > grsize_coarse[d]
-        outxyzmin[d] ? ijk1coarse[d]=1  : ijk1coarse[d]=ijk1coarsevirtual[d]
-        outxyzmax[d] ? ijk2coarse[d]=grsize_coarse[d] : ijk2coarse[d]=ijk2coarsevirtual[d]
+        # define outijk...
+        outijkmin[d] = ijk1coarsevirtual[d] < 1
+        outijkmax[d] = ijk2coarsevirtual[d] > grsize_coarse[d]
+        # reset ijk1coarse, etc. following outijkmin/max
+        outijkmin[d] ? ijk1coarse[d]=1  : ijk1coarse[d]=ijk1coarsevirtual[d]
+        outijkmax[d] ? ijk2coarse[d]=grsize_coarse[d] : ijk2coarse[d]=ijk2coarsevirtual[d]
     end
 
     ##
@@ -1110,9 +1114,10 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
         # grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=n1_fine,nθ=n2_fine,rinit=rinit,θinit=θinit)
     end
 
-    ## 
+    ##
     srcrefvars = SrcRefinVars(downscalefactor,
                               Tuple(ijk1coarse),
+                              Tuple(outijkmin),Tuple(outijkmax),
                               nearneigh_oper,nearneigh_idxcoarse,vel_fine)
 
     return grdfine,srcrefvars

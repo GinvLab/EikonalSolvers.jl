@@ -481,6 +481,8 @@ end
 struct SrcRefinVars{M,N} <: AbstractSrcRefinVars
     downscalefactor::Int64
     ijkorigincoarse::NTuple{M,Int64}
+    outijk_min::NTuple{N,Bool}
+    outijk_max::NTuple{N,Bool}
     nearneigh_oper::SparseMatrixCSC{Float64,Int64}
     nearneigh_idxcoarse::Vector{Int64}
     velcart_fine::Array{Float64,N}

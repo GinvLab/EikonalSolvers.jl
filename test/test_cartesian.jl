@@ -19,6 +19,11 @@ function test_fwdtt_2D_constvel()
               0.053837,
               0.025700]
 
+    tolnorm = [2.37,
+               0.87,
+               3.24,
+               1.53]               
+
     r=0
     for coordsrc in coordsrcs
 
@@ -48,13 +53,13 @@ function test_fwdtt_2D_constvel()
             end
 
             r+=1
-            maxerr[r] = maximum(abs.(diffttanalconstvel))
+            maxerr = maximum(abs.(diffttanalconstvel))
+            normerr = norm(abs.(diffttanalconstvel))
 
-            # @show tolerr[r],maxerr[r]
-            # @show tolerr[r]-maxerr[r]
-            # @show maxerr[r]<= tolerr[r]
+            # @show maxerr, tolerr[r]
+            # @show normerr, tolnorm[r]
 
-            @test maxerr[r]<= tolerr[r]
+            @test all( (maxerr <= tolerr[r], normerr<=tolnorm[r]) )
         end
     end
     
@@ -114,14 +119,14 @@ function test_fwdtt_2D_lingrad()
     maxerr = Vector{Float64}(undef,Ntests)
 
     tolerr = [1.69,
-              1.69,
               2.65,
-              4.70]
+              2.65,
+              2.46]
 
     tolnorm = [67.0,
-               67.0,
+               67.5,
                182.0,
-               166.0]
+               52.6]
                   
     #--------------------------------------
     # Create a grid and a velocity model
