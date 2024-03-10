@@ -8,7 +8,6 @@ using LinearAlgebra
 # Run tests
 
 # get all the functions
-# include("test_utils.jl")
 include("test_cartesian.jl")
 #include("test_spherical.jl")
 
@@ -25,19 +24,10 @@ end
     test_fwdtt_2D_lingrad()
 end
 
-@testset "Gradients adjoint vs. finite differences [2D Cart. coord.]" begin
+@testset "Gradient w.r.t. velocity vs. finite differences [2D Cart. coord.]" begin
     test_gradvel_2D()
-    test_gradsrc_2D()
 end
 
-
-
-
-# @testset "Tests eikonal vs. analytical solutions [Cartesian coodinates]" begin
-#     println("Number of workers available: $nwor")
-#     for fun in testfun
-#         @test fun()
-#     end
-#     println()
-# end
-
+@testset "Gradient w.r.t. source loc. vs. finite differences [2D Cart. coord.]" begin
+    test_gradsrc_2D()
+end
