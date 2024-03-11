@@ -1,16 +1,20 @@
 
-module SaveGrid2VTK
+module SaveGrid2VTKExt
 
 using EikonalSolvers
 using WriteVTK
-
-import EikonalSolvers: savemodelvtk
+using DocStringExtensions
 
 #export savemodelvtk
 
 #######################################################
 
-function savemodelvtk(flname::String,grd::Grid2DCart,datadict::Dict; kind::String="points")
+"""
+$(TYPEDSIGNATURES)
+
+Save a model to VTK file format for Grid2DCart grids.
+"""
+function EikonalSolvers.savemodelvtk(flname::String,grd::Grid2DCart,datadict::Dict; kind::String="points")
 
     if kind=="cells"
 
@@ -62,12 +66,19 @@ function savemodelvtk(flname::String,grd::Grid2DCart,datadict::Dict; kind::Strin
     else
         
         error("savevtk(): Wrong argument 'kind'.")   
-    end 
+    end
+    return
 end
 
 #######################################################
 
-function savemodelvtk(flname::String,grd::Grid3DCart,datadict::Dict; kind::String="points")
+
+"""
+$(TYPEDSIGNATURES)
+
+Save a model to VTK file format for Grid3DCart grids.
+"""
+function EikonalSolvers.savemodelvtk(flname::String,grd::Grid3DCart,datadict::Dict; kind::String="points")
 
 
     if kind=="cells"
@@ -122,12 +133,18 @@ function savemodelvtk(flname::String,grd::Grid3DCart,datadict::Dict; kind::Strin
     else
         
         error("savevtk(): Wrong argument 'kind'.")   
-    end    
+    end
+    return
 end
 
 #######################################################
 
-function savemodelvtk(flname::String,grd::Grid2DSphere,datadict::Dict; kind::String="points")
+"""
+$(TYPEDSIGNATURES)
+
+Save a model to VTK file format for Grid2DSphere grids.
+"""
+function EikonalSolvers.savemodelvtk(flname::String,grd::Grid2DSphere,datadict::Dict; kind::String="points")
     
     Δr = grd.Δr
     Δθ = grd.Δθ
@@ -224,11 +241,18 @@ function savemodelvtk(flname::String,grd::Grid2DSphere,datadict::Dict; kind::Str
         
     end
 
+    return
 end
 
 #######################################################
 
-function savemodelvtk(flname::String,grd::Grid3DSphere,datadict::Dict; kind::String="points")
+
+"""
+$(TYPEDSIGNATURES)
+
+Save a model to VTK file format for Grid3DSphere grids.
+"""
+function EikonalSolvers.savemodelvtk(flname::String,grd::Grid3DSphere,datadict::Dict; kind::String="points")
     
     Δr = grd.Δr
     Δθ = grd.Δθ

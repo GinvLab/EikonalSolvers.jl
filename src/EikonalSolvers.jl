@@ -83,13 +83,12 @@ include("HMCtraveltimes.jl")
 using .HMCtraveltimes
 
 
-function savemodvtk end
-
-# const extrapars = ExtraParams(allowfixsqarg=false,
-#                               refinearoundsrc=true,
-#                               manualGCtrigger=true)
-# warningextrapar(extrapars)
+# for extensions
+"""
+This function requires the package WriteVTK to be loaded first in order to work.
+"""
+function savemodelvtk end
 
  
-end
+end # module
 ##############################################
