@@ -4,11 +4,13 @@ module SaveGrid2VTK
 using EikonalSolvers
 using WriteVTK
 
+import EikonalSolvers: savemodelvtk
+
 #export savemodelvtk
 
 #######################################################
 
-function EikonalSolvers.savemodelvtk(flname::String,grd::Grid2DCart,datadict::Dict; kind::String="points")
+function savemodelvtk(flname::String,grd::Grid2DCart,datadict::Dict; kind::String="points")
 
     if kind=="cells"
 
@@ -65,7 +67,7 @@ end
 
 #######################################################
 
-function EikonalSolvers.savemodelvtk(flname::String,grd::Grid3DCart,datadict::Dict; kind::String="points")
+function savemodelvtk(flname::String,grd::Grid3DCart,datadict::Dict; kind::String="points")
 
 
     if kind=="cells"
@@ -125,7 +127,7 @@ end
 
 #######################################################
 
-function EikonalSolvers.savemodelvtk(flname::String,grd::Grid2DSphere,datadict::Dict; kind::String="points")
+function savemodelvtk(flname::String,grd::Grid2DSphere,datadict::Dict; kind::String="points")
     
     Δr = grd.Δr
     Δθ = grd.Δθ
@@ -226,7 +228,7 @@ end
 
 #######################################################
 
-function EikonalSolvers.savemodelvtk(flname::String,grd::Grid3DSphere,datadict::Dict; kind::String="points")
+function savemodelvtk(flname::String,grd::Grid3DSphere,datadict::Dict; kind::String="points")
     
     Δr = grd.Δr
     Δθ = grd.Δθ

@@ -33,6 +33,8 @@ export EikonalProb
 
 export ExtraParams,GridRefinementPars
 
+# from extensions
+export savemodelvtk
 
 # println("Hello -> using TimerOutputs")
 # using TimerOutputs
@@ -81,11 +83,13 @@ include("HMCtraveltimes.jl")
 using .HMCtraveltimes
 
 
+function savemodvtk end
+
 # const extrapars = ExtraParams(allowfixsqarg=false,
 #                               refinearoundsrc=true,
 #                               manualGCtrigger=true)
 # warningextrapar(extrapars)
 
-
+ 
 end
 ##############################################
