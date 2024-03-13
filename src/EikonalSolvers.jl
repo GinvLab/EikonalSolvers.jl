@@ -27,7 +27,7 @@ export eikttimemisfit
 
 export eiktraveltime2Dalt,eikgradient2Dalt
 export eiktraveltime3Dalt,eikgradient3Dalt
-
+export tracerays
 
 export EikonalProb
 

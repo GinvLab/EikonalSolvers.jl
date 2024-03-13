@@ -16,27 +16,28 @@ function rungradvel2d()
                      yinit=0.0,
                      nx=50,
                      ny=30) 
-   
+    nx,ny = grd.grsize
+
     nrec = 7
-    coordrec = [[hgrid.*LinRange(3.73,grd.nx-4.34,nrec)  hgrid.*3.7.*ones(nrec);
-                 hgrid*(grd.nx÷2)+0.6*grd.hgrid/2  hgrid*(grd.ny÷2)+0.5*grd.hgrid/2;
-                 hgrid.*LinRange(2.73,grd.nx-3.34,nrec)  hgrid.*(grd.ny-4)*ones(nrec)]]
+    coordrec = [[hgrid.*LinRange(3.73,nx-4.34,nrec)  hgrid.*3.7.*ones(nrec);
+                 hgrid*(nx÷2)+0.6*grd.hgrid/2  hgrid*(ny÷2)+0.5*grd.hgrid/2;
+                 hgrid.*LinRange(2.73,nx-3.34,nrec)  hgrid.*(ny-4)*ones(nrec)]]
     
     #@show coordrec
 
-    velmod = 2500.0 .* ones(grd.nx,grd.ny)                    
+    velmod = 2500.0 .* ones(nx,ny)                    
     # ## increasing velocity with depth...
-    for i=1:grd.ny
+    for i=1:ny
         velmod[:,i] = 23.6 * i .+ velmod[:,i]
     end
 
     srcongrid = false
     if srcongrid
         println("  Source on a grid point")
-        coordsrc1 = [hgrid*(grd.nx÷2)  hgrid*(grd.ny÷2)]
+        coordsrc1 = [hgrid*(nx÷2)  hgrid*(ny÷2)]
     else
         println("  Source NOT on a grid point")
-        coordsrc1 = [hgrid*(grd.nx÷2)+grd.hgrid/2  hgrid*(grd.ny÷2)+grd.hgrid]
+        coordsrc1 = [hgrid*(nx÷2)+grd.hgrid*0.35  hgrid*(ny÷2)+grd.hgrid*1.23]
     end
     @show coordsrc1
 
@@ -64,14 +65,14 @@ function rungradvel2d()
         dobs = ttpicks #.+ noise
 
         # # create a guess/"current" model
-        vel0 = 2200.0 .* ones(grd.nx,grd.ny)
+        vel0 = 2200.0 .* ones(nx,ny)
         ## increasing velocity with depth...
-        for i=1:grd.ny
+        for i=1:ny
            vel0[:,i] = 32.5 * i .+ vel0[:,i]
         end
 
         coordsrc2 = copy(coordsrc1) 
-        #coordsrc = [hgrid*5.4 hgrid*(grd.ny-3.2)]
+        #coordsrc = [hgrid*5.4 hgrid*(ny-3.2)]
 
 
         println("\n-------------- gradient  ----------------")
@@ -85,8 +86,8 @@ function rungradvel2d()
         dh = 0.001
         @show dh
         gradvel_FD = similar(gradvel_all[col])
-        for j=1:grd.ny
-            for i=1:grd.nx            
+        for j=1:ny
+            for i=1:nx            
                 if i%10 == 0
                     print("\ri: $i, j: $j      ")
                 end

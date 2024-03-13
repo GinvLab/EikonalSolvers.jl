@@ -23,15 +23,11 @@ function bilinear_interp(f::AbstractArray{Float64,2},grd::AbstractGridEik2D,
     if typeof(grd)==Grid2DCart
         dx = grd.hgrid
         dy = grd.hgrid
-        xinit = grd.xinit
-        yinit = grd.yinit
-
+        xinit,yinit = grd.cooinit
     elseif typeof(grd)==Grid2DSphere
         dx = grd.Δr
         dy = grd.Δθ
-        xinit = grd.rinit
-        yinit = grd.θinit
-
+        xinit,yinit = grd.cooinit
     end
     
     nx,ny = size(f)
@@ -113,20 +109,12 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
     i = ij[1]
     j = ij[2]
 
-    if typeof(grd)==Grid2DCart
-        simtype=:cartesian
-    elseif typeof(grd)==Grid2DSphere
-        simtype=:spherical
-    end
 
     # sizes, etc.
-    if simtype==:cartesian
-        n1 = grd.nx
-        n2 = grd.ny
+    n1,n2 = grd.grsize
+    if typeof(grd)==Grid2DCart
         Δh = MVector(grd.hgrid,grd.hgrid)
-    elseif simtype==:spherical
-        n1 = grd.nr
-        n2 = grd.nθ
+    elseif typeof(grd)==Grid2DSphere
         Δh = MVector(grd.Δr, grd.r[i]*deg2rad(grd.Δθ))
     end
     # slowness

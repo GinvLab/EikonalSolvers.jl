@@ -21,10 +21,8 @@ $(TYPEDFIELDS)
 
 The fields are:    
 - `hgrid`: spacing of the grid nodes (same for x and y)
-- `xinit, yinit`: origin of the coordinates of the grid
-- `nx, ny`: number of nodes along x and y for the velocity array
-- `ntx, nty`: number of nodes along x and y for the time array when using a staggered grid, meaningful and used *only* for Podvin and Lecomte stencils
-
+- `cooinit`: origin of the coordinates of the grid
+- `grsize`: number of grid nodes along x and y 
 
 # Example
 ```julia-repl
@@ -32,25 +30,26 @@ julia> Grid2DCart(hgrid=5.0,xinit=0.0,yinit=0.0,nx=300,ny=250)
 ```
 """
 struct Grid2DCart <: AbstractGridEik2D
+    "Spacing of the grid nodes"
     hgrid::Float64
-    xinit::Float64
-    yinit::Float64
-    nx::Int64
-    ny::Int64
-    ntx::Int64
-    nty::Int64
+    "Origin of the coodinates of the grid"
+    cooinit::NTuple{2,Float64}
+    cooend::NTuple{2,Float64}
+    grsize::NTuple{2,Int64}
     x::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
     y::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    # ntx::Int64
+    # nty::Int64
 
     function Grid2DCart(; hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
         @assert hgrid>0.0
         @assert nx>0
         @assert ny>0
-        ntx::Int64 = nx+1
-        nty::Int64 = ny+1
+        # ntx::Int64 = nx+1
+        # nty::Int64 = ny+1
         x = range(start=xinit,step=hgrid,length=nx) 
         y = range(start=yinit,step=hgrid,length=ny) 
-        new(hgrid,xinit,yinit,nx,ny,ntx,nty,x,y)
+        new(hgrid,(xinit,yinit),(x[end],y[end]),(nx,ny),x,y)
     end
 end
 
@@ -79,15 +78,9 @@ julia> Grid3DCart(hgrid=5.0,xinit=0.0,yinit=0.0,zinit=0.0,nx=60,ny=60,nz=40)
 """
 struct Grid3DCart <: AbstractGridEik3D
     hgrid::Float64
-    xinit::Float64
-    yinit::Float64
-    zinit::Float64
-    nx::Int64
-    ny::Int64
-    nz::Int64
-    ntx::Int64
-    nty::Int64
-    ntz::Int64
+    cooinit::NTuple{3,Float64}
+    cooend::NTuple{3,Float64}
+    grsize::NTuple{3,Int64}
     x::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
     y::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
     z::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
@@ -99,13 +92,13 @@ struct Grid3DCart <: AbstractGridEik3D
         @assert nx>0
         @assert ny>0
         @assert nz>0
-        ntx::Int64 = nx+1
-        nty::Int64 = ny+1
-        ntz::Int64 = nz+1
+        # ntx::Int64 = nx+1
+        # nty::Int64 = ny+1
+        # ntz::Int64 = nz+1
         x = range(start=xinit,step=hgrid,length=nx) 
         y = range(start=yinit,step=hgrid,length=ny) 
         z = range(start=zinit,step=hgrid,length=nz) 
-        new(hgrid,xinit,yinit,zinit,nx,ny,nz,ntx,nty,ntz,x,y,z)
+        new(hgrid,(xinit,yinit,zinit),(x[end],y[end],z[end]),(nx,ny,nz),x,y,z)
     end
 end
 
@@ -427,7 +420,9 @@ struct FMMVars2D <: AbstractFMMVars
     allowfixsqarg::Bool 
     srcboxpar::Union{SourceBoxParams,SourcePtsFromFineGrid}
 
-    function FMMVars2D(n1,n2; amIcoarsegrid::Bool,refinearoundsrc,allowfixsqarg)
+    function FMMVars2D(n1::Integer,n2::Integer;
+                       amIcoarsegrid::Bool,refinearoundsrc::Bool,
+                       allowfixsqarg::Bool)
         ttime = zeros(Float64,n1,n2)
         status = zeros(UInt8,n1,n2)
         bheap = init_minheap(n1*n2)

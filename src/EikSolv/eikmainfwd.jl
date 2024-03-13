@@ -204,11 +204,7 @@ function createFMMvars(grd::AbstractGridEik2D;
                        amIcoarsegrid::Bool,
                        refinearoundsrc::Bool,
                        allowfixsqarg::Bool)
-    if typeof(grd)==Grid2DCart
-        n1,n2 = grd.nx,grd.ny
-    elseif typeof(grd)==Grid2DSphere
-        n1,n2 = grd.r,grd.θ
-    end       
+    n1,n2 = grd.grsize
     fmmvars = FMMVars2D(n1,n2,amIcoarsegrid=true,
                         refinearoundsrc=refinearoundsrc,
                         allowfixsqarg=allowfixsqarg)
@@ -219,11 +215,7 @@ function createFMMvars(grd::AbstractGridEik3D;
                        amIcoarsegrid::Bool,
                        refinearoundsrc::Bool,
                        allowfixsqarg::Bool)
-    if typeof(grd)==Grid3DCart
-        n1,n2,n3 = grd.nx,grd.ny,grd.nz
-    elseif typeof(grd)==Grid3DSphere
-        n1,n2,n3 = grd.r,grd.θ,grd.φ
-    end   
+    n1,n2,n3 = grd.grsize
     fmmvars = FMMVars3D(n1,n2,n3,amIcoarsegrid=true,
                         refinearoundsrc=refinearoundsrc,
                         allowfixsqarg=allowfixsqarg)
@@ -854,7 +846,7 @@ function createsparsederivativematrices!(grd::AbstractGridEik,
     if typeof(grd)==Grid2DCart
         simtype = :cartesian
         Ndim = 2
-        n1,n2 = grd.nx,grd.ny
+        n1,n2 = grd.grsize
         npts = n1*n2
         hgrid = grd.hgrid
         #allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
@@ -870,11 +862,12 @@ function createsparsederivativematrices!(grd::AbstractGridEik,
     elseif typeof(grd)==Grid2DSphere
         simtype = :spherical
         Ndim = 2
-        n1,n2 = grd.nr,grd.nθ
+        n1,n2 = grd.grsize
         npts = n1*n2
-        Δr = grd.Δr
+        Δr = grd.Δrθ[1]
+        Δθ = grd.Δrθ[2]
         ## DEG to RAD !!!!
-        Δarc = [grd.r[i] * deg2rad(grd.Δθ) for i=1:grd.nr]
+        Δarc = [grd.r[i] * deg2rad(Δθ) for i=1:n1]
         # coefficients
         coe_r_1st = MVector(-1.0/Δr,  1.0/Δr)
         coe_r_2nd = MVector(-3.0/(2.0*Δr),  4.0/(2.0*Δr) -1.0/(2.0*Δr) )
@@ -888,7 +881,7 @@ function createsparsederivativematrices!(grd::AbstractGridEik,
     elseif typeof(grd)==Grid3DCart
         simtype = :cartesian
         Ndim = 3
-        n1,n2,n3 = grd.nx,grd.ny,grd.nz
+        n1,n2,n3 = grd.grsize
         npts = n1*n2*n3
         hgrid = grd.hgrid
         #allcoeff = [[-1.0/hgrid, 1.0/hgrid], [-3.0/(2.0*hgrid), 4.0/(2.0*hgrid), -1.0/(2.0*hgrid)]]
@@ -985,7 +978,6 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
     ## find indices of closest node to source in the "big" array
     ## ix, iy will become the center of the refined grid
     if simtype==:cartesian
-        #n1_coarse,n2_coarse,n3_coarse = grd.nx,grd.ny,grd.nz
         grsize_coarse = size(vel)
         ijksrccorn = findenclosingbox(grd,xyzsrc)
             
@@ -1133,18 +1125,10 @@ Find closest node on a grid to a given point.
 """
 function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::AbstractMatrix{<:Int}
 
-    if typeof(grd)==Grid2DCart
-        Ndim = 2
-        grsize = SVector(grd.nx,grd.ny)
-        xyzinit = SVector(grd.xinit,grd.yinit)
-    elseif typeof(grd)==Grid3DCart
-        Ndim = 3
-        grsize = SVector(grd.nx,grd.ny,grd.nz)
-        xyzinit = SVector(grd.xinit,grd.yinit,grd.zinit)
-    else
-        error("findclosestnode(): Not yet implemented for $(typeof(grd))")
-    end
+    grsize = SVector(grd.grsize...)
+    xyzinit = SVector(grd.cooinit...)
 
+    Ndim = length(xyzsrc)
     # xyzres = (xyzsrc.-xyzinit)./grd.hgrid
     # # make sure to get integers
     # ijkpt = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...
@@ -1265,12 +1249,9 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
     if Ncorn>1
         ## amount to move the source position
         srcshift = 1e-4*grd.hgrid   #1e3*sqrt(eps())
+        ## origin of coordinates
+        xyzinit = SVector(grd.cooinit...)
 
-        if Ndim==2
-            xyzinit = SVector(grd.xinit,grd.yinit)
-        elseif Ndim==3
-            xyzinit = SVector(grd.xinit,grd.yinit,grd.zinit)
-        end
         # check if the source position is halfway between grid points
         #   in each direction
         remainder = MVector{Ndim,Float64}(undef)

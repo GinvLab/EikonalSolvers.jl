@@ -10,9 +10,10 @@ function test_fwdtt_2D_constvel()
 
     # Create a grid and a velocity model
     grd = Grid2DCart(hgrid=250.0,xinit=0.0,yinit=0.0,nx=111,ny=121)
+    nx,ny = grd.grsize
 
-    coordsrcs = [[grd.hgrid+grd.x[grd.nx÷2]  grd.hgrid+grd.y[grd.ny÷2]],
-                 [grd.hgrid/2+grd.x[grd.nx÷2]  grd.hgrid/2+grd.y[grd.ny÷2]]]
+    coordsrcs = [[grd.hgrid+grd.x[nx÷2]  grd.hgrid+grd.y[ny÷2]],
+                 [grd.hgrid/2+grd.x[nx÷2]  grd.hgrid/2+grd.y[ny÷2]]]
 
     tolerr = [0.032895,
               0.012284,
@@ -35,7 +36,7 @@ function test_fwdtt_2D_constvel()
             ## Traveltime forward
             #printstyled("  Traveltime $(Ndim)-D vs. analytical solution (constant velocity), refin.=$refinearoundsrc.\n",bold=true,color=:cyan)
 
-            constvelmod = 2500.0 .* ones(grd.nx,grd.ny)
+            constvelmod = 2500.0 .* ones(nx,ny)
             coordrec = [[grd.x[2] grd.y[3]]]
             
             _,ttime = eiktraveltime(constvelmod,grd,coordsrc,coordrec,
@@ -43,10 +44,10 @@ function test_fwdtt_2D_constvel()
             
             # analytical solution for constant velocity
             xsrc,ysrc=coordsrc[1,1],coordsrc[1,2]
-            ttanalconstvel = zeros(grd.nx,grd.ny)
-            diffttanalconstvel = zeros(grd.nx,grd.ny)
-            for j=1:grd.ny
-                for i=1:grd.nx
+            ttanalconstvel = zeros(nx,ny)
+            diffttanalconstvel = zeros(nx,ny)
+            for j=1:ny
+                for i=1:nx
                     ttanalconstvel[i,j] = sqrt((grd.x[i]-xsrc)^2+(grd.y[j]-ysrc)^2)/constvelmod[i,j]
                     diffttanalconstvel[i,j] = ttime[1][i,j] - ttanalconstvel[i,j]
                 end
@@ -77,21 +78,22 @@ end
 function analyticalsollingrad2D(grd::Grid2DCart,xsrcpos::Float64,ysrcpos::Float64)
     ##################################
     ## linear gradient of velocity
-     
+    nx,ny = grd.grsize
+
     ## source must be *on* the top surface
     #@show ysrcpos
     @assert (ysrcpos == 0.0)
 
     # position of the grid nodes
-    xgridpos = grd.x #[(i-1)*grd.hgrid for i=1:grd.nx] .+ grd.xinit
-    ygridpos = grd.y #[(i-1)*grd.hgrid for i=1:grd.ny] .+ grd.yinit
+    xgridpos = grd.x #[(i-1)*grd.hgrid for i=1:nx] .+ grd.xinit
+    ygridpos = grd.y #[(i-1)*grd.hgrid for i=1:ny] .+ grd.yinit
     # base velocity
     vel0 = 2.0
     # gradient of velociy
     gr = 0.05
     ## construct the 2D velocity model
-    velmod = zeros(grd.nx,grd.ny) 
-    for i=1:grd.nx
+    velmod = zeros(nx,ny) 
+    for i=1:nx
         velmod[i,:] = vel0 .+ gr .* (ygridpos .- ysrcpos)
     end
 
@@ -99,8 +101,8 @@ function analyticalsollingrad2D(grd::Grid2DCart,xsrcpos::Float64,ysrcpos::Float6
     # Lesson No. 41: Linear Distribution of Velocity—V. The Wave-Fronts 
 
     ## Analytic solution
-    ansol2d  = zeros(grd.nx,grd.ny)
-    for j=1:grd.ny, i=1:grd.nx
+    ansol2d  = zeros(nx,ny)
+    for j=1:ny, i=1:nx
         x = xgridpos[i]-xsrcpos
         h = ygridpos[j]-ysrcpos
         ansol2d[i,j] = 1/gr * acosh( 1 + (gr^2*(x^2+h^2))/(2*vel0*velmod[i,j]) )
@@ -131,7 +133,7 @@ function test_fwdtt_2D_lingrad()
     #--------------------------------------
     # Create a grid and a velocity model
     grd = Grid2DCart(hgrid=15.0,xinit=0.0,yinit=0.0,nx=111,ny=121)
-    
+    nx,ny = grd.grsize
 
     #########################
     # Analytical solution
@@ -176,18 +178,19 @@ function test_gradvel_2D()
                      yinit=0.0,
                      nx=50,
                      ny=30)
+    nx,ny = grd.grsize
 
     nrec = 7
-    coordrec = [[grd.hgrid.*LinRange(3.73,grd.nx-4.34,nrec)  grd.hgrid.*3.7.*ones(nrec);
-                 grd.hgrid*(grd.nx÷2)+0.6*grd.hgrid/2  grd.hgrid*(grd.ny÷2)+0.5*grd.hgrid/2;
-                 grd.hgrid.*LinRange(2.73,grd.nx-3.34,nrec)  grd.hgrid.*(grd.ny-4)*ones(nrec)]]
+    coordrec = [[grd.hgrid.*LinRange(3.73,nx-4.34,nrec)  grd.hgrid.*3.7.*ones(nrec);
+                 grd.hgrid*(nx÷2)+0.6*grd.hgrid/2  grd.hgrid*(ny÷2)+0.5*grd.hgrid/2;
+                 grd.hgrid.*LinRange(2.73,nx-3.34,nrec)  grd.hgrid.*(ny-4)*ones(nrec)]]
 
-    velmod = 2500.0 .* ones(grd.nx,grd.ny)
-    for i=1:grd.ny
+    velmod = 2500.0 .* ones(nx,ny)
+    for i=1:ny
         velmod[:,i] = 23.6 * i .+ velmod[:,i]
     end
 
-    coordsrc1 = [grd.hgrid*(grd.nx÷2)+0.23*grd.hgrid  grd.hgrid*(grd.ny÷2)-0.6*grd.hgrid]
+    coordsrc1 = [grd.hgrid*(nx÷2)+0.23*grd.hgrid  grd.hgrid*(ny÷2)-0.6*grd.hgrid]
 
     tolerr = [7.04e-6,
               7.57e-6]
@@ -212,9 +215,9 @@ function test_gradvel_2D()
         dobs = ttpicks #.+ noise
 
         # # create a guess/"current" model
-        vel0 = 2200.0 .* ones(grd.nx,grd.ny)
+        vel0 = 2200.0 .* ones(nx,ny)
         ## increasing velocity with depth...
-        for i=1:grd.ny
+        for i=1:ny
            vel0[:,i] = 32.5 * i .+ vel0[:,i]
         end
 
@@ -228,8 +231,8 @@ function test_gradvel_2D()
         dh = 0.001
 
         gradvel_FD = similar(gradvel)
-        for j=1:grd.ny
-            for i=1:grd.nx
+        for j=1:ny
+            for i=1:nx
                 velpdh = copy(vel0)
                 velpdh[i,j] += dh
                 velmdh = copy(vel0)
@@ -265,20 +268,21 @@ function test_gradsrc_2D()
                      yinit=0.0,
                      nx=50,
                      ny=30)
+    nx,ny = grd.grsize
 
     nrec = 7
-    coordrec = [[grd.hgrid.*LinRange(3.73,grd.nx-4.34,nrec)  grd.hgrid.*3.7.*ones(nrec);
-                 grd.hgrid*(grd.nx÷2)+0.6*grd.hgrid/2  grd.hgrid*(grd.ny÷2)+0.5*grd.hgrid/2;
-                 grd.hgrid.*LinRange(2.73,grd.nx-3.34,nrec)  grd.hgrid.*(grd.ny-4)*ones(nrec)]]
+    coordrec = [[grd.hgrid.*LinRange(3.73,nx-4.34,nrec)  grd.hgrid.*3.7.*ones(nrec);
+                 grd.hgrid*(nx÷2)+0.6*grd.hgrid/2  grd.hgrid*(ny÷2)+0.5*grd.hgrid/2;
+                 grd.hgrid.*LinRange(2.73,nx-3.34,nrec)  grd.hgrid.*(ny-4)*ones(nrec)]]
 
-    velmod = 2500.0 .* ones(grd.nx,grd.ny)
+    velmod = 2500.0 .* ones(nx,ny)
 
-    for i=1:grd.ny
+    for i=1:ny
         velmod[:,i] = 23.6 * i .+ velmod[:,i]
     end
 
 
-    coordsrc1 = [grd.hgrid*(grd.nx÷2)+0.23*grd.hgrid  grd.hgrid*(grd.ny÷2)-0.6*grd.hgrid]
+    coordsrc1 = [grd.hgrid*(nx÷2)+0.23*grd.hgrid  grd.hgrid*(ny÷2)-0.6*grd.hgrid]
 
     tolerr = [3.83e-4,
               2.26e-4]
@@ -304,9 +308,9 @@ function test_gradsrc_2D()
         dobs = ttpicks #.+ noise
 
         # # create a guess/"current" model
-        vel0 = 2200.0 .* ones(grd.nx,grd.ny)
+        vel0 = 2200.0 .* ones(nx,ny)
         ## increasing velocity with depth...
-        for i=1:grd.ny
+        for i=1:ny
            vel0[:,i] = 32.5 * i .+ vel0[:,i]
         end
 
@@ -462,7 +466,7 @@ end
 #         stdobs[i] .= 0.15
 #         dobs[i] = ttpicks[i] .+ stdobs[i].^2 .* randn(size(ttpicks[i]))
 #     end
-#     flatmod = 2.8 .+ zeros(grd.nx,grd.ny) 
+#     flatmod = 2.8 .+ zeros(nx,ny) 
     
 #     println("Gradient 2D using default algo")
 #     grad = gradttime2D(flatmod,grd,coordsrc,coordrec,dobs,stdobs)
@@ -488,7 +492,7 @@ end
 #         stdobs[i] .= 0.15
 #         dobs[i] = ttpicks[i] .+ stdobs[i].^2 .* randn(size(ttpicks[i]))
 #     end
-#     flatmod = 2.8 .+ zeros(grd.nx,grd.ny) 
+#     flatmod = 2.8 .+ zeros(nx,ny) 
     
 #     gradalgos = ["gradFS_podlec","gradFMM_podlec","gradFMM_hiord"]
 #     for gradalgo in gradalgos
@@ -516,7 +520,7 @@ end
 #     noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
 #     dobs = ttpicks .+ noise
     
-#     flatmod = 2.8 .+ zeros(grd.nx,grd.ny,grd.nz) 
+#     flatmod = 2.8 .+ zeros(nx,ny,grd.nz) 
     
 #     println("Gradient 3D using default algo")
 #     grad = gradttime3D(flatmod,grd,coordsrc,coordrec,dobs,stdobs)
@@ -541,7 +545,7 @@ end
 #     noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
 #     dobs = ttpicks .+ noise
     
-#     flatmod = 2.8 .+ zeros(grd.nx,grd.ny,grd.nz) 
+#     flatmod = 2.8 .+ zeros(nx,ny,grd.nz) 
     
 #     gradalgos = ["gradFS_podlec","gradFMM_podlec","gradFMM_hiord"]
 #     for gradalgo in gradalgos

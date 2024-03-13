@@ -213,6 +213,27 @@ end
 
 ##############################################################################
 
+"""
+
+$(TYPEDSIGNATURES)
+
+Ray tracing utility. Given a traveltime grid and source and receiver positions, trace the rays.
+"""
+function tracerays(grd::AbstractGridEik,ttime::Vector{Array{Float64}},
+                   coordsrc::Array{Float64,2},coordrec::Vector{Array{Float64,2}};
+                   steplen::Real=0.01)
+    
+    nsrc = size(coordsrc,1)
+    rays_srcs = Vector{Vector{Matrix{Float64}}}(undef,nsrc)
+    for s=1:nsrc
+        rays_srcs[s] = tracerays_singlesrc(grd,ttime[s],coordsrc[s,:],coordrec[s],steplen=steplen)
+    end
+    
+    return rays_srcs
+end
+
+
+##############################################################################
 
 """
 
@@ -222,7 +243,7 @@ Ray tracing utility. Given a traveltime grid and source and receiver positions, 
 """
 function tracerays_singlesrc(grd::AbstractGridEik,ttime::Array{Float64,N},
                              srccoo::AbstractVector,coordrec::Array{Float64,2};
-                             steplen::Real=0.1) where N
+                             steplen::Real) where N
 
     # setup interpolation
     if typeof(grd)==Grid2DCart
@@ -262,19 +283,24 @@ function tracerays_singlesrc(grd::AbstractGridEik,ttime::Array{Float64,N},
             ## compute the new point
             newpt = raypath[s,:] .- rstep .* normgradT
 
-            # if any(grd.xyxinit .> newpt) ||  any(grd.xyzend .< newpt)
-            #     error("Point outside the domain")
-            # end
-            
+            ## If the newpt is outside the domain...
+            for d=1:Ndim
+                if newpt[d] < grd.cooinit[d]
+                    newpt[d] = grd.cooinit[d]
+                elseif newpt[d] > grd.cooend[d]
+                    newpt[d] = grd.cooend[d]
+                end
+            end
+                        
+            ## if the array is not big enough, re-allocate
+            if s>=size(raypath,1)            
+                raypath = [raypath; zeros(Nseg,Ndim)]
+            end
+
             raypath[s+1,:] = newpt
             
             dist2src = sqrt(sum((raypath[s+1,:] .- srccoo).^2))
-
             s += 1
-            ## if the array is not big enough, re-allocate
-            if s>size(raypath,1)            
-                raypath = [raypath; zeros(Nseg)]
-            end
         end
         ## last point, i.e., the source
         raypath[s,:] .= srccoo
