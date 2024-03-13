@@ -1157,7 +1157,7 @@ function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::Abstract
     ijkpt = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...            
 
     ## set an absolute tolerance for the remainder
-    atol = sqrt(eps())
+    atol = 1e-4*grd.hgrid #sqrt(eps())
     if all(isapprox.(remainder,0.0,atol=1e-8))   #all(remainder.==0.0)
         #####################################################
         ##
@@ -1229,6 +1229,7 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
     ## Set some srcboxpar fields
     fmmvars.srcboxpar.ijksrc .= ijkcorn
     fmmvars.srcboxpar.xyzsrc .= srcpos
+    #@show ijkcorn
 
     ## corner position
     xyzpt = MVector{Ndim,Float64}(undef)
@@ -1263,7 +1264,7 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
     ## If the source is exactly in the middle of four corners, move it by a bit...
     if Ncorn>1
         ## amount to move the source position
-        srcshift = 1e3*sqrt(eps())
+        srcshift = 1e-4*grd.hgrid   #1e3*sqrt(eps())
 
         if Ndim==2
             xyzinit = SVector(grd.xinit,grd.yinit)
@@ -1291,7 +1292,7 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
             end
    
             whichdir = findall(issrchalfway)
-            @warn "Shifting the source position along dimension(s) $(whichdir) by $(round(srcshift,sigdigits=3)) "
+            @warn "Shifting the source position along dimension(s) $(whichdir) by $(round(srcshift,sigdigits=3)) [1e-4*grd.hgrid] "
             fmmvars.srcboxpar.xyzsrc .= new_srcpos
 
             for l=1:Ncorn

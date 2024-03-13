@@ -208,20 +208,81 @@ function eikttimemisfit(velmod::Array{Float64,N},ttpicksobs::AbstractArray,
     end
     misf *= 0.5
 
-    # misf = 0.0
-    # for s=1:nsrc
-    #     misf = sum(ttpicks[s])
-    # end
-
-    # flatten traveltime array
-    # dcalc = vec(ttpicks)
-    # dobs = vec(ttpicksobs)
-    # stdobsv = vec(stdobs)
-    # ## L2 norm^2
-    # diffcalobs = dcalc .- dobs 
-    # misf = 0.5 * sum( diffcalobs.^2 ./ stdobsv.^2 )
-
     return misf
+end
+
+##############################################################################
+
+
+"""
+
+$(TYPEDSIGNATURES)
+
+Ray tracing utility. Given a traveltime grid and source and receiver positions, trace the rays.
+"""
+function tracerays_singlesrc(grd::AbstractGridEik,ttime::Array{Float64,N},
+                             srccoo::AbstractVector,coordrec::Array{Float64,2};
+                             steplen::Real=0.1) where N
+
+    # setup interpolation
+    if typeof(grd)==Grid2DCart
+        Ndim = 2
+        itp = scale(interpolate(ttime,BSpline(Cubic())),grd.x,grd.y)
+    elseif typeof(grd)==Grid3DCart
+        Ndim = 3
+        itp = scale(interpolate(ttime,BSpline(Cubic())),grd.x,grd.y,grd.z)
+    end
+
+    Nrec = size(coordrec,1)
+    rays = Vector{Matrix{Float64}}(undef,Nrec)
+
+    thrdist = grd.hgrid*sqrt(2)
+    rstep = steplen * grd.hgrid
+
+    Nseg::Int64 = 1e6
+    raypath = zeros(Nseg,Ndim)
+    
+    for r=1:Nrec
+
+        rec = coordrec[r,:]
+        raypath[1,:] .= rec
+        dist2src = sqrt(sum((raypath[1,:] .- srccoo).^2))
+
+        s=1
+        while dist2src >= thrdist
+            
+            x,y = raypath[s,:]
+            if Ndim == 2
+                gradT = gradient(itp,raypath[s,1],raypath[s,2])
+            elseif Ndim == 3
+                gradT = gradient(itp,raypath[s,1],raypath[s,2],raypath[s,3])
+            end
+            ## normalize the gradient vector to make the step-length more meaningful
+            normgradT = gradT ./ sqrt(sum((gradT).^2))
+            ## compute the new point
+            newpt = raypath[s,:] .- rstep .* normgradT
+
+            # if any(grd.xyxinit .> newpt) ||  any(grd.xyzend .< newpt)
+            #     error("Point outside the domain")
+            # end
+            
+            raypath[s+1,:] = newpt
+            
+            dist2src = sqrt(sum((raypath[s+1,:] .- srccoo).^2))
+
+            s += 1
+            ## if the array is not big enough, re-allocate
+            if s>size(raypath,1)            
+                raypath = [raypath; zeros(Nseg)]
+            end
+        end
+        ## last point, i.e., the source
+        raypath[s,:] .= srccoo
+        ## output array
+        rays[r] = raypath[1:s,:]
+    end
+
+    return rays
 end
 
 ##############################################################################

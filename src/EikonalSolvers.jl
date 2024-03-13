@@ -45,6 +45,7 @@ using OffsetArrays
 using SparseArrays
 using DocStringExtensions
 using StaticArrays
+using Interpolations
 
 # @warn "using HDF5"
 # using HDF5

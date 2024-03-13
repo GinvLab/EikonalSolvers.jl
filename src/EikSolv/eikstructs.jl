@@ -39,14 +39,17 @@ struct Grid2DCart <: AbstractGridEik2D
     ny::Int64
     ntx::Int64
     nty::Int64
-    x::Vector{Float64}
-    y::Vector{Float64}
+    x::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    y::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
 
     function Grid2DCart(; hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
+        @assert hgrid>0.0
+        @assert nx>0
+        @assert ny>0
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
-        x = [xinit+(i-1)*hgrid for i=1:nx]
-        y = [yinit+(i-1)*hgrid for i=1:ny]
+        x = range(start=xinit,step=hgrid,length=nx) 
+        y = range(start=yinit,step=hgrid,length=ny) 
         new(hgrid,xinit,yinit,nx,ny,ntx,nty,x,y)
     end
 end
@@ -85,19 +88,23 @@ struct Grid3DCart <: AbstractGridEik3D
     ntx::Int64
     nty::Int64
     ntz::Int64
-    x::Vector{Float64}
-    y::Vector{Float64}
-    z::Vector{Float64}
+    x::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    y::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    z::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
     
     ## constructor function
     function Grid3DCart(; hgrid::Float64,xinit::Float64,yinit::Float64, zinit::Float64,
-                    nx::Int64,ny::Int64,nz::Int64)
+                        nx::Int64,ny::Int64,nz::Int64)
+        @assert hgrid>0.0
+        @assert nx>0
+        @assert ny>0
+        @assert nz>0
         ntx::Int64 = nx+1
         nty::Int64 = ny+1
         ntz::Int64 = nz+1
-        x = [xinit+(i-1)*hgrid for i=1:nx]
-        y = [yinit+(i-1)*hgrid for i=1:ny]
-        z = [zinit+(i-1)*hgrid for i=1:nz]
+        x = range(start=xinit,step=hgrid,length=nx) 
+        y = range(start=yinit,step=hgrid,length=ny) 
+        z = range(start=zinit,step=hgrid,length=nz) 
         new(hgrid,xinit,yinit,zinit,nx,ny,nz,ntx,nty,ntz,x,y,z)
     end
 end
@@ -130,14 +137,17 @@ struct Grid2DSphere <: AbstractGridEik2D
     θinit::Float64
     nr::Int64
     nθ::Int64
-    r::Vector{Float64}
-    θ::Vector{Float64}
+    r::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    θ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
 
     function Grid2DSphere(; Δr::Float64,Δθ::Float64,rinit::Float64,θinit::Float64,nr::Int64,nθ::Int64)
-        r = [rinit+Δr*(i-1) for i =1:nr]
-        θ = [θinit+Δθ*(i-1) for i =1:nθ]
+        @assert r>0.0
         ## limit to 180 degrees for now...
         @assert all(0.0.<=θ.<=180.0)
+        @assert nr>0
+        @assert nθ>0
+        r = range(start=rinit,step=Δr,length=nr) #[rinit+Δr*(i-1) for i =1:nr]
+        θ = range(start=θinit,step=Δθ,length=nθ) #[θinit+Δθ*(i-1) for i =1:nθ]
         # ## now convert everything to radians
         # println("Grid2DSphere(): converting θ to radians")
         # θ .= deg2rad(θ)
@@ -178,20 +188,23 @@ struct Grid3DSphere <: AbstractGridEik3D
     nr::Int64
     nθ::Int64
     nφ::Int64
-    r::Vector{Float64}
-    θ::Vector{Float64}
-    φ::Vector{Float64}
+    r::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    θ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    φ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
 
     function Grid3DSphere(; Δr::Float64,Δθ::Float64,Δφ::Float64,rinit::Float64,θinit::Float64,φinit::Float64,
                           nr::Int64,nθ::Int64,nφ::Int64 )
-        r = [rinit+Δr*(i-1) for i =1:nr]
-        θ = [θinit+Δθ*(i-1) for i =1:nθ]
-        φ = [φinit+Δφ*(i-1) for i =1:nφ]
-
+        @assert r>0.0
         ## exclude the poles... sin(θ) -> sin(0) or sin(180) = 0  -> leads to division by zero
         @assert all(5.0.<=θ.<=175.0)
         ## limit to 180 degrees for now...
         @assert all(0.0.<=φ.<=180.0)
+        @assert nr>0
+        @assert nθ>0
+        @assert nφ>0
+        r = range(start=rinit,step=Δr,length=nr) #[rinit+Δr*(i-1) for i =1:nr]
+        θ = range(start=θinit,step=Δθ,length=nθ) #[θinit+Δθ*(i-1) for i =1:nθ]
+        φ = range(start=φinit,step=Δφ,length=nφ) #[φinit+Δφ*(i-1) for i =1:nφ]
         # ## now convert everything to radians
         # println("Grid2DSphere(): converting θ to radians")
         # θ .= deg2rad(θ)
