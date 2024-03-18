@@ -126,26 +126,28 @@ julia> Grid2DSphere(Δr=15.0,Δθ=2.0,nr=10,nθ=15,rinit=500.0,θinit=0.0)
 struct Grid2DSphere <: AbstractGridEik2D
     Δr::Float64
     Δθ::Float64
-    rinit::Float64
-    θinit::Float64
-    nr::Int64
-    nθ::Int64
+    cooinit::NTuple{2,Float64}
+    cooend::NTuple{2,Float64}
+    grsize::NTuple{2,Int64}
     r::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
     θ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
 
     function Grid2DSphere(; Δr::Float64,Δθ::Float64,rinit::Float64,θinit::Float64,nr::Int64,nθ::Int64)
-        @assert r>0.0
-        ## limit to 180 degrees for now...
-        @assert all(0.0.<=θ.<=180.0)
+        @assert rinit>=0.0
+        @assert Δr>0.0
+        @assert Δθ>0.0
         @assert nr>0
         @assert nθ>0
         r = range(start=rinit,step=Δr,length=nr) #[rinit+Δr*(i-1) for i =1:nr]
         θ = range(start=θinit,step=Δθ,length=nθ) #[θinit+Δθ*(i-1) for i =1:nθ]
+        ## limit to 180 degrees for now...
+        @show θ
+        @assert all(0.0.<=θ.<=180.0)
         # ## now convert everything to radians
         # println("Grid2DSphere(): converting θ to radians")
         # θ .= deg2rad(θ)
         # Δθ = deg2rad(Δθ)
-        new(Δr,Δθ,rinit,θinit,nr,nθ,r,θ)
+        new(Δr,Δθ,(rinit,θinit),(r[end],θ[end]),(nr,nθ),r,θ)
     end
 end
 
@@ -460,7 +462,8 @@ struct FMMVars3D <: AbstractFMMVars
     allowfixsqarg::Bool 
     srcboxpar::Union{SourceBoxParams,SourcePtsFromFineGrid}
     
-    function FMMVars3D(n1,n2,n3; amIcoarsegrid::Bool,refinearoundsrc,allowfixsqarg)
+    function FMMVars3D(n1::Integer,n2::Integer,n3::Integer;
+                       amIcoarsegrid::Bool,refinearoundsrc::Bool,allowfixsqarg::Bool)
         ttime = zeros(Float64,n1,n2,n3)
         status = zeros(UInt8,n1,n2,n3)
         bheap = init_minheap(n1*n2*n3)

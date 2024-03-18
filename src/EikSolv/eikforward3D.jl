@@ -233,7 +233,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
 
             ## check if on boundaries
             isonb1st,isonb2nd = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
-                                    
+
             ##==== 1st order ================
             if !isonb1st && fmmvars.status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
                 ## first test value
@@ -257,9 +257,9 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                     ish2::Int64 = 2*ish
                     jsh2::Int64 = 2*jsh
                     ksh2::Int64 = 2*ksh
-                    if !isonb2nd && fmmvars.status[i+ish2,j+jsh2,k+ksh]==2 ## 2==accepted
+                    if !isonb2nd && fmmvars.status[i+ish2,j+jsh2,k+ksh2]==2 ## 2==accepted
                         # second test value
-                        testval2 = fmmvars.ttime[i+ish2,j+jsh2,k+ksh]
+                        testval2 = fmmvars.ttime[i+ish2,j+jsh2,k+ksh2]
                         ## pick the lowest value of the two
                         ##    compare to chosenval 1, *not* 2!!
                         ## This because the direction has already been chosen
@@ -301,7 +301,6 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
 
         ## spacing
         deltah = Δh[axis]
-
         
         if use2ndord && use1stord # second order
             tmpa2 = 1.0/3.0 * (4.0*chosenval1-chosenval2)
@@ -382,11 +381,11 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                     end
 
                     ## check if on boundaries
-                     isonb1st,isonb2nd = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
+                    isonb1st,isonb2nd = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
                     
                     ## 1st order
-                    if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
-                           testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
+                    if !isonb1st && fmmvars.status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
+                        testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
                         ## pick the lowest value of the two
                         if testval1<=chosenval1 ## < only
                             chosenval1 = testval1

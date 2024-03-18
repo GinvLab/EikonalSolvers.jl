@@ -12,22 +12,6 @@ $(TYPEDSIGNATURES)
 Calculate the traveltime for 2D or 3D velocity models at requested receivers locations.
 Optionally return the array(s) of traveltime on the entire gridded model.
 
-The computations may be run in parallel depending on the value of `extraparams.parallelkind`.
-
-# Arguments
-- `vel`: the 2D or 3D velocity model
-- `grd`: a struct specifying the geometry and size of the model (e.g., Grid3DCart)
-- `coordsrc`: the coordinates of the source(s) (x,y[,z]), a 2-column (3-column) array
-- `coordrec`: the coordinates of the receiver(s) (x,y[,z]) for each single source, a vector of 2-column (3-column) arrays. An array of receivers' coordinates is needed for each source (they can be different). 
-- `returntt` (optional): whether to return the 3D array(s) of traveltimes for the entire model
-- `extraparams` (optional): a struct containing some "extra" parameters, namely
-    * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
-    * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
-    * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
-    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this!
-    * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
-
-# Returns
 - `ttpicks`: a vector of vectors containing traveltimes at the receivers for each source 
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 """
@@ -241,6 +225,7 @@ function ttFMM_hiord!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},src::Abstra
     end
 
     Ndim = ndims(vel)
+    @assert Ndim==length(grd.grsize)
 
     ##==================================================##
     ###
@@ -261,7 +246,7 @@ function ttFMM_hiord!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},src::Abstra
         ##
         ##  Init discrete adjoint stuff
         ##
-        nxyz = prod(size(vel))
+        nxyz = prod(grd.grsize)
         ## Initialize size of derivative matrices as full nxyz*nxyz,
         ##   then rows corresponding to "source" points will be removed
         ##   later on
@@ -341,23 +326,19 @@ function runrefinementaroundsrc!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
     else
         dodiscradj=true
     end
-    if typeof(grd)==Grid2DCart || typeof(grd)==Grid3DCart 
-        simtype = :cartesian
+
+    if typeof(grd)==Grid2DCart || typeof(grd)==Grid2DSphere 
         Ndim = 2
-    elseif typeof(grd)==Grid2DSphere || typeof(grd)==Grid3DSphere
-        simtype = :spherical
-        Ndim = 3
+    elseif typeof(grd)==Grid3DCart || typeof(grd)==Grid3DSphere
+        Ndim = 3        
     end
     
     ##==================================================
     ## create the refined grid
     grd_fine,srcrefvars = createfinegrid(grd,xyzsrc,vel,
                                          extrapars.grdrefpars)
-  
+
     ## pre-allocate ttime and status arrays plus the binary heap
-    # fmmvars_fine = FMMVars2D(n1_fine,n2_fine,amIcoarsegrid=false,
-    #                          refinearoundsrc=false,
-    #                          allowfixsqarg=extrapars.allowfixsqarg)
     fmmvars_fine = createFMMvars(grd_fine,amIcoarsegrid=false,
                                  refinearoundsrc=false,
                                  allowfixsqarg=extrapars.allowfixsqarg)
@@ -474,7 +455,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     naccinit = size(ijksrc,1)  
 
     ## Establish a mapping between linear and Cartesian indexing 
-    grsize = size(vel)
+    grsize = grd.grsize
     totnpts = prod(grsize)
     ND = ndims(vel)
     @assert ND==N
@@ -597,7 +578,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     ## Construct INITIAL narrow band
     for l=1:naccinit ##
 
-
         for ne=1:size(neigh,1) ## four potential neighbors
             #
             curptijk .= ijksrc[l,:] .+ neigh[ne,:]
@@ -630,7 +610,6 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
     end
         
 
-
     ######################################################
     ## main FMM loop
     ######################################################
@@ -649,7 +628,7 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
         ##  Loop over same min values
         ##    (pop all at the same time...)
         ##
-        maxnpop = 16 ##  ???
+        maxnpop = 128 ## Arbitrary number...???
         accptijk_ls = MMatrix{maxnpop,ND,Int64}(undef)
         sameminval = true
         npopped::Int64 = 0
@@ -771,12 +750,8 @@ function ttFMM_core!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},grd::Abstrac
 
         end ## while sameminval
         ##===================================
-
  
-        # println("\n $iter fmmvars.ttime'")
-        # display(transpose(fmmvars.ttime))
 
-        
         #############################################
         ## loop over all the popped points
         for ipop=1:npopped
@@ -986,7 +961,8 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
         # ixsrcglob,iysrcglob = findclosestnode_sph(xyzsrc[1],xyzsrc[2],xyzsrc[3],
         #                                           grd.rinit,grd.θinit,grd.φinit,
         #                                           grd.Δr,grd.Δθ,grd.Δφ)
-        error("createfinegrid(): spherical coordinates still work in progress...")
+        grsize_coarse = size(vel)
+        ijksrccorn = findenclosingbox(grd,xyzsrc)
     end
     
     ##
@@ -1095,15 +1071,21 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
         end
 
     elseif simtype==:spherical
-        error("createfinegrid(): spherical coordinates still work in progress...")
+        
+        if Ndim==2
+            # set origin of the fine grid
+            rinit = grd.r[ijk1coarse[1]]
+            θinit = grd.θ[ijk1coarse[2]]
+            dr = grd.Δr/downscalefactor
+            dθ = grd.Δθ/downscalefactor
+            # fine grid
+            grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=grsize_fine[1],nθ=grsize_fine[2],rinit=rinit,θinit=θinit)
 
-        # # set origin of the fine grid
-        # rinit = grd.r[i1coarse]
-        # θinit = grd.θ[j1coarse]
-        # dr = grd.Δr/downscalefactor
-        # dθ = grd.Δθ/downscalefactor
-        # # fine grid
-        # grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=n1_fine,nθ=n2_fine,rinit=rinit,θinit=θinit)
+        elseif Ndim==3
+            
+            error("createfinegrid(): spherical coordinates in 3D still work in progress...")
+            
+        end
     end
 
     ##
@@ -1129,6 +1111,19 @@ function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::Abstract
     xyzinit = SVector(grd.cooinit...)
 
     Ndim = length(xyzsrc)
+
+    ## set an absolute tolerance for the remainder
+    if typeof(grd)==Grid2DCart 
+        atol = 1e-4*grd.hgrid #sqrt(eps())
+        gridspac = (grd.hgrid,grd.hgrid)
+    elseif typeof(grd)==Grid3DCart
+        atol = 1e-4*grd.hgrid #sqrt(eps())
+        gridspac = (grd.hgrid,grd.hgrid,grd.hgrid)
+    elseif typeof(grd)==Grid2DSphere
+        atol = 1e-4*min(grd.Δr,grd.Δθ)
+        gridspac = (grd.Δr,grd.Δθ)
+    end
+
     # xyzres = (xyzsrc.-xyzinit)./grd.hgrid
     # # make sure to get integers
     # ijkpt = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...
@@ -1136,12 +1131,11 @@ function findenclosingbox(grd::AbstractGridEik,xyzsrc::AbstractVector)::Abstract
     xyzres = MVector{Ndim,Float64}(undef)
     remainder = MVector{Ndim,Float64}(undef)
     for d=1:Ndim
-        xyzres[d],remainder[d] = divrem(xyzsrc[d]-xyzinit[d],grd.hgrid)
+        xyzres[d],remainder[d] = divrem(xyzsrc[d]-xyzinit[d],gridspac[d])
     end
     ijkpt = floor.(Int64,xyzres) .+ 1 # .+1 julia indexing...            
 
-    ## set an absolute tolerance for the remainder
-    atol = 1e-4*grd.hgrid #sqrt(eps())
+  
     if all(isapprox.(remainder,0.0,atol=1e-8))   #all(remainder.==0.0)
         #####################################################
         ##
@@ -1187,7 +1181,6 @@ end
 
 #############################################################
 
-
 """
 $(TYPEDSIGNATURES)
 
@@ -1213,7 +1206,6 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
     ## Set some srcboxpar fields
     fmmvars.srcboxpar.ijksrc .= ijkcorn
     fmmvars.srcboxpar.xyzsrc .= srcpos
-    #@show ijkcorn
 
     ## corner position
     xyzpt = MVector{Ndim,Float64}(undef)
@@ -1226,14 +1218,18 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
         ## set status = accepted == 2
         fmmvars.status[ijkpt] = 2
 
-        if Ndim==2
+        if typeof(grd)==Grid2DCart
             xyzpt .= (grd.x[ijkpt[1]],grd.y[ijkpt[2]])
-        elseif Ndim==3
+        elseif typeof(grd)==Grid3DCart
             xyzpt .= (grd.x[ijkpt[1]],grd.y[ijkpt[2]],grd.z[ijkpt[3]])
+        elseif typeof(grd)==Grid2DSphere
+            xyzpt .= (grd.r[ijkpt[1]],grd.θ[ijkpt[2]])
+        elseif typeof(grd)==Grid3DSphere
+            xyzpt .= (grd.r[ijkpt[1]],grd.θ[ijkpt[2]],grd.φ[ijkpt[3]])
         end    
 
         # set the distance from corner to origin
-        distcorn = sqrt(sum((xyzpt.-srcpos).^2)) 
+        distcorn = distance2points(grd,xyzpt,srcpos)
 
         ## Set some srcboxpar fields
         fmmvars.srcboxpar.velcorn[l]  = vel[ijkpt]
@@ -1244,11 +1240,23 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
 
     end
 
-    
+   
     ## If the source is exactly in the middle of four corners, move it by a bit...
     if Ncorn>1
         ## amount to move the source position
-        srcshift = 1e-4*grd.hgrid   #1e3*sqrt(eps())
+        if typeof(grd)==Grid2DCart 
+            srcshift = 1e-4*grd.hgrid   #1e3*sqrt(eps())
+            gridspac = (grd.hgrid,grd.hgrid)
+        elseif typeof(grd)==Grid3DCart
+            srcshift = 1e-4*grd.hgrid #sqrt(eps())
+            gridspac = (grd.hgrid,grd.hgrid,grd.hgrid)
+        elseif typeof(grd)==Grid2DSphere
+            srcshift = 1e-4*min(grd.Δr,grd.Δθ)
+            gridspac = (grd.Δr,grd.Δθ)
+        elseif typeof(grd)==Grid3DSphere
+            srcshift = 1e-4*min(grd.Δr,grd.Δθ,grd.Δφ)
+            gridspac = (grd.Δr,grd.Δθ,grd.Δφ)
+        end
         ## origin of coordinates
         xyzinit = SVector(grd.cooinit...)
 
@@ -1256,9 +1264,9 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
         #   in each direction
         remainder = MVector{Ndim,Float64}(undef)
         for d=1:Ndim
-            remainder[d] = rem(srcpos[d]-xyzinit[d],grd.hgrid)
+            remainder[d] = rem(srcpos[d]-xyzinit[d],gridspac[d])
         end
-        issrchalfway = remainder.≈grd.hgrid/2.0
+        issrchalfway = remainder.≈gridspac./2.0
 
         # if any source coordinate is halfway, shift the source
         if any(issrchalfway)
@@ -1279,12 +1287,18 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
             for l=1:Ncorn
                 ijkpt = CartesianIndex(Tuple(ijkcorn[l,:]))
                 ## corner position
-                if Ndim==2
-                    xyzpt = SVector(grd.x[ijkpt[1]],grd.y[ijkpt[2]])
-                elseif Ndim==3
-                    xyzpt = SVector(grd.x[ijkpt[1]],grd.y[ijkpt[2]],grd.z[ijkpt[3]])
-                end 
-                fmmvars.srcboxpar.distcorn[l] = sqrt(sum((xyzpt.-fmmvars.srcboxpar.xyzsrc).^2))
+                if typeof(grd)==Grid2DCart
+                    xyzpt .= (grd.x[ijkpt[1]],grd.y[ijkpt[2]])
+                elseif typeof(grd)==Grid3DCart
+                    xyzpt .= (grd.x[ijkpt[1]],grd.y[ijkpt[2]],grd.z[ijkpt[3]])
+                elseif typeof(grd)==Grid2DSphere
+                    xyzpt .= (grd.r[ijkpt[1]],grd.θ[ijkpt[2]])
+                elseif typeof(grd)==Grid3DSphere
+                    xyzpt .= (grd.r[ijkpt[1]],grd.θ[ijkpt[2]],grd.φ[ijkpt[3]])
+                end
+                # set the distance from corner to origin
+                fmmvars.srcboxpar.distcorn[l] = distance2points(grd,xyzpt,srcpos)
+                # traveltime
                 fmmvars.ttime[ijkpt] = fmmvars.srcboxpar.distcorn[l] / vel[ijkpt]
             end
         end
