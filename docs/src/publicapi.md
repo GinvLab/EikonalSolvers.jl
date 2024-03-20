@@ -38,6 +38,11 @@ EikonalSolvers.HMCtraveltimes
 EikonalSolvers.HMCtraveltimes.EikonalProb
 ```
 
+## Extensions
+```@docs
+EikonalSolvers.savemodelvtk
+```
+
 
 ## Alternative algorithms
 ```@docs

@@ -23,17 +23,13 @@ function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
         dx = grd.hgrid
         dy = grd.hgrid
         dz = grd.hgrid
-        xinit = grd.xinit
-        yinit = grd.yinit
-        zinit = grd.zinit
+        xinit,yinit,zinit = grd.cooinit
 
     elseif typeof(grd)==Grid3DSphere
         dx = grd.Δr
         dy = grd.Δθ
         dz = grd.Δφ
-        xinit = grd.rinit
-        yinit = grd.θinit
-        zinit = grd.φinit
+        xinit,yinit,zinit = grd.cooinit
 
     end
     
@@ -145,52 +141,6 @@ end
 
 ###########################################################################
 
-# """
-# $(TYPEDSIGNATURES)
-
-#  Define the "box" of nodes around/including the source.
-# """
-# function sourceboxloctt!(fmmvars::FMMVars3D,vel::Array{Float64,3},srcpos::AbstractVector,
-#                          grd::Grid3DCart )
-
-#     ## source location, etc.      
-#     xsrc,ysrc,zsrc=srcpos[1],srcpos[2],srcpos[3]
-
-#     # get the position and velocity of corners around source
-#     _,velcorn,ijsrc = trilinear_interp(vel,grd,srcpos,outputcoeff=true)
-    
-#     ## Set srcboxpar
-#     Ncorn = size(ijsrc,1)
-#     fmmvars.srcboxpar.ijksrc .= ijsrc
-#     fmmvars.srcboxpar.xyzsrc .= srcpos
-#     fmmvars.srcboxpar.velcorn .= velcorn
-
-#     ## set ttime around source ONLY FOUR points!!!
-#     for l=1:Ncorn
-#         i,j,k = ijsrc[l,:]
-
-#         ## set status = accepted == 2
-#         fmmvars.status[i,j,k] = 2
-
-#         ## corner position 
-#         xp = grd.x[i] 
-#         yp = grd.y[j]
-#         zp = grd.z[k]
-
-#         # set the distance from corner to origin
-#         distcorn = sqrt((xsrc-xp)^2+(ysrc-yp)^2+(zsrc-zp)^2)
-#         fmmvars.srcboxpar.distcorn[l] = distcorn
-
-#         # set the traveltime to corner
-#         fmmvars.ttime[i,j,k] = distcorn / vel[i,j,k]
-
-#     end
-  
-#     return
-# end 
-
-##########################################################################
-
 """
 $(TYPEDSIGNATURES)
 
@@ -213,22 +163,11 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
     j = ijk[2]
     k = ijk[3]
 
-    if typeof(grd)==Grid3DCart
-        simtype=:cartesian
-    elseif typeof(grd)==Grid3DSphere
-        simtype=:spherical
-    end
-
     # sizes, etc.
-    if simtype==:cartesian
-        n1 = grd.nx
-        n2 = grd.ny
-        n3 = grd.nz
+    n1,n2,n3 = grd.grsize
+    if typeof(grd)==Grid3DCart
         Δh = MVector(grd.hgrid,grd.hgrid,grd.hgrid)
-    elseif simtype==:spherical
-        n1 = grd.nr
-        n2 = grd.nθ
-        n3 = grd.nφ
+    elseif typeof(grd)==Grid3DSphere
         Δh = MVector(grd.Δr, grd.r[i]*deg2rad(grd.Δθ),grd.r[i]*deg2rad(grd.Δφ) )
     end
     # slowness
@@ -294,7 +233,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
 
             ## check if on boundaries
             isonb1st,isonb2nd = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
-                                    
+
             ##==== 1st order ================
             if !isonb1st && fmmvars.status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
                 ## first test value
@@ -318,9 +257,9 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                     ish2::Int64 = 2*ish
                     jsh2::Int64 = 2*jsh
                     ksh2::Int64 = 2*ksh
-                    if !isonb2nd && fmmvars.status[i+ish2,j+jsh2,k+ksh]==2 ## 2==accepted
+                    if !isonb2nd && fmmvars.status[i+ish2,j+jsh2,k+ksh2]==2 ## 2==accepted
                         # second test value
-                        testval2 = fmmvars.ttime[i+ish2,j+jsh2,k+ksh]
+                        testval2 = fmmvars.ttime[i+ish2,j+jsh2,k+ksh2]
                         ## pick the lowest value of the two
                         ##    compare to chosenval 1, *not* 2!!
                         ## This because the direction has already been chosen
@@ -362,7 +301,6 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
 
         ## spacing
         deltah = Δh[axis]
-
         
         if use2ndord && use1stord # second order
             tmpa2 = 1.0/3.0 * (4.0*chosenval1-chosenval2)
@@ -443,11 +381,11 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                     end
 
                     ## check if on boundaries
-                     isonb1st,isonb2nd = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
+                    isonb1st,isonb2nd = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
                     
                     ## 1st order
-                    if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
-                           testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
+                    if !isonb1st && fmmvars.status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
+                        testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
                         ## pick the lowest value of the two
                         if testval1<=chosenval1 ## < only
                             chosenval1 = testval1
