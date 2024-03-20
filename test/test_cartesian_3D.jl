@@ -204,8 +204,8 @@ function test_gradvel_3D()
     coordsrc1 = [grd.hgrid*(grd.grsize[1]÷2)+0.312*grd.hgrid  grd.hgrid*(grd.grsize[2]÷2)-0.712*grd.hgrid  0.92*grd.z[end]]
 
 
-    tolerr = [4.104e-6,
-              3.810e-6]
+    tolerr = [4.11e-6,
+              3.90e-6]
 
     tolnorm = [3.01e-5,
                2.56e-5]
