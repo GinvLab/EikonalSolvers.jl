@@ -50,14 +50,12 @@ ttimepicks,ttimegrid = eiktraveltime(velmod,grd,coordsrc,coordrec,returntt=true)
 
 The gradient of the misfit functional (see documentation) with respect to velocity can be calculated as following. A set of observed traveltimes, error on the measurements and a reference velocity model are also required, see the documentation for a detailed example.
 ```julia
-```@example grad1
 # calculate the gradient of the misfit function w.r.t. velocity
 gradvel = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel)
 ```
 ![ttarrays](docs/src/images/grad-vel.png)
 The gradient of the misfit function w.r.t. the source position can also be computed, e.g., as
 ```julia
-```@example grad1
 # calculate the gradient of the misfit function w.r.t. velocity
 gradsrcloc = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradsrcloc)
 
