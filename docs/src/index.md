@@ -128,7 +128,7 @@ for i=1:grd.ny
   velmod[:,i] = 0.034 * i .+ velmod[:,i] 
 end
 
-# run the traveltime computation with default algorithm ("ttFMM_hiord")
+# run the traveltime computation 
 ttimepicks = eiktraveltime(velmod,grd,coordsrc,coordrec)
 nothing # hide
 ```
@@ -240,32 +240,32 @@ The resulting traveltime array on the grid is returned as a three-dimensional ar
 @show size(ttimegrid)
 ```	
 
-<!-- ### Spherical coordinates -->
+### Spherical coordinates
 
-<!-- Here we show an example of traveltime calculation in spherical coordinates in 2D. The grid is defined in terms of the radius `r` and the angle `θ`, representing the *co*-latitude. In 3D there is the additional angle `φ`, representing the longitude. -->
-<!-- Remark: for spherical coordinates some Greek symbols are used. You can render them in Julia as following: -->
+Here we show an example of traveltime calculation in spherical coordinates in 2D. The grid is defined in terms of the radius `r` and the angle `θ`, representing the *co*-latitude. In 3D there is the additional angle `φ`, representing the longitude.
+Remark: for spherical coordinates some Greek symbols are used. You can render them in Julia as following:
 
-<!-- Symbol | How to render -->
-<!-- --- | ---  -->
-<!-- Δ | \Delta^TAB  -->
-<!-- θ | \theta^TAB -->
-<!-- φ | \varphi^TAB -->
+Symbol | How to render
+--- | ---
+Δ | \Delta^TAB
+θ | \theta^TAB
+φ | \varphi^TAB
 
-<!-- The function for traveltimes in spherical coordinates, analogously to the Cartesian case, is `traveltime2Dsphere()`. -->
-<!-- The grid setup and forward computations are carried out as shown in the following script.  -->
-<!-- ```@example fullsph -->
-<!-- using EikonalSolvers -->
-<!-- grd = Grid2DSphere(Δr=2.0,Δθ=0.2,nr=40,nθ=70,rinit=500.0,θinit=10.0) # create the Grid2DSphere struct -->
-<!-- coordsrc = [grd.rinit.+grd.Δr*3  grd.θinit.+grd.Δθ*(grd.nθ-5)] # coordinates of the sources (1 source) -->
-<!-- coordrec = [[grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3] ] # coordinates of the receivers (1 receiver), vector of arrays -->
-<!-- velmod = 2.5 .* ones(grd.nr,grd.nθ)                           # velocity model -->
+The function for traveltimes in spherical coordinates, analogously to the Cartesian case, is `traveltime2Dsphere()`.
+The grid setup and forward computations are carried out as shown in the following script.
+```@example fullsph
+using EikonalSolvers
+grd = Grid2DSphere(Δr=2.0,Δθ=0.2,nr=40,nθ=70,rinit=500.0,θinit=10.0) # create the Grid2DSphere struct 
+coordsrc = [grd.rinit.+grd.Δr*3  grd.θinit.+grd.Δθ*(grd.nθ-5)] # coordinates of the sources (1 source) 
+coordrec = [[grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3] ] # coordinates of the receivers (1 receiver), vector of arrays 
+velmod = 2.5 .* ones(grd.nr,grd.nθ)                       # velocity model 
 
-<!-- # run the traveltime computation  -->
-<!-- ttimepicks = traveltime2D(velmod,grd,coordsrc,coordrec) -->
-<!-- nothing # hide -->
-<!-- ``` -->
-<!-- The following picture shows an example of computed traveltime and gradient in spherical coordinates in 2D. -->
-<!-- ![sph2dttgrad](./images/sph2dttgrad.png) -->
+# run the traveltime computation 
+ttimepicks = eiktraveltime(velmod,grd,coordsrc,coordrec) 
+nothing # hide 
+``` 
+The following picture shows an example of computed traveltime and gradient in spherical coordinates in 2D. 
+![sph2dttgrad](./images/sph2dttgrad.png) 
 
 
 ## Example of gradient w.r.t velocity calculation
@@ -287,7 +287,7 @@ for i=1:grd.ny
   velmod[:,i] = 0.034 * i .+ velmod[:,i]
 end
 
-# run the traveltime computation with default algorithm ("ttFMM_hiord")
+# run the traveltime computation 
 ttpicks = eiktraveltime(velmod,grd,coordsrc,coordrec)
 nothing # hide
 ```
@@ -349,37 +349,38 @@ The calculated gradient is an array with the same shape than the velocity model.
 @show size(gradvel)
 ``` 
 
-<!-- ### Spherical coordinates -->
+### Spherical coordinates
 
-<!-- Here a synthetic example of 2D gradient computations in spherical coordinates is shown. -->
-<!-- ```@example grad1sph -->
-<!-- using EikonalSolvers -->
-<!-- grd = Grid2DSphere(Δr=2.0,Δθ=0.2,nr=40,nθ=70,rinit=500.0,θinit=10.0) # create the Grid2DSphere struct -->
-<!-- coordsrc = [grd.rinit.+grd.Δr*3  grd.θinit.+grd.Δθ*(grd.nθ-5)] # coordinates of the sources (1 source) -->
-<!-- nsrc = size(coordsrc,1) -->
-<!-- coordrec = [[grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3] for i=1:nsrc] # coordinates of the receivers (1 receiver) -->
+Here a synthetic example of 2D gradient computations in spherical coordinates is shown.
+```@example grad1sph
+using EikonalSolvers
+grd = Grid2DSphere(Δr=2.0,Δθ=0.2,nr=40,nθ=70,rinit=500.0,θinit=10.0) # create the Grid2DSphere struct
+coordsrc = [grd.rinit.+grd.Δr*3  grd.θinit.+grd.Δθ*(grd.nθ-5)] # coordinates of the sources (1 source)
+nsrc = size(coordsrc,1)
+coordrec = [[grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3] for i=1:nsrc] # coordinates of the receivers (1 receiver)
 
-<!-- # velocity model -->
-<!-- velmod = 2.5 .* ones(grd.nr,grd.nθ)  -->
-<!-- # run the traveltime computation -->
-<!-- ttpicks = traveltime2D(velmod,grd,coordsrc,coordrec) -->
+# velocity model
+velmod = 2.5 .* ones(grd.nr,grd.nθ)
+# run the traveltime computation
+ttpicks = eiktraveltime(velmod,grd,coordsrc,coordrec) 
 
-<!-- # standard deviation of error on observed data -->
-<!-- stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc] -->
-<!-- # generate a "noise" array to simulate real data -->
-<!-- noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc] -->
-<!-- # add the noise to the synthetic traveltime data -->
-<!-- dobs = ttpicks .+ noise -->
+# standard deviation of error on observed data 
+stdobs = [0.15.*ones(size(ttpicks[1])) for i=1:nsrc] 
+# generate a "noise" array to simulate real data 
+noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc] 
+# add the noise to the synthetic traveltime data 
+dobs = ttpicks .+ noise 
 
-<!-- # create a guess/"current" model  -->
-<!-- vel0 = 3.0 .* ones(grd.nr,grd.nθ) -->
+# create a guess/"current" model  
+vel0 = 3.0 .* ones(grd.nr,grd.nθ) 
 
-<!-- # calculate the gradient of the misfit function -->
-<!-- grad = gradttime2D(vel0,grd,coordsrc,coordrec,dobs,stdobs) -->
-<!-- nothing # hide -->
-<!-- ```	 -->
-<!-- An example of a (thresholded) sensitivity kernel and contouring of traveltimes in 3D, using spherical coordinates, is depicted in the following plot: -->
-<!-- ![grad3D](./images/examplegrad3Dcarsph.png) -->
+# calculate the gradient of the misfit function 
+grad = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs) 
+nothing # hide 
+```	 
+ An example of a (thresholded) sensitivity kernel and contouring of traveltimes in 3D, using spherical coordinates, is depicted in the following plot: 
+ ![grad3D](./images/examplegrad3Dcarsph.png) 
+
 
 ## Example of gradient w.r.t source location calculation
 
@@ -398,7 +399,7 @@ for i=1:grd.ny
   velmod[:,i] = 0.034 * i .+ velmod[:,i]
 end
 
-# run the traveltime computation with default algorithm ("ttFMM_hiord")
+# run the traveltime computation 
 ttpicks = eiktraveltime(velmod,grd,coordsrc,coordrec)
 nothing # hide
 ```

@@ -42,6 +42,29 @@ function lin2cart!(l::Integer,nijk::NTuple{3,Integer},point::MVector{3,<:Integer
     return 
 end
 
+#############################################################
+
+@inline function distance2points(::Union{Grid2DCart,Grid3DCart},
+                                 xyz1::AbstractVector,xyz2::AbstractVector)
+    dist = sqrt( sum((xyz1 .- xyz2 ).^2) )
+    return dist
+end
+
+
+@inline function distance2points(::Grid2DSphere,
+                                 rθ1::AbstractVector,rθ2::AbstractVector)
+    r1,θ1 = rθ1
+    r2,θ2 = rθ2
+    dist = sqrt( r1^2 + r2^2 - 2*r1*r2*cosd(θ1-θ2) )
+    return dist
+end
+
+
+@inline function distance2points(::Grid3DSphere,
+                                 rθφ1::AbstractVector,rθφ2::AbstractVector)
+    error("sphericaldistance(): not yet implemented.")
+end
+
 ############################################################
 
 ## 2D
@@ -208,20 +231,120 @@ function eikttimemisfit(velmod::Array{Float64,N},ttpicksobs::AbstractArray,
     end
     misf *= 0.5
 
-    # misf = 0.0
-    # for s=1:nsrc
-    #     misf = sum(ttpicks[s])
-    # end
-
-    # flatten traveltime array
-    # dcalc = vec(ttpicks)
-    # dobs = vec(ttpicksobs)
-    # stdobsv = vec(stdobs)
-    # ## L2 norm^2
-    # diffcalobs = dcalc .- dobs 
-    # misf = 0.5 * sum( diffcalobs.^2 ./ stdobsv.^2 )
-
     return misf
+end
+
+##############################################################################
+
+"""
+
+$(TYPEDSIGNATURES)
+
+Ray tracing utility. Given a traveltime grid and source and receiver positions, trace the rays.
+"""
+function tracerays(grd::AbstractGridEik,ttime::Vector{Array{Float64}},
+                   coordsrc::Array{Float64,2},coordrec::Vector{Array{Float64,2}};
+                   steplen::Real=0.01)
+    
+    nsrc = size(coordsrc,1)
+    rays_srcs = Vector{Vector{Matrix{Float64}}}(undef,nsrc)
+    for s=1:nsrc
+        rays_srcs[s] = tracerays_singlesrc(grd,ttime[s],coordsrc[s,:],coordrec[s],steplen=steplen)
+    end
+    
+    return rays_srcs
+end
+
+
+##############################################################################
+
+"""
+
+$(TYPEDSIGNATURES)
+
+Ray tracing utility. Given a traveltime grid and source and receiver positions, trace the rays.
+"""
+function tracerays_singlesrc(grd::AbstractGridEik,ttime::Array{Float64,N},
+                             srccoo::AbstractVector,coordrec::Array{Float64,2};
+                             steplen::Real) where N
+
+    # setup interpolation
+    if typeof(grd)==Grid2DCart
+        Ndim = 2
+        itp = scale(interpolate(ttime,BSpline(Cubic())),grd.x,grd.y)
+        rstep = steplen * grd.hgrid
+        thrdist = grd.hgrid*sqrt(2)
+
+    elseif typeof(grd)==Grid3DCart
+        Ndim = 3
+        itp = scale(interpolate(ttime,BSpline(Cubic())),grd.x,grd.y,grd.z)
+        rstep = steplen * grd.hgrid
+        thrdist = grd.hgrid*sqrt(2)
+
+    # elseif typeof(grd)==Grid2DSphere
+    #     Ndim = 2
+    #     itp = scale(interpolate(ttime,BSpline(Cubic())),grd.r,grd.θ)
+    #     rstep = steplen * grd.Δr
+    #     thrdist = grd.Δr*sqrt(2)
+    else
+        error("tracerays_singlesrc(): ray tracing for spherical grids not yet implemented.")
+    end
+
+    Nrec = size(coordrec,1)
+    rays = Vector{Matrix{Float64}}(undef,Nrec)
+
+
+
+    Nseg::Int64 = 1e6
+    raypath = zeros(Nseg,Ndim)
+    
+    for r=1:Nrec
+
+        rec = coordrec[r,:]
+        raypath[1,:] .= rec
+        dist2src = distance2points(grd,raypath[1,:],srccoo) 
+
+        s=1
+        while dist2src >= thrdist
+            
+            x,y = raypath[s,:]
+            if Ndim == 2
+                gradT = gradient(itp,raypath[s,1],raypath[s,2])
+            elseif Ndim == 3
+                gradT = gradient(itp,raypath[s,1],raypath[s,2],raypath[s,3])
+            end
+
+            ## normalize the gradient vector to make the step-length more meaningful
+            normgradT = gradT ./ sqrt(sum((gradT).^2))
+            ## compute the new point
+            newpt = raypath[s,:] .- rstep .* normgradT
+
+            ## If the newpt is outside the domain...
+            for d=1:Ndim
+                if newpt[d] < grd.cooinit[d]
+                    newpt[d] = grd.cooinit[d]
+                elseif newpt[d] > grd.cooend[d]
+                    newpt[d] = grd.cooend[d]
+                end
+            end
+                        
+            ## if the array is not big enough, re-allocate
+            if s>=size(raypath,1)            
+                raypath = [raypath; zeros(Nseg,Ndim)]
+            end
+
+            raypath[s+1,:] = newpt
+            
+            dist2src = distance2points(grd,raypath[s+1,:],srccoo)
+            s += 1
+        end
+        ## last point, i.e., the source
+        raypath[s,:] .= srccoo
+        ## output array
+        rays[r] = raypath[1:s,:]
+    end
+
+    return rays
 end
 
 ##############################################################################

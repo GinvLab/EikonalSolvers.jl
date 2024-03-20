@@ -8,7 +8,8 @@ using LinearAlgebra
 # Run tests
 
 # get all the functions
-include("test_cartesian.jl")
+include("test_cartesian_2D.jl")
+include("test_cartesian_3D.jl")
 #include("test_spherical.jl")
 
 
@@ -16,6 +17,7 @@ include("test_cartesian.jl")
 nwor = nworkers()
 println("Number of workers available: $nwor")
 
+# 2D
 @testset "Eikonal vs. analytical solutions const. vel. [2D Cart. coord.]" begin
     test_fwdtt_2D_constvel()
 end
@@ -30,4 +32,9 @@ end
 
 @testset "Gradient w.r.t. source loc. vs. finite differences [2D Cart. coord.]" begin
     test_gradsrc_2D()
+end
+
+# 3D
+@testset "Eikonal vs. analytical solutions const. vel. [3D Cart. coord.]" begin
+    test_fwdtt_3D_constvel()
 end
