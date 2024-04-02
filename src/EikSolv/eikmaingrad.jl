@@ -84,15 +84,14 @@ function eikgradient(vel::Array{Float64,N},
         grpsrc = distribsrcs(nsrc,nth)
         nchu = size(grpsrc,1)            
         ##  do the calculations
-        ∂ψ∂vel_all = Vector{Array{Float64,ndims(vel)}}(undef,nchu)
-        ∂ψ∂xyzsrc = Vector{Vector{Float64}}(undef,nsrc)
-        
+        ∂ψ∂vel_all = Vector{ Array{Float64,ndims(vel)} }(undef,nchu) # for i=1:nchu]
+        ∂ψ∂xyzsrc = Matrix{Float64}(undef,nsrc,ndims(vel))
+
         Threads.@threads for s=1:nchu
-            igrs = grpsrc[s,1]:grpsrc[s,2]
-            @show igrs
-            ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs] = calcgradsomesrc2D(vel,view(coordsrc,igrs,:),view(coordrec,igrs),
-                                                               grd,view(stdobs,igrs),view(pickobs,igrs),
-                                                               whichgrad,extraparams )
+            igrs = grpsrc[s,1]:grpsrc[s,2]            
+            ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs,:] = calcgradsomesrc2D(vel,coordsrc[igrs,:],coordrec[igrs],
+                                                                grd,stdobs[igrs],pickobs[igrs],
+                                                                whichgrad,extraparams )
         end
         ∂ψ∂vel = sum(∂ψ∂vel_all)
 
@@ -143,22 +142,10 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
     grsize = size(vel)
     nsrc = size(xyzsrc,1)
 
-    if whichgrad==:gradvel
-        gradvel1 = zeros(grsize)
-        gradvelall = zeros(grsize)
-        gradsrcpos = nothing
-
-    elseif whichgrad==:gradsrcloc
-        gradvel1 = nothing
-        gradvelall = nothing
-        gradsrcpos = zeros(eltype(vel),nsrc,ndims(vel)) # ,2)-> 2D
-        
-    elseif whichgrad==:gradvelandsrcloc
-        gradvel1 = zeros(grsize)
-        gradvelall = zeros(grsize)
-        gradsrcpos = zeros(eltype(vel),nsrc,ndims(vel)) # ,2)-> 2D
-
-    end
+    #if whichgrad==:gradvel
+    gradvel1 = zeros(grsize)
+    gradvelall = zeros(grsize)
+    gradsrcpos = zeros(eltype(vel),nsrc,ndims(vel))
 
     ## pre-allocate ttime and status arrays plus the binary heap
     fmmvars = createFMMvars(grd,amIcoarsegrid=true,refinearoundsrc=extrapars.refinearoundsrc,
@@ -179,13 +166,13 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
             ## 
             # fmmvars_fine,adjvars_fine need to be *re-allocated* for each source
             #  because the size of the grid may change when hitting borders, etc.
-            fmmvars_fine,adjvars_fine,grd_fine,srcrefvars = ttFMM_hiord!(fmmvars,vel,view(xyzsrc,s,:),
+            fmmvars_fine,adjvars_fine,grd_fine,srcrefvars = ttFMM_hiord!(fmmvars,vel,xyzsrc[s,:],
                                                                          grd,adjvars,extrapars)
         else
             ##
             ## NO refinement around the source
             ## 
-            ttFMM_hiord!(fmmvars,vel,view(xyzsrc,s,:),grd,adjvars,extrapars)
+            ttFMM_hiord!(fmmvars,vel,xyzsrc[s,:],grd,adjvars,extrapars)
             fmmvars_fine=nothing
             adjvars_fine=nothing
             grd_fine=nothing
@@ -194,27 +181,27 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
 
         ###############################################################
         # Solve the adjoint problem(s) and get the requested gradient(s)
-        if gradsrcpos==nothing
+        if whichgrad==:gradvel 
             tmpgradsrcpos = gradsrcpos
         else
             # use a view so gradsrcpos gets automatically filled in this loop
-            tmpgradsrcpos = view(gradsrcpos,s,:)
+            tmpgradsrcpos = view(gradsrcpos,s,:) ## VIEW!!!
         end
                 
         calcgrads_singlesrc!(gradvel1,tmpgradsrcpos,
-                            fmmvars,adjvars,
-                            xyzsrc[s,:],coordrec[s],pickobs1[s],stdobs[s],
-                            vel,grd,whichgrad,extrapars.refinearoundsrc,
-                            fmmvars_fine=fmmvars_fine,
-                            adjvars_fine=adjvars_fine,
-                            grd_fine=grd_fine,
-                            srcrefvars=srcrefvars)
+                             fmmvars,adjvars,
+                             xyzsrc[s,:],coordrec[s],pickobs1[s],stdobs[s],
+                             vel,grd,whichgrad,extrapars.refinearoundsrc,
+                             fmmvars_fine=fmmvars_fine,
+                             adjvars_fine=adjvars_fine,
+                             grd_fine=grd_fine,
+                             srcrefvars=srcrefvars)
 
          
         if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
             ###########################################
             ## smooth gradient (with respect to velocity) around the source
-            smoothgradaroundsrc!(gradvel1,view(xyzsrc,s,:),grd,
+            smoothgradaroundsrc!(gradvel1,xyzsrc[s,:],grd,
                                  radiuspx=extrapars.radiussmoothgradsrc)
             ##########################################
             ## add up gradients from different sources
@@ -228,7 +215,7 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
         #println("Triggering GC")
         GC.gc()
     end
-    
+
     return gradvelall,gradsrcpos
 end 
 
@@ -1225,4 +1212,60 @@ function partderivttsrcpos(xyzpt::AbstractVector,xyzsrc::AbstractVector,vel::Rea
     return deriv_xyz
 end
 
+###################################################################
+
+"""
+$(TYPEDSIGNATURES)
+
+Calculate the Gaussian misfit functional 
+```math
+    S = \\dfrac{1}{2} \\sum_i \\dfrac{\\left( \\mathbf{u}_i^{\\rm{calc}}(\\mathbf{v})-\\mathbf{u}_i^{\\rm{obs}} \\right)^2}{\\sigma_i^2} \\, .
+```
+
+# Arguments
+- `velmod`: velocity model, either a 2D or 3D array.
+- `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
+- `ttpicksobs`: a vector of vectors of the traveltimes at the receivers.
+- `stdobs`: a vector of vectors standard deviations representing the error on the measured traveltimes.
+- `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
+- `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
+- `extraparams` (optional): a struct containing some "extra" parameters, namely
+    * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
+    * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
+    * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
+    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this!
+    * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
+
+# Returns
+The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
+
+"""
+function eikttimemisfit(velmod::Array{Float64,N},
+                        grd::AbstractGridEik,
+                        coordsrc::AbstractArray,
+                        coordrec::AbstractVector{<:AbstractArray},
+                        ttpicksobs::AbstractArray,
+                        stdobs::AbstractArray;
+                        extraparams::Union{ExtraParams,Nothing}=nothing)::Float64 where N
+    
+    if extraparams==nothing
+        extraparams = ExtraParams()
+    end
+
+    # compute the forward response
+    ttpicks = eiktraveltime(velmod,grd,coordsrc,coordrec,extraparams=extraparams)
+
+    nsrc = size(coordsrc,1)
+    ##nrecs1 = size.(coordrec,1)
+    ##totlen = sum(nrec1)
+    misf::Float64 = 0.0
+    for s=1:nsrc
+        misf += sum( (ttpicks[s].-ttpicksobs[s]).^2 ./ stdobs[s].^2)
+    end
+    misf *= 0.5
+
+    return misf
+end
+
 ###########################################################################
+

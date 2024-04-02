@@ -52,16 +52,23 @@ end
 
 
 @inline function distance2points(::Grid2DSphere,
-                                 rθ1::AbstractVector,rθ2::AbstractVector)
+                                 rθ1::AbstractVector,rθ2::AbstractVector;
+                                 degrees::Bool=true)
     r1,θ1 = rθ1
     r2,θ2 = rθ2
-    dist = sqrt( r1^2 + r2^2 - 2*r1*r2*cosd(θ1-θ2) )
+    if degrees
+        dist = sqrt( r1^2 + r2^2 - 2*r1*r2*cosd(θ1-θ2) )
+    else
+        dist = sqrt( r1^2 + r2^2 - 2*r1*r2*cos(θ1-θ2) )
+    end
     return dist
 end
 
 
 @inline function distance2points(::Grid3DSphere,
-                                 rθφ1::AbstractVector,rθφ2::AbstractVector)
+                                 rθφ1::AbstractVector,rθφ2::AbstractVector;
+                                 degrees::Bool=true)
+
     error("sphericaldistance(): not yet implemented.")
 end
 
@@ -182,57 +189,6 @@ function distribsrcs(nsrc::Integer,nw::Integer)
     return grpsrc
 end
 
-###################################################################
-
-"""
-$(TYPEDSIGNATURES)
-
-Calculate the Gaussian misfit functional 
-```math
-    S = \\dfrac{1}{2} \\sum_i \\dfrac{\\left( \\mathbf{u}_i^{\\rm{calc}}(\\mathbf{v})-\\mathbf{u}_i^{\\rm{obs}} \\right)^2}{\\sigma_i^2} \\, .
-```
-
-# Arguments
-- `velmod`: velocity model, either a 2D or 3D array.
-- `ttpicksobs`: a vector of vectors of the traveltimes at the receivers.
-- `stdobs`: a vector of vectors standard deviations representing the error on the measured traveltimes.
-- `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
-- `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
-- `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
-- `extraparams` (optional): a struct containing some "extra" parameters, namely
-    * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
-    * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
-    * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
-    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this!
-    * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
-
-# Returns
-The value of the misfit functional (L2-norm), the same used to compute the gradient with adjoint methods.
-
-"""
-function eikttimemisfit(velmod::Array{Float64,N},ttpicksobs::AbstractArray,
-                        stdobs::AbstractArray,coordsrc::AbstractArray,
-                        coordrec,grd::AbstractGridEik ;
-                        extraparams::Union{ExtraParams,Nothing}=nothing)::Float64 where N
-    
-    if extraparams==nothing
-        extraparams = ExtraParams()
-    end
-
-    # compute the forward response
-    ttpicks = eiktraveltime(velmod,grd,coordsrc,coordrec,extraparams=extraparams)
-
-    nsrc = size(coordsrc,1)
-    ##nrecs1 = size.(coordrec,1)
-    ##totlen = sum(nrec1)
-    misf::Float64 = 0.0
-    for s=1:nsrc
-        misf += sum( (ttpicks[s].-ttpicksobs[s]).^2 ./ stdobs[s].^2)
-    end
-    misf *= 0.5
-
-    return misf
-end
 
 ##############################################################################
 
@@ -281,11 +237,12 @@ function tracerays_singlesrc(grd::AbstractGridEik,ttime::Array{Float64,N},
         rstep = steplen * grd.hgrid
         thrdist = grd.hgrid*sqrt(2)
 
-    # elseif typeof(grd)==Grid2DSphere
-    #     Ndim = 2
-    #     itp = scale(interpolate(ttime,BSpline(Cubic())),grd.r,grd.θ)
-    #     rstep = steplen * grd.Δr
-    #     thrdist = grd.Δr*sqrt(2)
+    elseif typeof(grd)==Grid2DSphere
+        Ndim = 2
+        itp = scale(interpolate(ttime,BSpline(Cubic())),grd.r,grd.θ)
+        rstep = steplen 
+        thrdist = grd.Δr*sqrt(2)
+
     else
         error("tracerays_singlesrc(): ray tracing for spherical grids not yet implemented.")
     end
@@ -294,31 +251,54 @@ function tracerays_singlesrc(grd::AbstractGridEik,ttime::Array{Float64,N},
     rays = Vector{Matrix{Float64}}(undef,Nrec)
 
 
-
     Nseg::Int64 = 1e6
     raypath = zeros(Nseg,Ndim)
     
     for r=1:Nrec
 
         rec = coordrec[r,:]
+        # distance for polar coord. has input in degrees
+        dist2src = distance2points(grd,rec,srccoo) 
         raypath[1,:] .= rec
-        dist2src = distance2points(grd,raypath[1,:],srccoo) 
 
         s=1
         while dist2src >= thrdist
             
-            x,y = raypath[s,:]
+            #x,y = raypath[s,:]
             if Ndim == 2
                 gradT = gradient(itp,raypath[s,1],raypath[s,2])
             elseif Ndim == 3
                 gradT = gradient(itp,raypath[s,1],raypath[s,2],raypath[s,3])
             end
 
-            ## normalize the gradient vector to make the step-length more meaningful
-            normgradT = gradT ./ sqrt(sum((gradT).^2))
-            ## compute the new point
-            newpt = raypath[s,:] .- rstep .* normgradT
+     
+            if typeof(grd)==Grid2DCart ||  typeof(grd)==Grid3DCart 
+                ## normalize the gradient vector to make the step-length more meaningful
+                normgradT = gradT ./ sqrt(sum((gradT).^2))
+                ## compute the new point
+                newpt = raypath[s,:] .- rstep .* normgradT
 
+            elseif typeof(grd)==Grid2DSphere
+                rcur = raypath[s,1]
+                # need radiants for the conversion
+                θcur = deg2rad(raypath[s,2])
+
+                # transform the gradient into Cartesian coordinates considering the
+                #   unit vectors in polar coordinates
+                dfdx = cos(θcur) * gradT[1] - 1/rcur * sin(θcur) * rad2deg(gradT[2]) # weird but it's rad2deg...
+                dfdy = sin(θcur) * gradT[1] + 1/rcur * cos(θcur) * rad2deg(gradT[2])
+                gradTcart = [dfdx, dfdy] 
+                # normalise the gradient
+                normgradTcart = gradTcart ./ sqrt(sum((gradTcart).^2))
+                # convert to Cartesian for vector subtraction
+                point_cart = polardeg2cartesian(raypath[s,1],raypath[s,2])
+                ## compute the new pointn
+                newpt_cart = point_cart .- rstep .* normgradTcart
+                # convert back to polar coordinates
+                newpt = collect(cartesian2polardeg(newpt_cart[1],newpt_cart[2]))
+            end
+
+      
             ## If the newpt is outside the domain...
             for d=1:Ndim
                 if newpt[d] < grd.cooinit[d]
@@ -332,14 +312,14 @@ function tracerays_singlesrc(grd::AbstractGridEik,ttime::Array{Float64,N},
             if s>=size(raypath,1)            
                 raypath = [raypath; zeros(Nseg,Ndim)]
             end
-
-            raypath[s+1,:] = newpt
-            
+            raypath[s+1,:] .= newpt
+                  
             dist2src = distance2points(grd,raypath[s+1,:],srccoo)
             s += 1
         end
         ## last point, i.e., the source
         raypath[s,:] .= srccoo
+         
         ## output array
         rays[r] = raypath[1:s,:]
     end
@@ -348,3 +328,4 @@ function tracerays_singlesrc(grd::AbstractGridEik,ttime::Array{Float64,N},
 end
 
 ##############################################################################
+
