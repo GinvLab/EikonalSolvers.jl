@@ -116,6 +116,7 @@ function eikgradient(vel::Array{Float64,N},
         GC.gc()
     end
 
+     
     if whichgrad==:gradvel
         return ∂ψ∂vel
     elseif whichgrad==:gradsrcloc
@@ -303,7 +304,7 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
     ∂ψ_∂u_p = transpose(∂fi_∂us) * lambda_fmmord_coarse
 
 
-        
+
     ####################################################
     ##   Pre-compute stuff for grid refinement
     ####################################################
@@ -311,10 +312,10 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
         ############################################################
         #  Get adjoint variable, etc. from fine grid
         ############################################################
-        lambda_fmmord_fine,∂u_h_dtau_s,H_Areg  = computestuff_finegrid!(fmmvars_fine,
-                                                                        adjvars_fine,
-                                                                        grd_fine,
-                                                                        srcrefvars)
+        lambda_fmmord_fine,∂u_h_dtau_s,H_Areg = computestuff_finegrid!(fmmvars_fine,
+                                                                       adjvars_fine,
+                                                                       grd_fine,
+                                                                       srcrefvars)
     end
 
 
@@ -468,8 +469,6 @@ function solveadjointeq(twoDttDR::Vector{VecSPDerivMat},rhs::AbstractVecOrMat{Fl
     Ndim = length(twoDttDR)
     for d=1:Ndim
         Nnnz = twoDttDR[d].Nnnz[]
-        # Ni = twoDttDR[d].Nsize[1]
-        # Nj = twoDttDR[d].Nsize[2]
         # Transpose the matrices and add them
         tmplhs .+= SparseMatrixCSC(Nj,Ni,twoDttDR[d].iptr[1:Ni+1],
                                    twoDttDR[d].j[1:Nnnz],twoDttDR[d].v[1:Nnnz])
@@ -500,7 +499,7 @@ function computestuff_finegrid!(fmmvars,adjvars,grd,srcrefvars)
     #                                                                       #
     # * * * ALL stuff must be in FMM order (e.g., fmmord.ttime) !!!! * * *  #
     #                                                                       #
-    
+
     ## find the last value of traveltime computed in the fine grid
     ##    (The fine grid stop when hitting a boundary...)
     ## number of model parameters (== computed traveltimes)
@@ -550,8 +549,7 @@ function computestuff_finegrid!(fmmvars,adjvars,grd,srcrefvars)
         q+=1
     end
     H = sparse(H_i,H_j,H_v,Nhpts,Naccpts)
-
-    
+        
     ###########################################
     #  Derivatives (along x,y,z) matrices, row-deficient
     Deriv = adjvars.fmmord.Deriv
@@ -576,19 +574,20 @@ function computestuff_finegrid!(fmmvars,adjvars,grd,srcrefvars)
     rq = .!onsrccols
     H_Breg = H[:,rq] # remove columns
     H_Areg = H[:,onsrccols]
-    rhs = - transpose(H_Breg)
+    ## DO make a copy to materialize the transpose and
+    ##   allow the "\" to use the right algorithm
+    rhs = copy( - transpose(H_Breg) )
 
-  
     #####################################
     ##   Solve the adjoint equation
     #####################################
     lambda_fmmord_fine = solveadjointeq(twoDttDR,rhs)
-
     # deriv. of the implicit forw. mod. w.r.t. u_s, FMM ordering
     ∂gi_∂taus = sum( twoDttDS )
-    # copy to materialize the lazy transpose
-    ∂u_h_dtau_s =  transpose(lambda_fmmord_fine ) * ∂gi_∂taus
-   
+    #  deriv. of u_h w.r.t. τ_s
+    ∂u_h_dtau_s = transpose(lambda_fmmord_fine ) * ∂gi_∂taus
+
+
     return lambda_fmmord_fine,∂u_h_dtau_s,H_Areg 
 end
 

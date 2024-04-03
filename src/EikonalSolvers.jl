@@ -36,9 +36,10 @@ export ExtraParams,GridRefinementPars
 # from extensions
 export savemodelvtk
 
-# println("Hello -> using TimerOutputs")
-# using TimerOutputs
 
+# @warn "using TimerOutputs"
+# using TimerOutputs
+# const tiou = TimerOutput()
 
 using LinearAlgebra
 using OffsetArrays
@@ -47,8 +48,6 @@ using DocStringExtensions
 using StaticArrays
 using Interpolations
 
-# @warn "using HDF5"
-# using HDF5
 
 # using LinearAlgebra
 ## For parallelisation
