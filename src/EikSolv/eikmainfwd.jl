@@ -90,7 +90,7 @@ function eiktraveltime(vel::Array{Float64,N},
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 ttime[igrs],ttpicks[igrs] = ttforwsomesrc(vel,coordsrc[igrs,:],
                                                           coordrec[igrs],grd,extraparams,
-                                                             returntt=returntt )
+                                                          returntt=returntt )
             end
 
         else
@@ -98,8 +98,8 @@ function eiktraveltime(vel::Array{Float64,N},
             Threads.@threads for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 ttpicks[igrs] = ttforwsomesrc(vel,coordsrc[igrs,:],
-                                                 view[coordrec,igrs],grd,extraparams,
-                                                 returntt=returntt )
+                                              coordrec[igrs],grd,extraparams,
+                                              returntt=returntt )
             end
         end
 
@@ -161,7 +161,7 @@ function ttforwsomesrc(vel::Array{Float64,N},coordsrc::Array{Float64,2},
     ## group of pre-selected sources
     for s=1:nsrc    
         ## run the FMM forward
-        ttFMM_hiord!(fmmvars,vel,view(coordsrc,s,:),grd,extrapars)
+        ttFMM_hiord!(fmmvars,vel,coordsrc[s,:],grd,extrapars)
 
         ## interpolate at receivers positions
         for i=1:size(coordrec[s],1)

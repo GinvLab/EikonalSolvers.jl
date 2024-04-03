@@ -141,7 +141,6 @@ struct Grid2DSphere <: AbstractGridEik2D
         r = range(start=rinit,step=Δr,length=nr) #[rinit+Δr*(i-1) for i =1:nr]
         θ = range(start=θinit,step=Δθ,length=nθ) #[θinit+Δθ*(i-1) for i =1:nθ]
         ## limit to 180 degrees for now...
-        @show θ
         @assert all(0.0.<=θ.<=180.0)
         # ## now convert everything to radians
         # println("Grid2DSphere(): converting θ to radians")
@@ -256,6 +255,11 @@ struct ExtraParams
                          radiussmoothgradsrc::Integer=3,
                          smoothgradkern::Integer=0,
                          grdrefpars::GridRefinementPars=GridRefinementPars(downscalefactor=5,noderadius=3) )
+
+        if smoothgradkern>0 && iseven(smoothgradkern)
+            @show smoothgradkern
+            error("ExtraParams: smoothgradkern must be an odd number")
+        end
         
         if !(parallelkind in [:serial,:sharedmem,:distribmem])
             error("ExtraParams(): 'parallelkind' must be one of :serial, :sharedmem or :distribmem")
