@@ -12,8 +12,16 @@ $(TYPEDSIGNATURES)
 Calculate the traveltime for 2D or 3D velocity models at requested receivers locations.
 Optionally return the array(s) of traveltime on the entire gridded model.
 
-- `ttpicks`: a vector of vectors containing traveltimes at the receivers for each source 
-- `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
+# Arguments
+- `vel`: the 2D or 3D velocity model 
+- `grd`: a struct specifying the geometry and size of the model (e.g., Grid3DCart)
+- `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array 
+- `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
+- `returntt`: a boolean (default false) specifying whether to retur the array(s) of traveltime on the entire gridded model or not
+
+# Returns
+- A vector of vectors containing traveltimes at the receivers for each source 
+- If `returntt==true`, additionally returns the array(s) of traveltime on the entire gridded model
 """
 function eiktraveltime(vel::Array{Float64,N},
                        grd::AbstractGridEik,
@@ -1056,8 +1064,8 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
             yinit = grd.y[ijk1coarse[2]]
             dh = grd.hgrid/downscalefactor
             # fine grid
-            grdfine = Grid2DCart(hgrid=dh,xinit=xinit,yinit=yinit,
-                                 nx=grsize_fine[1],ny=grsize_fine[2])
+            grdfine = Grid2DCart(hgrid=dh,cooinit=(xinit,yinit),
+                                 grsize=grsize_fine)
 
         elseif Ndim==3
             # set origin of the fine grid
@@ -1066,8 +1074,8 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
             zinit = grd.z[ijk1coarse[3]]
             dh = grd.hgrid/downscalefactor
             # fine grid
-            grdfine = Grid3DCart(hgrid=dh,xinit=xinit,yinit=yinit,zinit=zinit,
-                                 nx=grsize_fine[1],ny=grsize_fine[2],nz=grsize_fine[3])
+            grdfine = Grid3DCart(hgrid=dh,cooinit=(xinit,yinit,zinit),
+                                 grsize=grsize_fine)
         end
 
     elseif simtype==:spherical

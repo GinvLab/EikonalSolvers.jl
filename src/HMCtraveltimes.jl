@@ -36,12 +36,12 @@ $(TYPEDEF)
 $(TYPEDFIELDS)
 """
 Base.@kwdef struct EikonalProb
-    ##mstart::Vector{Float64} # required
     grd::Union{Grid2DCart,Grid3DCart}
     dobs::Vector{Vector{Float64}}
     stdobs::Vector{Vector{Float64}}
     coordsrc::Array{Float64,2}
     coordrec::Vector{Array{Float64,2}}
+    whichgrad::Symbol
     logVel::Bool=false
     extraparams::Union{ExtraParams,Nothing}=nothing
 end
@@ -63,12 +63,13 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
 
     if typeof(eikprob.grd)==Grid2DCart
         # reshape vector to 2D array
-        velnd = reshape(vecvel,eikprob.grd.nx,eikprob.grd.ny)
+        velnd = reshape(vecvel,eikprob.grd.grsize[1],eikprob.grd.grsize[2])
     elseif typeof(eikprob.grd)==Grid3DCart
         # reshape vector to 3D array
-        velnd = reshape(vecvel,eikprob.grd.nx,eikprob.grd.ny,eikprob.grd.nz)
+        velnd = reshape(vecvel,eikprob.grd.grsize[1],eikprob.grd.grsize[2],
+                        eikprob.grd.grsize[3])
     else
-        error("typeof(eikprob.grd)== ?? ")
+        error("Wrong type of eikprob.grd.")
     end
 
     if kind==:nlogpdf
@@ -76,8 +77,12 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         ## compute the logdensity value for vecvel ##
         #############################################
         #println("logpdf")
-        misval = ttmisfitfunc(velnd,eikprob.dobs,eikprob.stdobs,eikprob.coordsrc,
-                              eikprob.coordrec,eikprob.grd,extraparams=eikprob.extraparams) 
+        misval = eikttimemisfit(velnd,eikprob.grd,
+                                eikprob.coordsrc,
+                                eikprob.coordrec,
+                                eikprob.dobs,
+                                eikprob.stdobs,
+                                extraparams=eikprob.extraparams) 
 
         return misval
         
@@ -87,19 +92,16 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         ## compute the gradient of the misfit function ##
         #################################################
         if typeof(eikprob.grd)==Grid2DCart
-            grad = gradttime2D(velnd,eikprob.grd,eikprob.coordsrc,
+            grad = eikgradient(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
+                               eikprob.whichgrad,
                                extraparams=eikprob.extraparams)
 
-        elseif typeof(eikprob.grd)==Grid3D
-            grad = gradttime3D(velnd,eikprob.grd,eikprob.coordsrc,
-                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
-                               extraparams=eikprob.extraparams)
         end
 
         if eikprob.logVel==true
             # derivative of ln(vel)
-            grad = (1.0./velnd) .* grad
+            grad .= (1.0./velnd) .* grad
         end
 
         # flatten traveltime array
