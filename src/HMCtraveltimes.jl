@@ -91,18 +91,23 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         #################################################
         ## compute the gradient of the misfit function ##
         #################################################
-        if typeof(eikprob.grd)==Grid2DCart
+        if eikprob.whichgrad==:gradvel
             grad = eikgradient(velnd,eikprob.grd,eikprob.coordsrc,
                                eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
                                eikprob.whichgrad,
                                extraparams=eikprob.extraparams)
+            if eikprob.logVel==true
+                # derivative of ln(vel)
+                grad .= (1.0./velnd) .* grad
+            end
 
+        elseif eikprob.whichgrad==:gradsrcloc
+            grad = eikgradient(velnd,eikprob.grd,eikprob.coordsrc,
+                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
+                               eikprob.whichgrad,
+                               extraparams=eikprob.extraparams)
         end
 
-        if eikprob.logVel==true
-            # derivative of ln(vel)
-            grad .= (1.0./velnd) .* grad
-        end
 
         # flatten traveltime array
         vecgrad = vec(grad)
