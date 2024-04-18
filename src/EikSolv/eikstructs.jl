@@ -19,14 +19,15 @@ A structure holding the 2D grid parameters, geometry and size.
 
 $(TYPEDFIELDS)
 
-The fields are:    
-- `hgrid`: spacing of the grid nodes (same for x and y)
-- `cooinit`: origin of the coordinates of the grid
-- `grsize`: number of grid nodes along x and y 
+
+The constructor requires three arguments (see the example):
+- `hgrid`: spacing of the grid nodes
+- `cooinit`: origin of the coordinate system
+- `grsize`: number of grid nodes along x and y
 
 # Example
 ```julia-repl
-julia> Grid2DCart(hgrid=5.0,xinit=0.0,yinit=0.0,nx=300,ny=250)
+julia> Grid2DCart(hgrid=5.0,cooinit=(0.0,0.0),grsize=(300,250))
 ```
 """
 struct Grid2DCart <: AbstractGridEik2D
@@ -34,22 +35,22 @@ struct Grid2DCart <: AbstractGridEik2D
     hgrid::Float64
     "Origin of the coodinates of the grid"
     cooinit::NTuple{2,Float64}
+    "End of the coodinates of the grid"
     cooend::NTuple{2,Float64}
+    "Number of grid nodes along x and y"
     grsize::NTuple{2,Int64}
-    x::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
-    y::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
-    # ntx::Int64
-    # nty::Int64
+    "x coordinates of the grid nodes"
+    x::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64}
+    "y coordinates of the grid nodes"
+    y::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64}
 
-    function Grid2DCart(; hgrid::Float64,xinit::Float64,yinit::Float64,nx::Int64,ny::Int64)
+    function Grid2DCart(; hgrid::Float64,cooinit::NTuple{2,Float64},
+                        grsize::NTuple{2,Int64})
         @assert hgrid>0.0
-        @assert nx>0
-        @assert ny>0
-        # ntx::Int64 = nx+1
-        # nty::Int64 = ny+1
-        x = range(start=xinit,step=hgrid,length=nx) 
-        y = range(start=yinit,step=hgrid,length=ny) 
-        new(hgrid,(xinit,yinit),(x[end],y[end]),(nx,ny),x,y)
+        @assert all(grsize.>0)
+        x = range(start=cooinit[1],step=hgrid,length=grsize[1]) 
+        y = range(start=cooinit[2],step=hgrid,length=grsize[2]) 
+        new(hgrid,cooinit,(x[end],y[end]),grsize,x,y)
     end
 end
 
@@ -64,41 +65,40 @@ A structure holding the 3D grid parameters, geometry and size.
 
 $(TYPEDFIELDS)
 
-The fields are:    
-- `hgrid`: spacing of the grid nodes (same for x, y and z)
-- `xinit, yinit, zinit`: origin of the coordinates of the grid
-- `nx, ny, nz`: number of nodes along x and y for the velocity array
-- `ntx, nty, ntz`: number of nodes along x and y for the time array when using a staggered grid, meaningful and used *only* for Podvin and Lecomte stencils
-
+The constructor requires three arguments (see the example):
+- `hgrid`: spacing of the grid nodes
+- `cooinit`: origin of the coordinate system
+- `grsize`: number of grid nodes along x, y and z
 
 # Example
 ```julia-repl
-julia> Grid3DCart(hgrid=5.0,xinit=0.0,yinit=0.0,zinit=0.0,nx=60,ny=60,nz=40)
+julia> Grid3DCart(hgrid=5.0,cooinit=(0.0,0.0,0.0),grsize=(60,60,40))
 ```
 """
 struct Grid3DCart <: AbstractGridEik3D
+    "Spacing of the grid nodes"
     hgrid::Float64
+    "Origin of the coodinates of the grid"
     cooinit::NTuple{3,Float64}
+    "End of the coodinates of the grid"
     cooend::NTuple{3,Float64}
+    "Number of grid nodes along x, y and z"
     grsize::NTuple{3,Int64}
-    x::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
-    y::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
-    z::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    "x coordinates of the grid nodes"
+    x::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} 
+    "y coordinates of the grid nodes"
+    y::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} 
+    "z coordinates of the grid nodes"
+    z::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} 
     
-    ## constructor function
-    function Grid3DCart(; hgrid::Float64,xinit::Float64,yinit::Float64, zinit::Float64,
-                        nx::Int64,ny::Int64,nz::Int64)
+    function Grid3DCart(; hgrid::Float64,cooinit::NTuple{3,Float64},
+                        grsize::NTuple{3,Int64})
         @assert hgrid>0.0
-        @assert nx>0
-        @assert ny>0
-        @assert nz>0
-        # ntx::Int64 = nx+1
-        # nty::Int64 = ny+1
-        # ntz::Int64 = nz+1
-        x = range(start=xinit,step=hgrid,length=nx) 
-        y = range(start=yinit,step=hgrid,length=ny) 
-        z = range(start=zinit,step=hgrid,length=nz) 
-        new(hgrid,(xinit,yinit,zinit),(x[end],y[end],z[end]),(nx,ny,nz),x,y,z)
+        @assert all(grsize.>0)
+        x = range(start=cooinit[1],step=hgrid,length=grsize[1]) 
+        y = range(start=cooinit[2],step=hgrid,length=grsize[2]) 
+        z = range(start=cooinit[3],step=hgrid,length=grsize[3]) 
+        new(hgrid,cooinit,(x[end],y[end],z[end]),grsize,x,y,z)
     end
 end
 

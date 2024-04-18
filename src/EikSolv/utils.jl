@@ -226,8 +226,8 @@ function smoothgradaroundsrc!(grad::AbstractArray,xyzsrc::AbstractVector{<:Real}
         # Cartesian
 
         xsrc,ysrc,zsrc = xyzsrc[1],xyzsrc[2],xyzsrc[3]
-        ijksrccorn = findenclosingbox(grd,xysrc)
-        nx,ny,nz = grd.nx,grd.ny,grd.nz
+        ijksrccorn = findenclosingbox(grd,xyzsrc)
+        nx,ny,nz = grd.grsize
 
         rmax = radiuspx*grd.hgrid
         imin = ijksrccorn[1,1]-radiuspx

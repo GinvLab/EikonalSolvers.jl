@@ -26,7 +26,7 @@ The computations may be run in parallel depending on the value of `extraparams.p
     * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
-- `grad`: the gradient w.r.t. velocity as a 2D or 3D array and the gradient w.r.t source location. In case only one of them is requested with `whichgrad`, the other will be of type Nothing.
+- The gradient w.r.t. velocity as a 2D or 3D array and the gradient w.r.t source location. In case only one of them is requested with `whichgrad`, the other will not be returned.
 """
 function eikgradient(vel::Array{Float64,N},
                      grd::AbstractGridEik,

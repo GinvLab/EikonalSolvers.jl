@@ -24,12 +24,12 @@ export Grid2DCart,Grid2DSphere
 export Grid3DCart,Grid3DSphere
 export eiktraveltime,eikgradient
 export eikttimemisfit
-
-export eiktraveltime2Dalt,eikgradient2Dalt
-export eiktraveltime3Dalt,eikgradient3Dalt
 export tracerays
 
-export EikonalProb
+#export eiktraveltime2Dalt,eikgradient2Dalt
+#export eiktraveltime3Dalt,eikgradient3Dalt
+
+export EikonalProbVel,EikonalProbSrcLoc
 
 export ExtraParams,GridRefinementPars
 
