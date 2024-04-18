@@ -22,7 +22,7 @@ module HMCtraveltimes
 using DocStringExtensions
 using EikonalSolvers
 
-export EikonalProb
+export EikonalProbVel,EikonalProbSrcLoc
 
 
 #################################################################
@@ -35,7 +35,7 @@ $(TYPEDEF)
 
 $(TYPEDFIELDS)
 """
-Base.@kwdef struct EikonalProb
+Base.@kwdef struct EikonalProbVel
     grd::Union{Grid2DCart,Grid3DCart}
     dobs::Vector{Vector{Float64}}
     stdobs::Vector{Vector{Float64}}
@@ -53,7 +53,9 @@ end
 $(TYPEDSIGNATURES)
 
 """
-function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
+function (eikprob::EikonalProbVel)(inpvecvel::Vector{Float64},kind::Symbol)
+
+    @assert eikprob.whichgrad==:gradvel
 
     if eikprob.logVel==true 
         vecvel = exp.(inpvecvel)
@@ -76,7 +78,7 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         #############################################
         ## compute the logdensity value for vecvel ##
         #############################################
-        #println("logpdf")
+        #println("HMCtraveltimes logpdf")
         misval = eikttimemisfit(velnd,eikprob.grd,
                                 eikprob.coordsrc,
                                 eikprob.coordrec,
@@ -91,23 +93,14 @@ function (eikprob::EikonalProb)(inpvecvel::Vector{Float64},kind::Symbol)
         #################################################
         ## compute the gradient of the misfit function ##
         #################################################
-        if eikprob.whichgrad==:gradvel
-            grad = eikgradient(velnd,eikprob.grd,eikprob.coordsrc,
-                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
-                               eikprob.whichgrad,
-                               extraparams=eikprob.extraparams)
-            if eikprob.logVel==true
-                # derivative of ln(vel)
-                grad .= (1.0./velnd) .* grad
-            end
-
-        elseif eikprob.whichgrad==:gradsrcloc
-            grad = eikgradient(velnd,eikprob.grd,eikprob.coordsrc,
-                               eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
-                               eikprob.whichgrad,
-                               extraparams=eikprob.extraparams)
+        grad = eikgradient(velnd,eikprob.grd,eikprob.coordsrc,
+                           eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
+                           eikprob.whichgrad,
+                           extraparams=eikprob.extraparams)
+        if eikprob.logVel==true
+            # derivative of ln(vel)
+            grad .= (1.0./velnd) .* grad
         end
-
 
         # flatten traveltime array
         vecgrad = vec(grad)
@@ -121,6 +114,74 @@ end
 
 #################################################################
 
+## create the problem type for traveltime tomography
+"""
+$(TYPEDEF)
+
+# Fields 
+
+$(TYPEDFIELDS)
+"""
+Base.@kwdef struct EikonalProbSrcLoc
+    grd::Union{Grid2DCart,Grid3DCart}
+    dobs::Vector{Vector{Float64}}
+    stdobs::Vector{Vector{Float64}}
+    coordrec::Vector{Array{Float64,2}}
+    velmod::Array{Float64,2}
+    whichgrad::Symbol
+    extraparams::Union{ExtraParams,Nothing}=nothing
+end
+
+## use  x.T * C^-1 * x  = ||L^-1 * x ||^2 ?
+
+## make the type callable
+"""
+$(TYPEDSIGNATURES)
+
+"""
+function (eikprob::EikonalProbSrcLoc)(inpcoosrc::Vector{Float64},kind::Symbol)
+
+    @assert eikprob.whichgrad==:gradsrcloc
+
+    coosrcnd = reshape(inpcoosrc,:,ndims(eikprob.velmod))
+
+   
+    if kind==:nlogpdf
+        #############################################
+        ## compute the logdensity value for vecvel ##
+        #############################################
+        #println("HMCtraveltimes logpdf")
+        misval = eikttimemisfit(eikprob.velmod,eikprob.grd,
+                                coosrcnd,
+                                eikprob.coordrec,
+                                eikprob.dobs,
+                                eikprob.stdobs,
+                                extraparams=eikprob.extraparams) 
+
+        return misval
+        
+
+    elseif kind==:gradnlogpdf
+        #################################################
+        ## compute the gradient of the misfit function ##
+        #################################################
+        grad = eikgradient(eikprob.velmod,eikprob.grd,coosrcnd,
+                           eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
+                           eikprob.whichgrad,
+                           extraparams=eikprob.extraparams)
+
+        # flatten traveltime array
+        vecgrad = vec(grad)
+        # return flattened gradient
+        return vecgrad
+        
+    else
+        error("eikprob::EikonalProb(): Wrong argument 'kind': $kind...")
+    end
+end
+
+
+#################################
 end # module
 #################################################################
 
