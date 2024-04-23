@@ -233,8 +233,6 @@ $(TYPEDEF)
 $(TYPEDFIELDS)
 """
 struct ExtraParams
-    "brute-force fix negative sqarg"
-    allowfixsqarg::Bool
     "refine grid around source?"
     refinearoundsrc::Bool
     "trigger GC manually at selected points"
@@ -248,8 +246,7 @@ struct ExtraParams
     "Downscaling factor and node radius for refined grid creation"
     grdrefpars::GridRefinementPars
 
-    function ExtraParams(; allowfixsqarg::Bool=false,
-                         refinearoundsrc::Bool=true,
+    function ExtraParams(; refinearoundsrc::Bool=true,
                          manualGCtrigger::Bool=false,
                          parallelkind::Symbol=:serial,
                          radiussmoothgradsrc::Integer=3,
@@ -264,7 +261,7 @@ struct ExtraParams
         if !(parallelkind in [:serial,:sharedmem,:distribmem])
             error("ExtraParams(): 'parallelkind' must be one of :serial, :sharedmem or :distribmem")
         end
-        return new(allowfixsqarg,refinearoundsrc,manualGCtrigger,
+        return new(refinearoundsrc,manualGCtrigger,
                    parallelkind,radiussmoothgradsrc,smoothgradkern,
                    grdrefpars)
     end    
@@ -422,21 +419,13 @@ struct FMMVars2D <: AbstractFMMVars
     bheap::BinHeapMin
     "refine grid around source"
     refinearoundsrc::Bool
-    "brute-force fix negative saqarg"
-    allowfixsqarg::Bool 
     srcboxpar::Union{SourceBoxParams,SourcePtsFromFineGrid}
 
     function FMMVars2D(n1::Integer,n2::Integer;
-                       amIcoarsegrid::Bool,refinearoundsrc::Bool,
-                       allowfixsqarg::Bool)
+                       amIcoarsegrid::Bool,refinearoundsrc::Bool)
         ttime = zeros(Float64,n1,n2)
         status = zeros(UInt8,n1,n2)
         bheap = init_minheap(n1*n2)
-        begin
-            if allowfixsqarg==true
-                @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
-            end
-        end
         
         if  amIcoarsegrid && refinearoundsrc==true
             ## there is refinement
@@ -450,7 +439,7 @@ struct FMMVars2D <: AbstractFMMVars
                                         MVector{Ncoe}(zeros(Ncoe)) )
 
         end
-        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
+        new(ttime,status,bheap,refinearoundsrc,srcboxpar)
     end
 end
 
@@ -462,20 +451,13 @@ struct FMMVars3D <: AbstractFMMVars
     bheap::BinHeapMin
     "refine grid around source"
     refinearoundsrc::Bool
-    "brute-force fix negative saqarg"
-    allowfixsqarg::Bool 
     srcboxpar::Union{SourceBoxParams,SourcePtsFromFineGrid}
     
     function FMMVars3D(n1::Integer,n2::Integer,n3::Integer;
-                       amIcoarsegrid::Bool,refinearoundsrc::Bool,allowfixsqarg::Bool)
+                       amIcoarsegrid::Bool,refinearoundsrc::Bool)
         ttime = zeros(Float64,n1,n2,n3)
         status = zeros(UInt8,n1,n2,n3)
         bheap = init_minheap(n1*n2*n3)
-        begin
-            if allowfixsqarg==true
-                @warn("ExtraParams: allowfixsqarg==true, brute-force fixing of negative discriminant allowed.")
-            end
-        end
 
         if amIcoarsegrid && refinearoundsrc==true
             ## there is refinement
@@ -487,7 +469,7 @@ struct FMMVars3D <: AbstractFMMVars
                                         MVector{Ncoe}(zeros(Ncoe)),
                                         MVector{Ncoe}(zeros(Ncoe)) )                                          
         end
-        new(ttime,status,bheap,refinearoundsrc,allowfixsqarg,srcboxpar)
+        new(ttime,status,bheap,refinearoundsrc,srcboxpar)
     end
 end
 

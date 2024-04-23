@@ -22,7 +22,6 @@ The computations may be run in parallel depending on the value of `extraparams.p
     * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
     * `radiussmoothgradsrc`: radius for smoothing each individual gradient *only* around the source. Zero means no smoothing.
     * `smoothgradkern`: smooth the final gradient with a kernel of size `smoothgradkern` (in grid nodes). Zero means no smoothing.
-    * `allowfixsqarg`: brute-force fix negative sqarg. Don't use this!
     * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
@@ -149,8 +148,7 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
     gradsrcpos = zeros(eltype(vel),nsrc,ndims(vel))
 
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars = createFMMvars(grd,amIcoarsegrid=true,refinearoundsrc=extrapars.refinearoundsrc,
-                            allowfixsqarg=extrapars.allowfixsqarg)
+    fmmvars = createFMMvars(grd,amIcoarsegrid=true,refinearoundsrc=extrapars.refinearoundsrc)
     
     ## pre-allocate discrete adjoint variables for coarse grid
     adjvars = createAdjointVars(grsize)
@@ -1232,7 +1230,6 @@ Calculate the Gaussian misfit functional
     * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
     * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
     * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
-    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this!
     * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
