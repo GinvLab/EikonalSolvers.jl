@@ -1,7 +1,7 @@
 name = "EikonalSolvers"
 uuid = "0631ba50-6b23-11e9-3fc3-378508ba069a"
 authors = ["Andrea Zunino <6928707-anzun@users.noreply.gitlab.com>"]
-version = "0.14.0"
+version = "0.15.0"
 
 [deps]
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -19,7 +19,7 @@ WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 SaveGrid2VTKExt = "WriteVTK"
 
 [compat]
-julia = "1.9"
+julia = "1.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

@@ -144,7 +144,6 @@ function (eikprob::EikonalProbSrcLoc)(inpcoosrc::Vector{Float64},kind::Symbol)
     @assert eikprob.whichgrad==:gradsrcloc
 
     coosrcnd = reshape(inpcoosrc,:,ndims(eikprob.velmod))
-
    
     if kind==:nlogpdf
         #############################################
@@ -165,7 +164,7 @@ function (eikprob::EikonalProbSrcLoc)(inpcoosrc::Vector{Float64},kind::Symbol)
         #################################################
         ## compute the gradient of the misfit function ##
         #################################################
-        grad = eikgradient(eikprob.velmod,eikprob.grd,coosrcnd,
+        grad,_ = eikgradient(eikprob.velmod,eikprob.grd,coosrcnd,
                            eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
                            eikprob.whichgrad,
                            extraparams=eikprob.extraparams)

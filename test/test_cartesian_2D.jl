@@ -9,7 +9,7 @@ function test_fwdtt_2D_constvel()
     maxerr = Vector{Float64}(undef,Ntests)
 
     # Create a grid and a velocity model
-    grd = Grid2DCart(hgrid=250.0,xinit=0.0,yinit=0.0,nx=111,ny=121)
+    grd = Grid2DCart(hgrid=250.0,cooinit=(0.0,0.0),grsize=(111,121))
     nx,ny = grd.grsize
 
     coordsrcs = [[grd.hgrid+grd.x[nx÷2]  grd.hgrid+grd.y[ny÷2]],
@@ -127,7 +127,7 @@ function test_fwdtt_2D_lingrad()
                   
     #--------------------------------------
     # Create a grid and a velocity model
-    grd = Grid2DCart(hgrid=15.0,xinit=0.0,yinit=0.0,nx=111,ny=121)
+    grd = Grid2DCart(hgrid=15.0,cooinit=(0.0,0.0),grsize=(111,121))
     nx,ny = grd.grsize
 
     #########################
@@ -169,10 +169,8 @@ function test_gradvel_2D()
 
     # create the Grid2D struct
     grd = Grid2DCart(hgrid=20.0,
-                     xinit=0.0,
-                     yinit=0.0,
-                     nx=50,
-                     ny=30)
+                     cooinit=(0.0,0.0),
+                     grsize=(50,30))
     nx,ny = grd.grsize
 
     nrec = 7
@@ -219,10 +217,12 @@ function test_gradvel_2D()
         coordsrc2 = copy(coordsrc1)
 
         ## calculate the gradient of the misfit function
-        gradvel = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
-                              :gradvel,extraparams=extraparams)
+        gradvel,misf1 = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
+                                :gradvel,extraparams=extraparams)
 
-
+        misf2 = eikttimemisfit(vel0,grd,coordsrc2,
+                               coordrec,dobs,stdobs;
+                               extraparams=extraparams)
         dh = 0.001
 
         gradvel_FD = similar(gradvel)
@@ -232,9 +232,9 @@ function test_gradvel_2D()
                 velpdh[i,j] += dh
                 velmdh = copy(vel0)
                 velmdh[i,j] -= dh
-                misf_pdh = eikttimemisfit(velpdh,dobs,stdobs,coordsrc2,coordrec,grd;
+                misf_pdh = eikttimemisfit(velpdh,grd,coordsrc2,coordrec,dobs,stdobs;
                                         extraparams=extraparams)
-                misf_mdh = eikttimemisfit(velmdh,dobs,stdobs,coordsrc2,coordrec,grd;
+                misf_mdh = eikttimemisfit(velmdh,grd,coordsrc2,coordrec,dobs,stdobs;
                                         extraparams=extraparams)
                 gradvel_FD[i,j] = (misf_pdh-misf_mdh)/(2*dh)
             end
@@ -245,7 +245,8 @@ function test_gradvel_2D()
         maxerr = maximum(abs.(gradvel.-gradvel_FD))
         # @show normerr
         # @show maxerr
-
+        
+        @test misf1≈misf2
         @test all((maxerr<=tolerr[r] && normerr<=tolnorm[r] ))
     end
 
@@ -259,10 +260,8 @@ function test_gradsrc_2D()
 
     # create the Grid2D struct
     grd = Grid2DCart(hgrid=20.0,
-                     xinit=0.0,
-                     yinit=0.0,
-                     nx=50,
-                     ny=30)
+                     cooinit=(0.0,0.0),
+                     grsize=(50,30))
     nx,ny = grd.grsize
 
     nrec = 7
@@ -276,7 +275,6 @@ function test_gradsrc_2D()
         velmod[:,i] = 23.6 * i .+ velmod[:,i]
     end
 
-
     coordsrc1 = [grd.hgrid*(nx÷2)+0.23*grd.hgrid  grd.hgrid*(ny÷2)-0.6*grd.hgrid]
 
     tolerr = [3.83e-4,
@@ -284,7 +282,6 @@ function test_gradsrc_2D()
 
     tolnorm = [5.23e-4
                3.13e-4]
-
 
     r=0
     for refinesrc in [false,true]
@@ -315,8 +312,13 @@ function test_gradsrc_2D()
         end
 
         ## calculate the gradient of the misfit function
-        gradsrcloc = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
-                                 :gradsrcloc,extraparams=extraparams)
+        gradsrcloc,misf1 = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
+                                   :gradsrcloc,extraparams=extraparams)
+
+        misf2 = eikttimemisfit(vel0,grd,coordsrc2,
+                                  coordrec,dobs,stdobs;
+                                  extraparams=extraparams)
+
 
         dh = 0.0001
 
@@ -329,12 +331,12 @@ function test_gradsrc_2D()
                 coordsrc_minusdx = copy(coordsrc2[s:s,:])
 
                 coordsrc_plusdx[axis] += dh
-                misf_pdx = eikttimemisfit(vel0,dobs,stdobs,coordsrc_plusdx,
-                                          coordrec,grd;
+                misf_pdx = eikttimemisfit(vel0,grd,coordsrc_plusdx,
+                                          coordrec,dobs,stdobs;
                                           extraparams=extraparams)
                 coordsrc_minusdx[axis] -= dh
-                misf_mdx = eikttimemisfit(vel0,dobs,stdobs,coordsrc_minusdx,
-                                          coordrec,grd;
+                misf_mdx = eikttimemisfit(vel0,grd,coordsrc_minusdx,
+                                          coordrec,dobs,stdobs;
                                           extraparams=extraparams)
                 gradsrcloc_FD[s,axis] = (misf_pdx-misf_mdx)/(2*dh)
             end
@@ -350,6 +352,7 @@ function test_gradsrc_2D()
         # @show normerr #-tolnorm[r]
         # @show maxerr #-tolerr[r]
 
+        @test misf1≈misf2
         @test all((maxerr<=tolerr[r] && normerr<=tolnorm[r] ))
     end
 
