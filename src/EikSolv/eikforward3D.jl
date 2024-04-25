@@ -336,7 +336,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
     ## If discriminant is negative (probably because of sharp contrasts in
     ##  velocity) revert to 1st order for both x and y
     if sqarg<0.0
-        @warn "sqarg<0.0"
+        @warn "Discriminant is negative (sqarg<0.0), reverting to 1st order."
         begin    
             codeD[:] .= 0 # integers
             alpha = 0.0
@@ -421,25 +421,102 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
             sqarg = beta^2-4.0*alpha*gamma
 
         end ## begin...
+    end ## if sqarg<0.0
 
-        if sqarg<0.0
+    ################################################################
+    if sqarg<0.0
+        ## SECOND time sqarg<0...
+        @warn "Discriminant is still negative (sqarg<0.0), dropping to one dimension."
+        begin 
+            codeD[:] .= 0 # integers
+            alpha = 0.0
+            beta  = 0.0
+            gamma = - slowcurpt^2 ## !!!!
 
-            if fmmvars.allowfixsqarg==true
-            
-                gamma = beta^2/(4.0*alpha)
-                sqarg = beta^2-4.0*alpha*gamma
-                println("calcttpt_2ndord(): ### Brute force fixing problems with 'sqarg', results may be quite inaccurate. ###")
+            ## 3 directions
+            chosenval1vec = MVector(HUGE,HUGE,HUGE)
+            for axis=1:3
                 
-            else
-                println("\n To get a non-negative discriminant, need to fulfil: ")
-                println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
-                println(" where tx,ty can be")
-                println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
-                println(" t? = chosenval1  if 1st order ")
+                use1stord = false
+                chosenval1vec[axis] = HUGE
                 
-                error("calcttpt_2ndord(): sqarg<0.0, negative discriminant (at i=$i, j=$j)")
-            end
-        end
+                ## two sides for each direction
+                for l=1:2
+
+                    ## map the 4 cases to an integer as in linear indexing...
+                    lax = l + 2*(axis-1)
+                    if lax==1 # axis==1
+                        ish = 1 #1
+                        jsh = 0 #0
+                        ksh = 0
+                    elseif lax==2 # axis==1
+                        ish = -1  #-1
+                        jsh = 0  #0
+                        ksh = 0
+                    elseif lax==3 # axis==2
+                        ish = 0 #0
+                        jsh = 1 #1
+                        ksh = 0
+                    elseif lax==4 # axis==2
+                        ish = 0 # 0
+                        jsh = -1 #-1
+                        ksh = 0
+                    elseif lax==5 # axis==3
+                        ish = 0
+                        jsh = 0
+                        ksh = 1
+                    elseif lax==6 # axis==3
+                        ish = 0
+                        jsh = 0
+                        ksh = -1
+                    end
+
+                    ## check if on boundaries
+                    isonb1st,isonb2nd = isonbord(i+ish,j+jsh,k+ksh,n1,n2,n3)
+                    
+                    ## 1st order
+                    if !isonb1st && fmmvars.status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
+                        testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
+                        ## pick the lowest value of the two
+                        if testval1<=chosenval1vec[axis] ## < only
+                            chosenval1vec[axis] = testval1
+                            use1stord = true
+
+                            # save derivative choices
+                            if axis==1
+                                codeD[axis]=ish
+                            elseif axis==2
+                                codeD[axis]=jsh
+                            else
+                                codeD[axis]=ksh
+                            end
+
+                        end
+                    end
+                end # end two sides
+            end # end three axes
+
+            # use only one dimension to update the traveltime
+            # pick the minimum traveltime from neighbors
+            idcv = argmin(chosenval1vec)
+            soughtt = (Δh[idcv]*slowcurpt) + chosenval1vec[idcv]
+            # update the info about derivatives
+            tmpcodeD = codeD[idcv]
+            codeD .= 0
+            # the only nonzero code is the one corresponding to the used dimension
+            codeD[idcv] = tmpcodeD
+
+            return soughtt
+
+        end ## begin...
+        ################################################################
+
+        #         println("\n To get a non-negative discriminant, need to fulfil: ")
+        #         println(" (tx-ty)^2 - 2*s^2/curalpha <= 0")
+        #         println(" where tx,ty can be")
+        #         println(" t? = 1.0/3.0 * (4.0*chosenval1-chosenval2)  if 2nd order")
+        #         println(" t? = chosenval1  if 1st order ")
+        
     end ## if sqarg<0.0
     ##=========================================================================================
 

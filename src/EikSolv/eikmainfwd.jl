@@ -18,6 +18,13 @@ Optionally return the array(s) of traveltime on the entire gridded model.
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array 
 - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
 - `returntt`: a boolean (default false) specifying whether to retur the array(s) of traveltime on the entire gridded model or not
+- `extraparams` (optional): a struct containing some "extra" parameters, namely
+    * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
+    * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
+    * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
+    * `radiussmoothgradsrc`: radius for smoothing each individual gradient *only* around the source. Zero means no smoothing.
+    * `smoothgradkern`: smooth the final gradient with a kernel of size `smoothgradkern` (in grid nodes). Zero means no smoothing.
+    * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
 - A vector of vectors containing traveltimes at the receivers for each source 
@@ -155,8 +162,8 @@ function ttforwsomesrc(vel::Array{Float64,N},coordsrc::Array{Float64,2},
 
     ## pre-allocate ttime and status arrays plus the binary heap
     fmmvars = createFMMvars(grd,amIcoarsegrid=true,
-                            refinearoundsrc=extrapars.refinearoundsrc,
-                            allowfixsqarg=extrapars.allowfixsqarg)
+                            refinearoundsrc=extrapars.refinearoundsrc)
+                            
 
     ## pre-allocate discrete adjoint variables
     ##  No adjoint calculations
@@ -194,23 +201,19 @@ end
 
 function createFMMvars(grd::AbstractGridEik2D;
                        amIcoarsegrid::Bool,
-                       refinearoundsrc::Bool,
-                       allowfixsqarg::Bool)
+                       refinearoundsrc::Bool)
     n1,n2 = grd.grsize
     fmmvars = FMMVars2D(n1,n2,amIcoarsegrid=true,
-                        refinearoundsrc=refinearoundsrc,
-                        allowfixsqarg=allowfixsqarg)
+                        refinearoundsrc=refinearoundsrc)
     return fmmvars
 end
 
 function createFMMvars(grd::AbstractGridEik3D;
                        amIcoarsegrid::Bool,
-                       refinearoundsrc::Bool,
-                       allowfixsqarg::Bool)
+                       refinearoundsrc::Bool)
     n1,n2,n3 = grd.grsize
     fmmvars = FMMVars3D(n1,n2,n3,amIcoarsegrid=true,
-                        refinearoundsrc=refinearoundsrc,
-                        allowfixsqarg=allowfixsqarg)
+                        refinearoundsrc=refinearoundsrc)
     return fmmvars
 end
 
@@ -348,8 +351,7 @@ function runrefinementaroundsrc!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},
 
     ## pre-allocate ttime and status arrays plus the binary heap
     fmmvars_fine = createFMMvars(grd_fine,amIcoarsegrid=false,
-                                 refinearoundsrc=false,
-                                 allowfixsqarg=extrapars.allowfixsqarg)
+                                 refinearoundsrc=false)                           
     
     ##==================================================
     # init ttime 

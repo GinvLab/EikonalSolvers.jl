@@ -22,11 +22,11 @@ The computations may be run in parallel depending on the value of `extraparams.p
     * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
     * `radiussmoothgradsrc`: radius for smoothing each individual gradient *only* around the source. Zero means no smoothing.
     * `smoothgradkern`: smooth the final gradient with a kernel of size `smoothgradkern` (in grid nodes). Zero means no smoothing.
-    * `allowfixsqarg`: brute-force fix negative sqarg. Don't use this!
     * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
-- The gradient w.r.t. velocity as a 2D or 3D array and the gradient w.r.t source location. In case only one of them is requested with `whichgrad`, the other will not be returned.
+- The gradient w.r.t. velocity as a 2D or 3D array and the gradient w.r.t source location. In case only one of them is requested with `whichgrad`, the other one will not be returned.
+- The value of the misfit functional for the given input velocity model.
 """
 function eikgradient(vel::Array{Float64,N},
                      grd::AbstractGridEik,
@@ -62,6 +62,8 @@ function eikgradient(vel::Array{Float64,N},
         ## do the calculations
         ∂ψ∂vel_all = Vector{Array{Float64,ndims(vel)}}(undef,nchu)
         ∂ψ∂xyzsrc = Vector{Vector{Float64}}(undef,nsrc)
+        ttmisfsrc = Vector{Float64}(undef,nchu)
+
         @sync begin 
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
@@ -73,6 +75,7 @@ function eikgradient(vel::Array{Float64,N},
                 end
             end
             ∂ψ∂vel = sum(∂ψ∂vel_all)
+            ttmisf = sum(ttmisfsrc)
         end
 
 
@@ -86,21 +89,22 @@ function eikgradient(vel::Array{Float64,N},
         ##  do the calculations
         ∂ψ∂vel_all = Vector{ Array{Float64,ndims(vel)} }(undef,nchu) # for i=1:nchu]
         ∂ψ∂xyzsrc = Matrix{Float64}(undef,nsrc,ndims(vel))
-
+        ttmisfsrc = Vector{Float64}(undef,nchu)
+        
         Threads.@threads for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]            
-            ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs,:] = calcgradsomesrc2D(vel,coordsrc[igrs,:],coordrec[igrs],
+            ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs,:],ttmisfsrc[s] = calcgradsomesrc2D(vel,coordsrc[igrs,:],coordrec[igrs],
                                                                 grd,stdobs[igrs],pickobs[igrs],
                                                                 whichgrad,extraparams )
         end
         ∂ψ∂vel = sum(∂ψ∂vel_all)
-
+        ttmisf = sum(ttmisfsrc)
 
     elseif extraparams.parallelkind==:serial
         ##====================================
         ## Serial run
         ##====================
-        ∂ψ∂vel,∂ψ∂xyzsrc = calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
+        ∂ψ∂vel,∂ψ∂xyzsrc,ttmisf = calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
                                             whichgrad,extraparams )
 
     end
@@ -118,11 +122,11 @@ function eikgradient(vel::Array{Float64,N},
 
      
     if whichgrad==:gradvel
-        return ∂ψ∂vel
+        return ∂ψ∂vel,ttmisf
     elseif whichgrad==:gradsrcloc
-        return ∂ψ∂xyzsrc
+        return ∂ψ∂xyzsrc,ttmisf
     elseif whichgrad==:gradvelandsrcloc
-        return ∂ψ∂vel,∂ψ∂xyzsrc
+        return ∂ψ∂vel,∂ψ∂xyzsrc,ttmisf
     end
     return
 end
@@ -149,11 +153,12 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
     gradsrcpos = zeros(eltype(vel),nsrc,ndims(vel))
 
     ## pre-allocate ttime and status arrays plus the binary heap
-    fmmvars = createFMMvars(grd,amIcoarsegrid=true,refinearoundsrc=extrapars.refinearoundsrc,
-                            allowfixsqarg=extrapars.allowfixsqarg)
+    fmmvars = createFMMvars(grd,amIcoarsegrid=true,refinearoundsrc=extrapars.refinearoundsrc)
     
     ## pre-allocate discrete adjoint variables for coarse grid
     adjvars = createAdjointVars(grsize)
+
+    totmisf::Float64 = 0.0
 
     # looping on 1...nsrc because only already selected srcs have been
     #   passed to this routine
@@ -189,15 +194,16 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
             tmpgradsrcpos = view(gradsrcpos,s,:) ## VIEW!!!
         end
                 
-        calcgrads_singlesrc!(gradvel1,tmpgradsrcpos,
-                             fmmvars,adjvars,
-                             xyzsrc[s,:],coordrec[s],pickobs1[s],stdobs[s],
-                             vel,grd,whichgrad,extrapars.refinearoundsrc,
-                             fmmvars_fine=fmmvars_fine,
-                             adjvars_fine=adjvars_fine,
-                             grd_fine=grd_fine,
-                             srcrefvars=srcrefvars)
-
+        misfit1src = calcgrads_singlesrc!(gradvel1,tmpgradsrcpos,
+                                          fmmvars,adjvars,
+                                          xyzsrc[s,:],coordrec[s],pickobs1[s],stdobs[s],
+                                          vel,grd,whichgrad,extrapars.refinearoundsrc,
+                                          fmmvars_fine=fmmvars_fine,
+                                          adjvars_fine=adjvars_fine,
+                                          grd_fine=grd_fine,
+                                          srcrefvars=srcrefvars)
+        # update misfit value
+        totmisf += 0.5 * misfit1src
          
         if whichgrad==:gradvel || whichgrad==:gradvelandsrcloc
             ###########################################
@@ -217,7 +223,7 @@ function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2
         GC.gc()
     end
 
-    return gradvelall,gradsrcpos
+    return gradvelall,gradsrcpos,totmisf
 end 
 
 ##############################################################################
@@ -270,8 +276,11 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
     #######################################################
     ##  right hand side adj eq. == -(∂ψ/∂u_p)^T
     #######################################################
+    # compute misfit value for current source
+    pickdiff = (P*tt_fmmord).-pickobs
+    misfit1src = sum( (pickdiff.^2) ./stdobs.^2 )
     #rhs = - transpose(P) * ( ((P*tt).-pickobs)./stdobs.^2)
-    fact2∂ψ∂u = ((P*tt_fmmord).-pickobs)./stdobs.^2
+    fact2∂ψ∂u = pickdiff ./stdobs.^2
     # bool vector with false for src columns
     rq = .!adjvars.fmmord.onsrccols
     P_Breg = P[:,rq] # remove columns
@@ -437,7 +446,7 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
 
     end
     
-    return 
+    return misfit1src
 end
 
 ##############################################################################
@@ -1232,7 +1241,6 @@ Calculate the Gaussian misfit functional
     * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
     * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
     * `grdrefpars`: refined grid around the source parameters (`downscalefactor` and `noderadius`)
-    * `allowfixsqarg`: brute-force fix negative saqarg. Don't use this!
     * `manualGCtrigger`: trigger garbage collector (GC) manually at selected points.
 
 # Returns
