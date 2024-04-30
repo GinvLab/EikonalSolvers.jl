@@ -114,39 +114,46 @@ $(TYPEDFIELDS)
 The fields are:    
 - `Δr`: spacing of the grid nodes along the radial coordinate r
 - `Δθ`: spacing of the grid nodes along the θ coordinate
-- `rinit, θinit`: origin of the coordinates of the grid
-- `nr, nθ`: number of nodes along r and θ for the velocity array (structured grid)
+- `cooinit`: origin of the coordinate system
+- `grsize`: number of grid nodes along r and θ 
 
 
 # Example
 ```julia-repl
-julia> Grid2DSphere(Δr=15.0,Δθ=2.0,nr=10,nθ=15,rinit=500.0,θinit=0.0)
+julia> Grid2DSphere(Δr=15.0,Δθ=2.0,grsize=(10,15),cooinit=(500.0,0.0))
 ```
 """
 struct Grid2DSphere <: AbstractGridEik2D
+    "Spacing of the grid nodes along the radius (r)"
     Δr::Float64
+    "Spacing of the grid nodes along the angle θ"
     Δθ::Float64
+    "Origin of the coodinates of the grid"
     cooinit::NTuple{2,Float64}
+    "End of the coodinates of the grid"
     cooend::NTuple{2,Float64}
+    "Number of grid nodes along r and θ"
     grsize::NTuple{2,Int64}
-    r::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
-    θ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    "r coordinates of the grid nodes"
+    r::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} 
+    "θ coordinates of the grid nodes"
+    θ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} 
 
-    function Grid2DSphere(; Δr::Float64,Δθ::Float64,rinit::Float64,θinit::Float64,nr::Int64,nθ::Int64)
-        @assert rinit>=0.0
+    function Grid2DSphere(; Δr::Float64,Δθ::Float64,cooinit::NTuple{2,Float64},
+                          grsize::NTuple{2,Int64} )
+        @assert cooinit[1]>=0.0
         @assert Δr>0.0
         @assert Δθ>0.0
-        @assert nr>0
-        @assert nθ>0
-        r = range(start=rinit,step=Δr,length=nr) #[rinit+Δr*(i-1) for i =1:nr]
-        θ = range(start=θinit,step=Δθ,length=nθ) #[θinit+Δθ*(i-1) for i =1:nθ]
+        @assert all(grsize.>0)
+        r = range(start=cooinit[1],step=Δr,length=grsize[1]) 
+        θ = range(start=cooinit[2],step=Δθ,length=grsize[2]) 
         ## limit to 180 degrees for now...
         @assert all(0.0.<=θ.<=180.0)
         # ## now convert everything to radians
         # println("Grid2DSphere(): converting θ to radians")
         # θ .= deg2rad(θ)
         # Δθ = deg2rad(Δθ)
-        new(Δr,Δθ,(rinit,θinit),(r[end],θ[end]),(nr,nθ),r,θ)
+        new(Δr,Δθ,cooinit,(r[end],θ[end]),grsize,r,θ)
     end
 end
 
@@ -164,46 +171,50 @@ The fields are:
 - `Δr`: spacing of the grid nodes along the radial coordinate r
 - `Δθ`: spacing of the grid nodes along the θ coordinate
 - `Δφ`: spacing of the grid nodes along the θ coordinate
-- `rinit, θinit,φinit`: origin of the coordinates of the grid
-- `nr, nθ, nφ`: number of nodes along r, θ and φ for the velocity array (structured grid)
+- `cooinit`: origin of the coordinate system
+- `grsize`: number of grid nodes along r, θ and φ 
 
 # Example
 ```julia-repl
-julia> Grid3DSphere(Δr=15.0,Δθ=2.0,Δφ=1.5,nr=10,nθ=15,nφ=12,rinit=500.0,θinit=20.0,φinit=0.0)
+julia> Grid3DSphere(Δr=15.0,Δθ=2.0,Δφ=1.5,grsize=(10,15,12),cooinit=(500.0,20.0,0.0))
 ```
 """
 struct Grid3DSphere <: AbstractGridEik3D
+    "Spacing of the grid nodes along the radius (r)"
     Δr::Float64
+    "Spacing of the grid nodes along the angle θ"
     Δθ::Float64
+    "Spacing of the grid nodes along the angle φ"
     Δφ::Float64
-    rinit::Float64
-    θinit::Float64
-    φinit::Float64
-    nr::Int64
-    nθ::Int64
-    nφ::Int64
-    r::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
-    θ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
-    φ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} #Vector{Float64}
+    "Origin of the coodinates of the grid"
+    cooinit::NTuple{3,Float64}
+    "End of the coodinates of the grid"
+    cooend::NTuple{3,Float64}
+    "Number of grid nodes along r, θ and φ"
+    grsize::NTuple{3,Int64}
+    "r coordinates of the grid nodes"
+    r::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} 
+    "θ coordinates of the grid nodes"
+    θ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} 
+    "φ coordinates of the grid nodes"
+    φ::StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int64} 
 
-    function Grid3DSphere(; Δr::Float64,Δθ::Float64,Δφ::Float64,rinit::Float64,θinit::Float64,φinit::Float64,
-                          nr::Int64,nθ::Int64,nφ::Int64 )
-        @assert r>0.0
+    function Grid3DSphere(; Δr::Float64,Δθ::Float64,Δφ::Float64,cooinit::NTuple{3,Float64},
+                          grsize::NTuple{3,Int64})
+        @assert cooinit[1]>0.0
+        @assert all(grsize.>0)
+        r = range(start=cooinit[1],step=Δr,length=grsize[1]) #[rinit+Δr*(i-1) for i =1:nr]
+        θ = range(start=cooinit[2],step=Δθ,length=grsize[2]) #[θinit+Δθ*(i-1) for i =1:nθ]
+        φ = range(start=cooinit[3],step=Δφ,length=grsize[3]) #[φinit+Δφ*(i-1) for i =1:nφ]
         ## exclude the poles... sin(θ) -> sin(0) or sin(180) = 0  -> leads to division by zero
         @assert all(5.0.<=θ.<=175.0)
         ## limit to 180 degrees for now...
         @assert all(0.0.<=φ.<=180.0)
-        @assert nr>0
-        @assert nθ>0
-        @assert nφ>0
-        r = range(start=rinit,step=Δr,length=nr) #[rinit+Δr*(i-1) for i =1:nr]
-        θ = range(start=θinit,step=Δθ,length=nθ) #[θinit+Δθ*(i-1) for i =1:nθ]
-        φ = range(start=φinit,step=Δφ,length=nφ) #[φinit+Δφ*(i-1) for i =1:nφ]
         # ## now convert everything to radians
         # println("Grid2DSphere(): converting θ to radians")
         # θ .= deg2rad(θ)
         # Δθ = deg2rad(Δθ)
-        new(Δr,Δθ,Δφ,rinit,θinit,φinit,nr,nθ,nφ,r,θ,φ)
+        new(Δr,Δθ,Δφ,cooinit,(r[end],θ[end],φ[end]),grsize,r,θ,φ)
     end
 end
 
@@ -353,8 +364,8 @@ struct CoeffDerivCartesian <: CoeffDerivatives
 end
 
 struct CoeffDerivSpherical2D <: CoeffDerivatives
-    firstord::Matrix{Float64}
-    secondord::Matrix{Float64}
+    firstord::AbstractArray #Union{MVector{2,Float64},MMatrix{Float64}}
+    secondord::AbstractArray #Union{MVector{3,Float64},MMatrix{Float64}}
 end
 
 struct CoeffDerivSpherical3D <: CoeffDerivatives

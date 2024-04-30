@@ -1045,7 +1045,7 @@ function setcoeffderiv!(D::VecSPDerivMat,status::Array,irow::Integer,idxconv::Ma
                 mycoeff = signcod * coeff[p]
             elseif axis==:Y
                 # in this case coeff depends on radius (index i)
-                mycoeff = signcod * coeff[i,p]
+                mycoeff = signcod * coeff[ijkcoe[1],p]
             elseif axis==:Z
                 error("setcoeffderiv!(): :Z axis not yet implemented for spherical stuff.")
                 # # in this case coeff depends on radius (index i)

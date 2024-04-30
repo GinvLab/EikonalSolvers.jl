@@ -19,7 +19,7 @@ Here below an example of how to calculate traveltimes at receiver stations in 2D
 using EikonalSolvers
 
 # create the Grid2DCart struct
-grd = Grid2DCart(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)  # create the Grid2D struct
+grd = Grid2DCart(hgrid=0.5,cooinit=(0.0,0.0),grsize=(300,220))  # create the Grid2D struct
 nsrc = 4 # number of sources
 nrec = 10 # number of receivers
 # coordinates of the sources (4 sources)
@@ -27,8 +27,8 @@ coordsrc = [grd.hgrid.*LinRange(10,290,nsrc)  grd.hgrid.*200.0.*ones(nsrc)] # co
 # coordinates of the receivers (10 receivers)
 coordrec = [ [grd.hgrid.*LinRange(8,294,nrec) grd.hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
 # velocity model
-velmod = 2.5 .* ones(grd.nx,grd.ny)   # velocity model
-# increasing velocity with depth...
+velmod = 2.5 .* ones(grd.grsize...)   # velocity model
+# increasing velocity with depth
 for i=1:grd.ny 
   velmod[:,i] = 0.034 * i .+ velmod[:,i] 
 end
@@ -51,13 +51,13 @@ ttimepicks,ttimegrid = eiktraveltime(velmod,grd,coordsrc,coordrec,returntt=true)
 The gradient of the misfit functional (see documentation) with respect to velocity can be calculated as following. A set of observed traveltimes, error on the measurements and a reference velocity model are also required, see the documentation for a detailed example.
 ```julia
 # calculate the gradient of the misfit function w.r.t. velocity
-gradvel = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel)
+gradvel,misf = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel)
 ```
 ![ttarrays](docs/src/images/grad-vel.png)
 The gradient of the misfit function w.r.t. the source position can also be computed, e.g., as
 ```julia
 # calculate the gradient of the misfit function w.r.t. velocity
-gradsrcloc = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradsrcloc)
+gradsrcloc,misf = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradsrcloc)
 
 # now print the partial derivatives
 @show(gradsrcloc)
