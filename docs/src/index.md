@@ -95,11 +95,6 @@ Moreover, a convenience module `HMCTraveltimes` (see [`EikonalSolvers.HMCtravelt
 [`ExtraParams`](@ref) also may play an important role in certain user cases.
 
 
-Additional functions are provided to perform forward and inverse calculations using different methods than the defaults. These functions are there for historical reasons and are pooly maintained. Do not rely on them.
-* [`eiktraveltime2Dalt`](@ref) and [`eiktraveltime3Dalt`](@ref) which compute traveltimes using either a fast marching method ([^Sethian1996], [^SethianPopovici1999]) using Podvin-Lecomte stencils ([^PodvinLecomte1991]) or a fast sweeping method (FSM) ([^LeungQian2006]) using Podvin-Lecomte stencils ([^PodvinLecomte1991]) ;
-* [`eikgradient2Dalt`](@ref) and [`eikgradient3Dalt`](@ref), which computes the 3D gradient of the misfit function with respect to velocity using either FMM or FSM ([^LeungQian2006],[^Taillandieretal2009]) and different stencils depending on user choices.
-
-
 
 ## Parallelisation
 
@@ -117,14 +112,14 @@ Let's start with a complete example:
 
 ```@example full
 using EikonalSolvers
-grd = Grid2DCart(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)  # create the Grid2D struct
+grd = Grid2DCart(hgrid=0.5,cooinit=(0.0,0.0),grsize=(300,220))  # create the Grid2D struct
 nsrc = 4
 nrec = 10
 coordsrc = [grd.hgrid.*LinRange(10,290,nsrc)  grd.hgrid.*200.0.*ones(nsrc)] # coordinates of the sources (4 sources)
 coordrec = [ [grd.hgrid.*LinRange(8,294,nrec) grd.hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
-velmod = 2.5 .* ones(grd.nx,grd.ny)   # velocity model
+velmod = 2.5 .* ones(grd.grsize...)   # velocity model
 # increasing velocity with depth...
-for i=1:grd.ny 
+for i=1:grd.grsize[2] 
   velmod[:,i] = 0.034 * i .+ velmod[:,i] 
 end
 
@@ -141,9 +136,9 @@ First of we have to import the module and define the parameters of the grid usin
 ```@example parts
 using EikonalSolvers
 # hgrid: grid spacing
-# xinit,yinit: grid origin coordinates
-# nx,ny: grid size
-grd = Grid2DCart(hgrid=0.5,xinit=0.0,yinit=0.0,nx=300,ny=220)  # create the Grid2D struct
+# cooinit: grid origin coordinates
+# grsize: grid size
+grd = Grid2DCart(hgrid=0.5,cooinit=(0.0,0.0),grsize=(300,220)) # create the Grid2D struct
 ```
 Then define the coordinates of the sources, a two-column array (since we are in 2D) representing the \$x\$ and \$y\$ coordinates
 ```@example parts
@@ -155,11 +150,11 @@ and the receivers, a "vector of arrays", i.e., a vector where each element (one 
 nrec = 10
 coordrec = [ [grd.hgrid.*LinRange(8,294,nrec) grd.hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
 ```
-The velocity model is defined as a 2D array with size (`grd.nx` \$\times\$ `grd.ny`)
+The velocity model is defined as a 2D array with size (`grd.grsize`)
 ```@example parts
-velmod = 2.5 .* ones(grd.nx,grd.ny) 
+velmod = 2.5 .* ones(grd.grsize...) 
 # increasing velocity with depth...
-for i=1:grd.ny 
+for i=1:grd.grsize[2]
   velmod[:,i] = 0.034 * i .+ velmod[:,i] 
 end
 ```
@@ -255,10 +250,10 @@ The function for traveltimes in spherical coordinates, analogously to the Cartes
 The grid setup and forward computations are carried out as shown in the following script.
 ```@example fullsph
 using EikonalSolvers
-grd = Grid2DSphere(Δr=2.0,Δθ=0.2,nr=40,nθ=70,rinit=500.0,θinit=10.0) # create the Grid2DSphere struct 
-coordsrc = [grd.rinit.+grd.Δr*3  grd.θinit.+grd.Δθ*(grd.nθ-5)] # coordinates of the sources (1 source) 
-coordrec = [[grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3] ] # coordinates of the receivers (1 receiver), vector of arrays 
-velmod = 2.5 .* ones(grd.nr,grd.nθ)                       # velocity model 
+grd = Grid2DSphere(Δr=2.0,Δθ=0.2,grsize=(40,70),cooinit=(500.0,10.0)) # create the Grid2DSphere struct 
+coordsrc = [grd.cooinit[1].+grd.Δr*3  grd.cooinit[2].+grd.Δθ*(grd.grsize[2]-5)] # coordinates of the sources (1 source) 
+coordrec = [[grd.cooinit[1].+grd.Δr*(grd.grsize[1]-3) grd.cooinit[2].+grd.Δθ*3] ] # coordinates of the receivers (1 receiver), vector of arrays 
+velmod = 2.5 .* ones(grd.grsize...)                       # velocity model 
 
 # run the traveltime computation 
 ttimepicks = eiktraveltime(velmod,grd,coordsrc,coordrec) 
@@ -276,14 +271,14 @@ Here a synthetic example of 2D gradient computations in Cartesian coordinates is
 ```@example grad1
 using EikonalSolvers
 hgrid=0.5
-grd = Grid2DCart(hgrid=hgrid,xinit=0.0,yinit=0.0,nx=300,ny=220)         # create the Grid2D struct
+grd = Grid2DCart(hgrid=hgrid,cooinit=(0.0,0.0),grsize=(300,220))         # create the Grid2D struct
 nsrc = 4
 nrec = 10
 coordsrc = [0.95*hgrid.*LinRange(12,290,nsrc)   hgrid.*207.0.*ones(nsrc)] # coordinates of the sources (4 sources)
 coordrec = [[hgrid.*LinRange(8.0,290.0,nrec)  hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
-velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
-# increasing velocity with depth...
-for i=1:grd.ny
+velmod = 2.5 .* ones(grd.grsize...)                                # velocity model
+# increasing velocity with depth
+for i=1:grd.grsize[2]
   velmod[:,i] = 0.034 * i .+ velmod[:,i]
 end
 
@@ -305,14 +300,14 @@ nothing # hide
 Now we can finally compute the gradient of the misfit functional (see above) at a given point, i.e., the gradient is computed at a given velocity model: ``\dfrac{d S}{d \mathbf{v}} \Big|_{\mathbf{v}_0}``.
 ```@example grad1
 # create a guess/"current" model
-vel0 = 2.3 .* ones(grd.nx,grd.ny)
+vel0 = 2.3 .* ones(grd.grsize...)
 # increasing velocity with depth...
-for i=1:grd.ny
+for i=1:grd.grsize[2]
    vel0[:,i] = 0.015 * i .+ vel0[:,i]
 end
     
 # calculate the gradient of the misfit function
-gradvel = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel)
+gradvel,misf = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel)
 nothing # hide
 ```
 Finally, plot the rsults 
@@ -354,13 +349,13 @@ The calculated gradient is an array with the same shape than the velocity model.
 Here a synthetic example of 2D gradient computations in spherical coordinates is shown.
 ```@example grad1sph
 using EikonalSolvers
-grd = Grid2DSphere(Δr=2.0,Δθ=0.2,nr=40,nθ=70,rinit=500.0,θinit=10.0) # create the Grid2DSphere struct
-coordsrc = [grd.rinit.+grd.Δr*3  grd.θinit.+grd.Δθ*(grd.nθ-5)] # coordinates of the sources (1 source)
+grd = Grid2DSphere(Δr=2.0,Δθ=0.2,grsize=(40,70),cooinit=(500.0,10.0)) # create the Grid2DSphere struct
+coordsrc = [grd.cooinit[1].+grd.Δr*3  grd.cooinit[2].+grd.Δθ*(grd.grsize[2]-5)] # coordinates of the sources (1 source)
 nsrc = size(coordsrc,1)
-coordrec = [[grd.rinit.+grd.Δr*(grd.nr-3) grd.θinit.+grd.Δθ*3] for i=1:nsrc] # coordinates of the receivers (1 receiver)
+coordrec = [[grd.cooinit[1].+grd.Δr*(grd.grsize[1]-3) grd.cooinit[2].+grd.Δθ*3] for i=1:nsrc] # coordinates of the receivers (1 receiver)
 
 # velocity model
-velmod = 2.5 .* ones(grd.nr,grd.nθ)
+velmod = 2.5 .* ones(grd.grsize...)
 # run the traveltime computation
 ttpicks = eiktraveltime(velmod,grd,coordsrc,coordrec) 
 
@@ -372,10 +367,10 @@ noise = [stdobs[i].^2 .* randn(size(stdobs[i])) for i=1:nsrc]
 dobs = ttpicks .+ noise 
 
 # create a guess/"current" model  
-vel0 = 3.0 .* ones(grd.nr,grd.nθ) 
+vel0 = 3.0 .* ones(grd.grsize...) 
 
 # calculate the gradient of the misfit function 
-grad = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs) 
+grad,misf = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel) 
 nothing # hide 
 ```	 
  An example of a (thresholded) sensitivity kernel and contouring of traveltimes in 3D, using spherical coordinates, is depicted in the following plot: 
@@ -388,14 +383,14 @@ Here a synthetic example of 2D gradient computation w.r.t. source location in Ca
 ```@example gradsrcloc
 using EikonalSolvers
 hgrid=0.5
-grd = Grid2DCart(hgrid=hgrid,xinit=0.0,yinit=0.0,nx=300,ny=220)         # create the Grid2D struct
+grd = Grid2DCart(hgrid=hgrid,cooinit=(0.0,0.0),grsize=(300,220))         # create the Grid2D struct
 nsrc = 4
 nrec = 10
 coordsrc = [0.95*hgrid.*LinRange(12,290,nsrc)   hgrid.*207.0.*ones(nsrc)] # coordinates of the sources (4 sources)
 coordrec = [[hgrid.*LinRange(8.0,290.0,nrec)  hgrid.*20.0.*ones(nrec)] for i=1:nsrc] # coordinates of the receivers (10 receivers)
-velmod = 2.5 .* ones(grd.nx,grd.ny)                                # velocity model
-# increasing velocity with depth...
-for i=1:grd.ny
+velmod = 2.5 .* ones(grd.grsize...)                                # velocity model
+# increasing velocity with depth
+for i=1:grd.grsize[2]
   velmod[:,i] = 0.034 * i .+ velmod[:,i]
 end
 
@@ -417,7 +412,7 @@ Now the gradient w.r.t. source location, ``\dfrac{d S}{d \mathbf{x}^{\rm src}}``
 ```@example gradsrcloc
 # calculate the gradient of the misfit function w.r.t. source location
 #   notice the last argument :gradsrcloc
-gradsrcloc = eikgradient(velmod,grd,coordsrc,coordrec,dobs,stdobs,:gradsrcloc)
+gradsrcloc,misf = eikgradient(velmod,grd,coordsrc,coordrec,dobs,stdobs,:gradsrcloc)
 nothing # hide
 ```
 The gradient is returned as an array where each row contains the partial derivatives for each source:
@@ -437,14 +432,10 @@ The gradient is returned as an array where each row contains the partial derivat
 
 [^TreisterHaber2016]: Treister, Eran & Haber, Eldad. (2016). A fast marching algorithm for the factored eikonal equation. Journal of Computational Physics. 324. 210–225. 10.1016/j.jcp.2016.08.012. 
 
-[^PodvinLecomte1991]: Podvin, P. and Lecomte, I. (1991). Finite difference computation of traveltimes in very contrasted velocity models: a massively parallel approach and its associated tools. Geophysical Journal International, 105, 271-284.
-
 [^RawlinsonSambridge2004]: Rawlinson, N. and Sambridge, M. (2004). Wave front evolution in strongly heterogeneous layered media using the fast marching method. Geophys. J. Int., 156(3), 631-647.
 
 [^Sethian1996]: Sethian A. J. (1996). A fast marching level set method for monotonically advancing fronts. Proceedings of the National Academy of Sciences Feb 1996, 93 (4) 1591-1595. 
 
 [^SethianPopovici1999]: Sethian A. J. and Popovici A. (1999). Three dimensional traveltimes computation using the Fast Marching Method. Geophysics. 64. 516-523. 
-
-[^Taillandieretal2009]: Taillandier, C., Noble, M., Chauris, H. and Calandra, H. (2009). First arrival travel time tomography based on the adjoint state methods. Geophysics, 74(6), WCB57–WCB66.
 
 [^ZuninoMosegaard2018]: Zunino A., Mosegaard K. (2018), Integrating Gradient Information with Probabilistic Traveltime Tomography Using the Hamiltonian Monte Carlo Algorithm, 80th EAGE Conference & Exhibition, Copenhagen.

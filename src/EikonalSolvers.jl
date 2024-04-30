@@ -1,7 +1,7 @@
 
 #
 # MIT License
-# Copyright (c) 2022 Andrea Zunino
+# Copyright (c) 2024 Andrea Zunino
 # 
 
 ##############################################
@@ -69,13 +69,13 @@ include("EikSolv/eikmaingrad.jl")
 
 ## 2D stuff
 include("EikSolv/eikforward2D.jl")
-include("EikSolv/eikonalforward2D_alternative.jl")
-include("EikSolv/eikonalgradient2D_alternative.jl")
+# include("EikSolv/eikonalforward2D_alternative.jl")
+# include("EikSolv/eikonalgradient2D_alternative.jl")
 
 ## 3D stuff
 include("EikSolv/eikforward3D.jl")
-include("EikSolv/eikonalforward3D_alternative.jl")
-include("EikSolv/eikonalgradient3D_alternative.jl")
+# include("EikSolv/eikonalforward3D_alternative.jl")
+# include("EikSolv/eikonalgradient3D_alternative.jl")
 
 
 ## Hamiltonian Monte Carlo setup

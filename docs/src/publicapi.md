@@ -32,10 +32,16 @@ ExtraParams
 GridRefinementPars
 ```
 
+## Ray tracing
+```@docs
+tracerays
+```
+
 ## HMCsampler wrapper
 ```@docs
 EikonalSolvers.HMCtraveltimes
-EikonalSolvers.HMCtraveltimes.EikonalProb
+EikonalSolvers.HMCtraveltimes.EikonalProbVel
+EikonalSolvers.HMCtraveltimes.EikonalProbSrcLoc
 ```
 
 ## Extensions
@@ -43,11 +49,3 @@ EikonalSolvers.HMCtraveltimes.EikonalProb
 EikonalSolvers.savemodelvtk
 ```
 
-
-## Alternative algorithms
-```@docs
-eiktraveltime2Dalt
-eikgradient2Dalt
-eiktraveltime3Dalt
-eikgradient3Dalt
-```

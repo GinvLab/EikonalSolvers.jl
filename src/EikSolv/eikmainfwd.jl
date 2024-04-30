@@ -849,17 +849,19 @@ function createsparsederivativematrices!(grd::AbstractGridEik,
         Ndim = 2
         n1,n2 = grd.grsize
         npts = n1*n2
-        Δr = grd.Δrθ[1]
-        Δθ = grd.Δrθ[2]
+        Δr = grd.Δr
+        Δθ = grd.Δθ
         ## DEG to RAD !!!!
         Δarc = [grd.r[i] * deg2rad(Δθ) for i=1:n1]
         # coefficients
         coe_r_1st = MVector(-1.0/Δr,  1.0/Δr)
-        coe_r_2nd = MVector(-3.0/(2.0*Δr),  4.0/(2.0*Δr) -1.0/(2.0*Δr) )
-        coe_θ_1st = MVector(-1.0 ./ Δarc,  1.0 ./ Δarc )
-        coe_θ_2nd = MVector(-3.0./(2.0*Δarc),  4.0./(2.0*Δarc),  -1.0./(2.0*Δarc) )
+        coe_r_2nd = MVector(-3.0/(2.0*Δr),  4.0/(2.0*Δr), -1.0/(2.0*Δr) )
+        coe_θ_1st = [-1.0./Δarc  1.0./Δarc] 
+        coe_θ_2nd = [-3.0./(2.0.*Δarc)  4.0./(2.0.*Δarc)  -1.0./(2.0.*Δarc)] 
 
         allcoeff = Vector{CoeffDerivSpherical2D}(undef,Ndim)
+        # @show typeof(coe_r_1st),typeof(coe_r_2nd)
+        # @show typeof(coe_θ_1st),typeof(coe_θ_2nd)
         allcoeff[1] = CoeffDerivSpherical2D( coe_r_1st, coe_r_2nd )
         allcoeff[2] = CoeffDerivSpherical2D( coe_θ_1st, coe_θ_2nd )
 
@@ -1089,7 +1091,7 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
             dr = grd.Δr/downscalefactor
             dθ = grd.Δθ/downscalefactor
             # fine grid
-            grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,nr=grsize_fine[1],nθ=grsize_fine[2],rinit=rinit,θinit=θinit)
+            grdfine = Grid2DSphere(Δr=dr,Δθ=dθ,grsize=grsize_fine,cooinit=(rinit,θinit))
 
         elseif Ndim==3
             

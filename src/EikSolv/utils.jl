@@ -171,7 +171,7 @@ function smoothgradaroundsrc!(grad::AbstractArray,xysrc::AbstractVector{<:Real},
         rsrc,θsrc = xysrc[1],xysrc[2]
         ijsrccorn = findenclosingbox(grd,xysrc)
        
-        nr,nθ = grd.nr,grd.nθ
+        nr,nθ = grd.grsize
         xsrc,ysrc = polardeg2cartesian(rsrc,θsrc)
 
         ## for simplicity rmax is defined in terms of the radius only
