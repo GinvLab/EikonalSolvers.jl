@@ -249,7 +249,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                         codeD[axis]= -ish
                     elseif axis==2
                         codeD[axis]= -jsh
-                    else
+                    elseif axis==3
                         codeD[axis]= -ksh
                     end
                     
@@ -272,7 +272,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                                 codeD[axis]= -2*ish
                             elseif axis==2
                                 codeD[axis]= -2*jsh
-                            else
+                            elseif axis==3
                                 codeD[axis]= -2*ksh
                             end
                         else
@@ -286,7 +286,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                                 codeD[axis]= -ish
                             elseif axis==2
                                 codeD[axis]= -jsh
-                            else
+                            elseif axis==3
                                 codeD[axis]= -ksh
                             end
                         end
@@ -295,7 +295,6 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                     
                 end 
             end ##==== END 1st order ================
-
 
         end # end two sides
 
@@ -320,7 +319,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
             gamma += curalpha * chosenval1^2 ## see init of gamma : - slowcurpt^2
         end
 
-    end ## for axis=1:2
+    end ## for axis=1:3
 
     ## compute discriminant 
     sqarg = beta^2-4.0*alpha*gamma
@@ -338,7 +337,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
     if sqarg<0.0
         @warn "Discriminant is negative (sqarg<0.0), reverting to 1st order."
         begin    
-            codeD[:] .= 0 # integers
+            codeD .= 0 # integers
             alpha = 0.0
             beta  = 0.0
             gamma = - slowcurpt^2 ## !!!!
@@ -387,17 +386,17 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                     if !isonb1st && fmmvars.status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
                         testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
                         ## pick the lowest value of the two
-                        if testval1<=chosenval1 ## < only
+                        if testval1 < chosenval1 ## < only
                             chosenval1 = testval1
                             use1stord = true
 
                             # save derivative choices
                             if axis==1
-                                codeD[axis]=ish
+                                codeD[axis] = -ish
                             elseif axis==2
-                                codeD[axis]=jsh
-                            else
-                                codeD[axis]=ksh
+                                codeD[axis] = -jsh
+                            elseif axis==3
+                                codeD[axis] = -ksh
                             end
 
                         end
@@ -421,6 +420,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
             sqarg = beta^2-4.0*alpha*gamma
 
         end ## begin...
+       
     end ## if sqarg<0.0
 
     ################################################################
@@ -478,17 +478,17 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                     if !isonb1st && fmmvars.status[i+ish,j+jsh,k+ksh]==2 ## 2==accepted
                         testval1 = fmmvars.ttime[i+ish,j+jsh,k+ksh]
                         ## pick the lowest value of the two
-                        if testval1<=chosenval1vec[axis] ## < only
+                        if testval1 < chosenval1vec[axis] ## < only
                             chosenval1vec[axis] = testval1
                             use1stord = true
 
                             # save derivative choices
                             if axis==1
-                                codeD[axis]=ish
+                                codeD[axis] = -ish
                             elseif axis==2
-                                codeD[axis]=jsh
-                            else
-                                codeD[axis]=ksh
+                                codeD[axis] = -jsh
+                            elseif axis==3
+                                codeD[axis] = -ksh
                             end
 
                         end

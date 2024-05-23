@@ -136,7 +136,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
     beta  = 0.0
     gamma = - slowcurpt^2 ## !!!!
     HUGE = typemax(eltype(vel)) #1.0e30
-    codeD[:] .= 0 # integers
+    codeD .= 0 # integers
 
     ## 2 axis, x and y
     for axis=1:2
@@ -265,7 +265,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
     if sqarg<0.0
         @warn "Discriminant is negative (sqarg<0.0), reverting to 1st order."
         begin    
-            codeD[:] .= 0 # integers
+            codeD .= 0 # integers
             alpha = 0.0
             beta  = 0.0
             gamma = - slowcurpt^2 ## !!!!
@@ -302,7 +302,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                     if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
                         testval1 = fmmvars.ttime[i+ish,j+jsh]
                         ## pick the lowest value of the two
-                        if testval1<=chosenval1 ## < only
+                        if testval1 < chosenval1 ## < only
                             chosenval1 = testval1
                             use1stord = true
 
@@ -381,7 +381,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                     if !isonb1st && fmmvars.status[i+ish,j+jsh]==2 ## 2==accepted
                         testval1 = fmmvars.ttime[i+ish,j+jsh]
                         ## pick the lowest value of the two
-                        if testval1<=chosenval1vec[axis] ## < only
+                        if testval1 < chosenval1vec[axis] ## < only
                             chosenval1vec[axis] = testval1
                             use1stord = true
 

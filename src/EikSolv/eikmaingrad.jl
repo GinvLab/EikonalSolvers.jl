@@ -921,7 +921,7 @@ function setcoeffderiv!(D::VecSPDerivMat,status::Array,irow::Integer,idxconv::Ma
                         idxperm::AbstractVector{Int64},
                         nptsfixedtt::Integer;
                         axis::Symbol, simtype::Symbol)
-    
+
     # get the linear index in the original grid
     iptorig = idxconv.lfmm2grid[irow+nptsfixedtt]
     # get the (i,j) indices in the original grid
@@ -1019,6 +1019,7 @@ function setcoeffderiv!(D::VecSPDerivMat,status::Array,irow::Integer,idxconv::Ma
 
     if simtype==:cartesian
         ## store coefficients in the struct for sparse matrices
+        ##  loop over each single element of the stencil
         for p=1:nnzcol 
             # i = igrid + whX*signcod*(p-1)  # start from 0  (e.g., 0,+1,+2)
             # j = jgrid + whY*signcod*(p-1)  # start from 0  (e.g., 0,-1)

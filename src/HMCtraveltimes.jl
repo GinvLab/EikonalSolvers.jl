@@ -93,10 +93,10 @@ function (eikprob::EikonalProbVel)(inpvecvel::Vector{Float64},kind::Symbol)
         #################################################
         ## compute the gradient of the misfit function ##
         #################################################
-        grad = eikgradient(velnd,eikprob.grd,eikprob.coordsrc,
-                           eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
-                           eikprob.whichgrad,
-                           extraparams=eikprob.extraparams)
+        grad,_ = eikgradient(velnd,eikprob.grd,eikprob.coordsrc,
+                             eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
+                             eikprob.whichgrad,
+                             extraparams=eikprob.extraparams)
         if eikprob.logVel==true
             # derivative of ln(vel)
             grad .= (1.0./velnd) .* grad
@@ -165,9 +165,9 @@ function (eikprob::EikonalProbSrcLoc)(inpcoosrc::Vector{Float64},kind::Symbol)
         ## compute the gradient of the misfit function ##
         #################################################
         grad,_ = eikgradient(eikprob.velmod,eikprob.grd,coosrcnd,
-                           eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
-                           eikprob.whichgrad,
-                           extraparams=eikprob.extraparams)
+                             eikprob.coordrec,eikprob.dobs,eikprob.stdobs,
+                             eikprob.whichgrad,
+                             extraparams=eikprob.extraparams)
 
         # flatten traveltime array
         vecgrad = vec(grad)
