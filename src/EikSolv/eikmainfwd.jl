@@ -41,6 +41,7 @@ function eiktraveltime(vel::Array{Float64,N},
         extraparams =  ExtraParams()
     end
 
+    @assert 2<=ndims(vel)<=3
     @assert all(vel.>0.0)
     checksrcrecposition(grd,coordsrc,coordrec)
 

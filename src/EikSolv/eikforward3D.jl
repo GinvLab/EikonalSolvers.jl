@@ -335,7 +335,7 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
     ## If discriminant is negative (probably because of sharp contrasts in
     ##  velocity) revert to 1st order for both x and y
     if sqarg<0.0
-        @warn "Discriminant is negative (sqarg<0.0), reverting to 1st order."
+        #@warn "Discriminant is negative (sqarg<0.0), reverting to 1st order."
         begin    
             codeD .= 0 # integers
             alpha = 0.0
