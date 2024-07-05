@@ -79,22 +79,17 @@ function smoothgradient(l,inpimg)
 
     dim = ndims(img)
     dimpad = size(img).+l
-    mea = sum(img)/length(img)
-    imgpadded = fill(mea,dimpad) #zeros(dimpad)
+    #mea = sum(img)/length(img)
+    #imgpadded = fill(mea,dimpad)
+    imgpadded = zeros(dimpad)
     # "internal" indices
     idxset = [l÷2+1:i for i in size(img).+l÷2]
     setindex!(imgpadded, img, idxset...  )
     kernel = gaussian_kernel(dim, l)
     out1d = smoothimg(kernel,imgpadded)
 
-
     out2d = reshape(out1d,dimpad)
     out = getindex(out2d,idxset...)
-
-    # @show dim,l
-    # @show size(inpimg)
-    # @show size(kernel)
-    # @show size(out)
 
     return out
 end

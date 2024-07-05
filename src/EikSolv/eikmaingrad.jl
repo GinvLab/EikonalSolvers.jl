@@ -44,6 +44,7 @@ function eikgradient(vel::Array{Float64,N},
     end
 
     # some checks
+    @assert 2<=ndims(vel)<=3
     @assert all(vel.>0.0)
     checksrcrecposition(grd,coordsrc,coordrec)
     
@@ -68,7 +69,7 @@ function eikgradient(vel::Array{Float64,N},
             for s=1:nchu
                 igrs = grpsrc[s,1]:grpsrc[s,2]
                 @async begin
-                    ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs] .= remotecall_fetch(calcgradsomesrc2D,wks[s],vel,
+                    ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs] .= remotecall_fetch(calcgradsomesrc,wks[s],vel,
                                                                        coordsrc[igrs,:],coordrec[igrs],
                                                                        grd,stdobs[igrs],pickobs[igrs],
                                                                        whichgrad,extraparams )
@@ -90,12 +91,12 @@ function eikgradient(vel::Array{Float64,N},
         ∂ψ∂vel_all = Vector{ Array{Float64,ndims(vel)} }(undef,nchu) # for i=1:nchu]
         ∂ψ∂xyzsrc = Matrix{Float64}(undef,nsrc,ndims(vel))
         ttmisfsrc = Vector{Float64}(undef,nchu)
-        
+
         Threads.@threads for s=1:nchu
-            igrs = grpsrc[s,1]:grpsrc[s,2]            
-            ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs,:],ttmisfsrc[s] = calcgradsomesrc2D(vel,coordsrc[igrs,:],coordrec[igrs],
-                                                                grd,stdobs[igrs],pickobs[igrs],
-                                                                whichgrad,extraparams )
+            igrs = grpsrc[s,1]:grpsrc[s,2]
+            ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs,:],ttmisfsrc[s] = calcgradsomesrc(vel,coordsrc[igrs,:],coordrec[igrs],
+                                                                           grd,stdobs[igrs],pickobs[igrs],
+                                                                           whichgrad,extraparams )
         end
         ∂ψ∂vel = sum(∂ψ∂vel_all)
         ttmisf = sum(ttmisfsrc)
@@ -104,13 +105,13 @@ function eikgradient(vel::Array{Float64,N},
         ##====================================
         ## Serial run
         ##====================
-        ∂ψ∂vel,∂ψ∂xyzsrc,ttmisf = calcgradsomesrc2D(vel,coordsrc,coordrec,grd,stdobs,pickobs,
+        ∂ψ∂vel,∂ψ∂xyzsrc,ttmisf = calcgradsomesrc(vel,coordsrc,coordrec,grd,stdobs,pickobs,
                                             whichgrad,extraparams )
 
     end
 
     ## smooth gradient
-    if extraparams.smoothgradkern>0
+    if extraparams.smoothgradkern>0 
         ∂ψ∂vel = smoothgradient(extraparams.smoothgradkern,∂ψ∂vel)
     end
 
@@ -139,14 +140,13 @@ $(TYPEDSIGNATURES)
 
 Calculate the gradient for some requested sources 
 """
-function calcgradsomesrc2D(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2},
-                           coordrec::AbstractVector{Array{Float64,2}},grd::AbstractGridEik,
-                           stdobs::AbstractVector{Vector{Float64}},pickobs1::AbstractVector{Vector{Float64}},
-                           whichgrad::Symbol,extrapars::ExtraParams ) where N
+function calcgradsomesrc(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2},
+                         coordrec::AbstractVector{Array{Float64,2}},grd::AbstractGridEik,
+                         stdobs::AbstractVector{Vector{Float64}},pickobs1::AbstractVector{Vector{Float64}},
+                         whichgrad::Symbol,extrapars::ExtraParams ) where N
                            
     grsize = size(vel)
     nsrc = size(xyzsrc,1)
-
     #if whichgrad==:gradvel
     gradvel1 = zeros(grsize)
     gradvelall = zeros(grsize)
