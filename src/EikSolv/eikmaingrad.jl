@@ -37,7 +37,8 @@ function eikgradient(vel::Array{Float64,N},
                      whichgrad::Symbol ;
                      extraparams::Union{ExtraParams,Nothing}=nothing) where N
 
-    @assert (whichgrad in (:gradvel, :gradsrcloc, :gradvelandsrcloc)) "whichgrad not in (:vel, :srcloc, :velandsrcloc)"
+    symlist = (:gradvel, :gradsrcloc, :gradvelandsrcloc)
+    @assert (whichgrad in symlist) "Symbol 'whichgrad' not in $symlist "
     
     if extraparams==nothing
         extraparams =  ExtraParams()
@@ -111,7 +112,7 @@ function eikgradient(vel::Array{Float64,N},
     end
 
     ## smooth gradient
-    if extraparams.smoothgradkern>0 
+    if extraparams.smoothgradkern>0
         ∂ψ∂vel = smoothgradient(extraparams.smoothgradkern,∂ψ∂vel)
     end
 
@@ -336,8 +337,6 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
         ##     at the "onsrc" points
         ##  compute gradient
         ##############################################
-
-
         
         if refinearoundsrc==false
             dus_dsr = calc_dus_dsr(lambda_fmmord_coarse,

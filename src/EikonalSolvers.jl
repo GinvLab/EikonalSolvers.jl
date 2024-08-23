@@ -29,7 +29,7 @@ export tracerays
 #export eiktraveltime2Dalt,eikgradient2Dalt
 #export eiktraveltime3Dalt,eikgradient3Dalt
 
-export EikonalProbVel,EikonalProbSrcLoc
+export EikonalProbVel,EikonalProbSrcLoc,EikonalProbVelAndSrcLoc
 
 export ExtraParams,GridRefinementPars
 
