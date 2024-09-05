@@ -623,7 +623,7 @@ function calc_duh_dva_finegrid!(lambda_fmmord_fine,
 
 
     ##========================================
-    ##  Compute the T2Vd term
+    ##  Compute the T2Wb term
     ##========================================
     ## The gradient in the fine grid is not a rectangular grid but it
     ##    depends on when the FMM has stopped (so a vector with 'Naccpts'
@@ -639,7 +639,7 @@ function calc_duh_dva_finegrid!(lambda_fmmord_fine,
         # i,j = ijkpt
         p2 = p+nptsonsrc
         for h=1:Nhpts
-            # get the contribution of T2Vd to the gradient
+            # get the contribution of T2Wb to the gradient
             duh_dwq[h,p2] = 2.0 * lambda_fmmord_fine[p,h] / srcrefvars.velcart_fine[iorig]^3
         end
     end
@@ -653,28 +653,28 @@ function calc_duh_dva_finegrid!(lambda_fmmord_fine,
     dtaus_dwa = - diagm(distcorn) .* (1.0./velcorn.^2) # Hadamard product!
 
     ##========================================
-    ## Compute the T2Vc term 
+    ## Compute the T2Wa term 
     ##======================================== 
     ## FMM ordering for ∂gi_∂taus!!!
     #tmpdgidwa = ∂gi_∂taus * dtaus_dwa  
     ## FMM ordering for lambda_fmmord!!!
     #T2Vc = transpose(lambda_fmmord_fine) * tmpdgidwa
-    T2Vc = ∂u_h_dtau_s * dtaus_dwa
+    T2Wa = ∂u_h_dtau_s * dtaus_dwa
 
     ## add contribution to the gradient in the fine grid
     for p=1:nptsonsrc #size(T2Vc,2)
         for h=1:Nhpts #size(T2Vc,1)
-            duh_dwq[h,p] += T2Vc[h,p]
+            duh_dwq[h,p] += T2Wa[h,p]
         end
     end
 
     ##========================================
-    ## Compute the T1Vc term 
+    ## Compute the T1Wa term 
     ##========================================
-    T1Vc = H_Areg * dtaus_dwa
+    T1Wa = H_Areg * dtaus_dwa
     for p=1:nptsonsrc
         for h=1:Nhpts
-            duh_dwq[h,p] += T1Vc[h,p]
+            duh_dwq[h,p] += T1Wa[h,p]
         end
     end
     
@@ -1233,10 +1233,10 @@ Calculate the Gaussian misfit functional
 # Arguments
 - `velmod`: velocity model, either a 2D or 3D array.
 - `grd`: the struct holding the information about the grid, one of `Grid2D`,`Grid3D`,`Grid2Dsphere`,`Grid3Dsphere`
-- `ttpicksobs`: a vector of vectors of the traveltimes at the receivers.
-- `stdobs`: a vector of vectors standard deviations representing the error on the measured traveltimes.
 - `coordsrc`: the coordinates of the source(s) (x,y), a 2-column array
 - `coordrec`: the coordinates of the receiver(s) (x,y) for each single source, a vector of 2-column arrays
+- `ttpicksobs`: a vector of vectors of the traveltimes at the receivers.
+- `stdobs`: a vector of vectors standard deviations representing the error on the measured traveltimes.
 - `extraparams` (optional): a struct containing some "extra" parameters, namely
     * `parallelkind`: serial, Threads or Distributed run? (:serial, :sharedmem, :distribmem)
     * `refinearoundsrc`: whether to perform a refinement of the grid around the source location
@@ -1249,7 +1249,7 @@ The value of the misfit functional (L2-norm), the same used to compute the gradi
 """
 function eikttimemisfit(velmod::Array{Float64,N},
                         grd::AbstractGridEik,
-                        coordsrc::AbstractArray,
+                        coordsrc::AbstractMatrix,
                         coordrec::AbstractVector{<:AbstractArray},
                         ttpicksobs::AbstractArray,
                         stdobs::AbstractArray;
@@ -1260,7 +1260,8 @@ function eikttimemisfit(velmod::Array{Float64,N},
     end
 
     # compute the forward response
-    ttpicks = eiktraveltime(velmod,grd,coordsrc,coordrec,extraparams=extraparams)
+    ttpicks = eiktraveltime(velmod,grd,coordsrc,coordrec,
+                            extraparams=extraparams)
 
     nsrc = size(coordsrc,1)
     ##nrecs1 = size.(coordrec,1)
