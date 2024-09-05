@@ -109,7 +109,7 @@ function (eikprob::EikonalProbVel)(inpvecvel::Vector{Float64},kind::Symbol)
         return  vecgrad
         
     else
-        error("eikprob::EikonalVelProb(): Wrong argument 'kind': $kind...")
+        error("eikprob::EikonalProbVel(): Wrong argument 'kind': $kind...")
     end
 end
 
@@ -157,11 +157,7 @@ function (eikprob::EikonalProbSrcLoc)(inpcoosrc::Vector{Float64},kind::Symbol)
                                 eikprob.dobs,
                                 eikprob.stdobs,
                                 extraparams=eikprob.extraparams) 
-        ###############      
-        # scal = 2.0
-        # println("\n --- Scaling misfit by $scal ---\n")
-        # misval *= scal
-        ###############
+
         return misval
         
 
@@ -174,20 +170,19 @@ function (eikprob::EikonalProbSrcLoc)(inpcoosrc::Vector{Float64},kind::Symbol)
                                      eikprob.whichgrad,
                                      extraparams=eikprob.extraparams)
 
-        #@show mis
         # flatten traveltime array
         vecgradsrcloc = vec(gradsrcloc)
         # return flattened gradient
 
         ##################
         # scal = 0.5 
-        # println("Scaling gradient by $scal")
+        # println(" --- Scaling gradient by $scal --- ")
         # vecgradsrcloc *= scal
         ##################
         return vecgradsrcloc
         
     else
-        error("eikprob::EikonalSrcLocProb(): Wrong argument 'kind': $kind...")
+        error("eikprob::EikonalProbSrcLoc(): Wrong argument 'kind': $kind...")
     end
 end
 
@@ -248,6 +243,11 @@ function (eikprob::EikonalProbVelAndSrcLoc)(inppars::Vector{Float64},kind::Symbo
                                 eikprob.stdobs,
                                 extraparams=eikprob.extraparams) 
 
+        # ###############      
+        # scal = 2.0
+        # println(" --- Scaling misfit by $scal ---")
+        # misval *= scal
+        # ###############
         return misval
         
 
@@ -265,8 +265,15 @@ function (eikprob::EikonalProbVelAndSrcLoc)(inppars::Vector{Float64},kind::Symbo
             gradvel .= (1.0./velnd) .* gradvel
         end
 
+        ######################
+        # scal = 0.5 
+        # println("Scaling source gradient by $scal")
+        # gradsrcloc *= scal
+        ######################
+        
         # flatten traveltime array
-        vecgrad = [vec(gradvel); vec(gradsrcloc)]        
+        vecgrad = [vec(gradvel);
+                   vec(gradsrcloc)]        
         # return flattened gradient
         return vecgrad
         
