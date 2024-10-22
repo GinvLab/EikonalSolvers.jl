@@ -240,13 +240,13 @@ function smoothgradaroundsrc!(grad::AbstractArray,xyzsrc::AbstractVector{<:Real}
         nx,ny,nz = grd.grsize
 
         rmax = radiuspx*grd.hgrid
-        if size(ijsrccorn,1)==1
-            imin = ijsrccorn[1]-radiuspx
-            imax = ijsrccorn[1]+radiuspx
-            jmin = ijsrccorn[2]-radiuspx
-            jmax = ijsrccorn[2]+radiuspx
-            kmin = ijsrccorn[3]-radiuspx
-            kmax = ijsrccorn[3]+radiuspx
+        if size(ijksrccorn,1)==1
+            imin = ijksrccorn[1]-radiuspx
+            imax = ijksrccorn[1]+radiuspx
+            jmin = ijksrccorn[2]-radiuspx
+            jmax = ijksrccorn[2]+radiuspx
+            kmin = ijksrccorn[3]-radiuspx
+            kmax = ijksrccorn[3]+radiuspx
         else
             imin = ijksrccorn[1,1]-radiuspx
             imax = ijksrccorn[2,1]+radiuspx
@@ -290,13 +290,13 @@ function smoothgradaroundsrc!(grad::AbstractArray,xyzsrc::AbstractVector{<:Real}
 
         ## for simplicity rmax is defined in terms of the radius only
         rmax = radiuspx*grd.Δr
-        if size(ijsrccorn,1)==1
-            imin = ijsrccorn[1]-radiuspx
-            imax = ijsrccorn[1]+radiuspx
-            jmin = ijsrccorn[2]-radiuspx
-            jmax = ijsrccorn[2]+radiuspx
-            kmin = ijsrccorn[3]-radiuspx
-            kmax = ijsrccorn[3]+radiuspx
+        if size(ijksrccorn,1)==1
+            imin = ijksrccorn[1]-radiuspx
+            imax = ijksrccorn[1]+radiuspx
+            jmin = ijksrccorn[2]-radiuspx
+            jmax = ijksrccorn[2]+radiuspx
+            kmin = ijksrccorn[3]-radiuspx
+            kmax = ijksrccorn[3]+radiuspx
         else
             imin = ijksrccorn[1,1]-radiuspx
             imax = ijksrccorn[2,1]+radiuspx
