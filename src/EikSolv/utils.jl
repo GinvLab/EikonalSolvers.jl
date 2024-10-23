@@ -130,13 +130,12 @@ function smoothgradaroundsrc!(grad::AbstractArray,xysrc::AbstractVector{<:Real},
     
     if typeof(grd)==Grid2DCart
         # Cartesian
-
         xsrc,ysrc = xysrc[1],xysrc[2]
         ijsrccorn = findenclosingbox(grd,xysrc)
         nx,ny = grd.grsize
 
         rmax = radiuspx*grd.hgrid
-
+       
         if size(ijsrccorn,1)==1
             imin = ijsrccorn[1]-radiuspx
             imax = ijsrccorn[1]+radiuspx
@@ -149,8 +148,11 @@ function smoothgradaroundsrc!(grad::AbstractArray,xysrc::AbstractVector{<:Real},
             jmax = ijsrccorn[3,2]+radiuspx
         end
 
+    
         for j=jmin:jmax
             for i=imin:imax
+
+                #@show i,j
                 # deal with the borders
                 if i<1 || i>nx || j<1 || j>ny
                     continue

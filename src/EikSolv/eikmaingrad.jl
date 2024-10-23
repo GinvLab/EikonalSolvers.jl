@@ -194,7 +194,7 @@ function calcgradsomesrc(vel::Array{Float64,N},xyzsrc::AbstractArray{Float64,2},
             # use a view so gradsrcpos gets automatically filled in this loop
             tmpgradsrcpos = view(gradsrcpos,s,:) ## VIEW!!!
         end
-                
+
         misfit1src = calcgrads_singlesrc!(gradvel1,tmpgradsrcpos,
                                           fmmvars,adjvars,
                                           xyzsrc[s,:],coordrec[s],pickobs1[s],stdobs[s],

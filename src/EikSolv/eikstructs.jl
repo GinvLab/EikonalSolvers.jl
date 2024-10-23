@@ -251,9 +251,9 @@ struct ExtraParams
     "Serial, Threads or Distributed run? Either :serial, :sharedmem or :distribmem"
     parallelkind::Symbol
     "Radius for smoothing the gradient around the source. Zero means no smoothing."
-    radiussmoothgradsrc::UInt64
+    radiussmoothgradsrc::Int64
     "Smooth the gradient with a kernel of size (in pixels). Zero means no smoothing."
-    smoothgradkern::UInt64
+    smoothgradkern::Int64
     "Downscaling factor and node radius for refined grid creation"
     grdrefpars::GridRefinementPars
 
@@ -263,6 +263,9 @@ struct ExtraParams
                          radiussmoothgradsrc::Integer=3,
                          smoothgradkern::Integer=0,
                          grdrefpars::GridRefinementPars=GridRefinementPars(downscalefactor=5,noderadius=3) )
+
+        @assert radiussmoothgradsrc>= 0
+        @assert smoothgradkern>=0
 
         if smoothgradkern>0 && iseven(smoothgradkern)
             @show smoothgradkern
