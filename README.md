@@ -29,7 +29,7 @@ coordrec = [ [grd.hgrid.*LinRange(8,294,nrec) grd.hgrid.*20.0.*ones(nrec)] for i
 # velocity model
 velmod = 2.5 .* ones(grd.grsize...)   # velocity model
 # increasing velocity with depth
-for i=1:grd.grdsize[2] 
+for i=1:grd.grsize[2] 
   velmod[:,i] = 0.034 * i .+ velmod[:,i] 
 end
 
@@ -56,7 +56,7 @@ gradvel,misf = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel)
 ![ttarrays](docs/src/images/grad-vel.png)
 The gradient of the misfit function w.r.t. the source position can also be computed, e.g., as
 ```julia
-# calculate the gradient of the misfit function w.r.t. velocity
+# calculate the gradient of the misfit function w.r.t. source location
 gradsrcloc,misf = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradsrcloc)
 
 # now print the partial derivatives
