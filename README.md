@@ -29,7 +29,7 @@ coordrec = [ [grd.hgrid.*LinRange(8,294,nrec) grd.hgrid.*20.0.*ones(nrec)] for i
 # velocity model
 velmod = 2.5 .* ones(grd.grsize...)   # velocity model
 # increasing velocity with depth
-for i=1:grd.grdsize[2] 
+for i=1:grd.grsize[2] 
   velmod[:,i] = 0.034 * i .+ velmod[:,i] 
 end
 
