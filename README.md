@@ -56,7 +56,7 @@ gradvel,misf = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel)
 ![ttarrays](docs/src/images/grad-vel.png)
 The gradient of the misfit function w.r.t. the source position can also be computed, e.g., as
 ```julia
-# calculate the gradient of the misfit function w.r.t. velocity
+# calculate the gradient of the misfit function w.r.t. source location
 gradsrcloc,misf = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradsrcloc)
 
 # now print the partial derivatives
