@@ -1208,7 +1208,7 @@ function partderivttsrcpos(xyzpt::AbstractVector,xyzsrc::AbstractVector,vel::Rea
 
     #denom = vel * sqrt((xpt - xsrc)^2 + (ypt - ysrc)^2)
     denom = vel .* sqrt.( sum((xyzpt.-xyzsrc).^2) )
-    @assert denom!=0.0 "partderivttsrcpos2D(): Source position and grid node position concide."
+    @assert denom!=0.0 "partderivttsrcpos2D(): Source position and grid node position coincide."
     # deriv_x = -(xpt - xsrc) / denom
     # deriv_y = -(ypt - ysrc) / denom
     Ndim = length(xyzpt)

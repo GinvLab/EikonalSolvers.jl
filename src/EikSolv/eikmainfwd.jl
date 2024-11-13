@@ -1214,6 +1214,14 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
         fmmvars.srcboxpar.ijksrc   = MMatrix{Ncorn,Ndim,Int64}(undef)
         fmmvars.srcboxpar.velcorn  = MVector{Ncorn,Float64}(undef)
         fmmvars.srcboxpar.distcorn = MVector{Ncorn,Float64}(undef)
+    elseif size(fmmvars.srcboxpar.ijksrc,1) != Ncorn
+        ##
+        ## Previous run re-allocated arrays to size(.,1)==1, so, re-allocate again
+        ##   to re-enlarge arrays...
+        ## 
+        fmmvars.srcboxpar.ijksrc   = MMatrix{Ncorn,Ndim,Int64}(undef)
+        fmmvars.srcboxpar.velcorn  = MVector{Ncorn,Float64}(undef)
+        fmmvars.srcboxpar.distcorn = MVector{Ncorn,Float64}(undef)
     end
 
     ## Set some srcboxpar fields

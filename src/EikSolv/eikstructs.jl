@@ -409,9 +409,9 @@ end
 ####################################
 
 mutable struct SourceBoxParams
-    "(i,j) positions of the corners surrounding the source location"
+    "(i,j[,k]) positions of the corners surrounding the source location"
     ijksrc::MArray
-    "(x,y) position of the source"
+    "(x,y[,z]) position of the source"
     xyzsrc::MVector
     "coefficient matrix for the interpolation of the velocity"
     velcorn::MVector
