@@ -18,11 +18,13 @@ For historical reasons, alternative solvers are available (poorly maintained), i
 
 Both forward and gradient (adjoint) computations can be run in paralle using either Julia's distributed computing functions for distributed memory or threads for multicore processor. The parallelisation scheme is "by source", distributing calculations for different seismic sources to different processors.
 
+
 This code is part of a larger project `HMCLab` ([^ZuninoGebraadetal2023]) targeting probabilistic geophysical inverse problems. Please cite the following papers if you use this code:
 
 * Andrea Zunino, Scott Keating, Andreas Fichtner, **Eikonal tomography using the discrete adjoint state method**, in preparation.
 
 * Andrea Zunino, Lars Gebraad, Alessandro Ghirotto, Andreas Fichtner, **HMCLab: a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo method**, Geophysical Journal International, Volume 235, Issue 3, December 2023, Pages 2979–2991  [https://doi.org/10.1093/gji/ggad403](https://doi.org/10.1093/gji/ggad403)
+
 
 
 ## Installation
