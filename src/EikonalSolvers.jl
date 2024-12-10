@@ -1,7 +1,7 @@
 
 #
 # MIT License
-# Copyright (c) 2022 Andrea Zunino
+# Copyright (c) 2024 Andrea Zunino
 # 
 
 ##############################################
@@ -20,29 +20,34 @@ $(EXPORTS)
 module EikonalSolvers
 
 
-export Grid2D,Grid2DSphere
-export traveltime2D,gradttime2D
-export traveltime2Dalt,gradttime2Dalt
+export Grid2DCart,Grid2DSphere
+export Grid3DCart,Grid3DSphere
+export eiktraveltime,eikgradient
+export eikttimemisfit
+export tracerays
 
-export Grid3D,Grid3DSphere
-export traveltime3D,gradttime3D
-export traveltime3Dalt,gradttime3Dalt
+#export eiktraveltime2Dalt,eikgradient2Dalt
+#export eiktraveltime3Dalt,eikgradient3Dalt
 
-export ttmisfitfunc
-export EikonalProb
+export EikonalProbVel,EikonalProbSrcLoc,EikonalProbVelAndSrcLoc
 
-export ExtraParams
+export ExtraParams,GridRefinementPars
+
+# from extensions
+export savemodelvtk
 
 
-# println("Hello -> using TimerOutputs")
+# @warn "using TimerOutputs"
 # using TimerOutputs
-
+# const tiou = TimerOutput()
 
 using LinearAlgebra
 using OffsetArrays
 using SparseArrays
 using DocStringExtensions
 using StaticArrays
+using Interpolations
+
 
 # using LinearAlgebra
 ## For parallelisation
@@ -55,21 +60,22 @@ using .BinHeaps
 
 ## general utils
 include("EikSolv/eikstructs.jl")
+include("EikSolv/eikchecks.jl")
 include("EikSolv/eikonalutils_spherical.jl")
-include("EikSolv/eikonalutils.jl")
+include("EikSolv/eikutils.jl")
 include("EikSolv/utils.jl")
+include("EikSolv/eikmainfwd.jl")
+include("EikSolv/eikmaingrad.jl")
 
 ## 2D stuff
-include("EikSolv/eikonalforward2D.jl")
-include("EikSolv/eikonalgradient2D.jl")
-include("EikSolv/eikonalforward2D_alternative.jl")
-include("EikSolv/eikonalgradient2D_alternative.jl")
+include("EikSolv/eikforward2D.jl")
+# include("EikSolv/eikonalforward2D_alternative.jl")
+# include("EikSolv/eikonalgradient2D_alternative.jl")
 
 ## 3D stuff
-include("EikSolv/eikonalforward3D.jl")
-include("EikSolv/eikonalgradient3D.jl")
-include("EikSolv/eikonalforward3D_alternative.jl")
-include("EikSolv/eikonalgradient3D_alternative.jl")
+include("EikSolv/eikforward3D.jl")
+# include("EikSolv/eikonalforward3D_alternative.jl")
+# include("EikSolv/eikonalgradient3D_alternative.jl")
 
 
 ## Hamiltonian Monte Carlo setup
@@ -77,11 +83,12 @@ include("HMCtraveltimes.jl")
 using .HMCtraveltimes
 
 
-# const extrapars = ExtraParams(allowfixsqarg=false,
-#                               refinearoundsrc=true,
-#                               manualGCtrigger=true)
-# warningextrapar(extrapars)
+# for extensions
+"""
+This function requires the package WriteVTK to be loaded first in order to work.
+"""
+function savemodelvtk end
 
-
-end
+ 
+end # module
 ##############################################

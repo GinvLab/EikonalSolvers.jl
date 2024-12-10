@@ -21,7 +21,9 @@ Gaussian kernel for smoothing
 """
 function gaussian_kernel(dim::Integer, l::Integer)
     @assert l>0
-    @assert isodd(l)
+    if iseven(l)
+        error("gaussian_kernel(): l must be odd")
+    end
     gker(s,r) = exp(-r^2/(2.0*s))
     # pos = LinRange(-(l-1)/2.0, (l-1)/2.0, l)
     ar = zeros([l for i=1:dim]...)
@@ -32,7 +34,8 @@ function gaussian_kernel(dim::Integer, l::Integer)
         ar[I] = gker(s,r)
     end
     ar /= sum(ar)
-    return OffsetArray(ar,fill(-l÷2-1, dim)...) 
+    # convert l to Int otherwise it underflows
+    return OffsetArray(ar,fill(-Int(l)÷2-1, dim)...) 
 end
 
 ##########################################################
@@ -76,22 +79,18 @@ function smoothgradient(l,inpimg)
 
     dim = ndims(img)
     dimpad = size(img).+l
-    mea = sum(img)/length(img)
-    imgpadded = fill(mea,dimpad) #zeros(dimpad)
+    #mea = sum(img)/length(img)
+    #imgpadded = fill(mea,dimpad)
+    imgpadded = zeros(dimpad)
     # "internal" indices
     idxset = [l÷2+1:i for i in size(img).+l÷2]
     setindex!(imgpadded, img, idxset...  )
     kernel = gaussian_kernel(dim, l)
+    #@show extrema(kernel),sum(kernel)
     out1d = smoothimg(kernel,imgpadded)
-
 
     out2d = reshape(out1d,dimpad)
     out = getindex(out2d,idxset...)
-
-    # @show dim,l
-    # @show size(inpimg)
-    # @show size(kernel)
-    # @show size(out)
 
     return out
 end
@@ -119,8 +118,8 @@ end
 
 ########################################################################
 
-function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::AbstractVector{<:Real},
-                                grd::Union{Grid2D,Grid2DSphere} ; radiuspx::Integer)
+function smoothgradaroundsrc!(grad::AbstractArray,xysrc::AbstractVector{<:Real},
+                              grd::Union{Grid2DCart,Grid2DSphere} ; radiuspx::Integer)
 
     ## no smoothing
     if radiuspx==0
@@ -129,22 +128,31 @@ function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::AbstractVector{<:Real
         error("smoothgradaroundsrc!(): 'radius'<0 ")
     end
     
-    if typeof(grd)==Grid2D
+    if typeof(grd)==Grid2DCart
         # Cartesian
-
         xsrc,ysrc = xysrc[1],xysrc[2]
-        isr,jsr = findclosestnode(xsrc,ysrc,grd.xinit,grd.yinit,grd.hgrid)
-        nx,ny = grd.nx,grd.ny
-
+        ijsrccorn = findenclosingbox(grd,xysrc)
+        nx,ny = grd.grsize
 
         rmax = radiuspx*grd.hgrid
-        imin = isr-radiuspx
-        imax = isr+radiuspx
-        jmin = jsr-radiuspx
-        jmax = jsr+radiuspx
+       
+        if size(ijsrccorn,1)==1
+            imin = ijsrccorn[1]-radiuspx
+            imax = ijsrccorn[1]+radiuspx
+            jmin = ijsrccorn[2]-radiuspx
+            jmax = ijsrccorn[2]+radiuspx
+        else 
+            imin = ijsrccorn[1,1]-radiuspx
+            imax = ijsrccorn[2,1]+radiuspx
+            jmin = ijsrccorn[1,2]-radiuspx
+            jmax = ijsrccorn[3,2]+radiuspx
+        end
 
+    
         for j=jmin:jmax
             for i=imin:imax
+
+                #@show i,j
                 # deal with the borders
                 if i<1 || i>nx || j<1 || j>ny
                     continue
@@ -167,18 +175,24 @@ function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::AbstractVector{<:Real
         # Spherical
 
         rsrc,θsrc = xysrc[1],xysrc[2]
-        isr,jsr = findclosestnode_sph(rsrc,θsrc,grd.rinit,grd.θinit,
-                                      grd.Δr,grd.Δθ)
-        nr,nθ = grd.nr,grd.nθ
-        xsrc,ysrc = sphericaldeg2cartesian(rsrc,θsrc)
-
+        ijsrccorn = findenclosingbox(grd,xysrc)
+       
+        nr,nθ = grd.grsize
+        xsrc,ysrc = polardeg2cartesian(rsrc,θsrc)
 
         ## for simplicity rmax is defined in terms of the radius only
         rmax = radiuspx*grd.Δr
-        imin = isr-radiuspx
-        imax = isr+radiuspx
-        jmin = jsr-radiuspx
-        jmax = jsr+radiuspx
+        if size(ijsrccorn,1)==1
+            imin = ijsrccorn[1]-radiuspx
+            imax = ijsrccorn[1]+radiuspx
+            jmin = ijsrccorn[2]-radiuspx
+            jmax = ijsrccorn[2]+radiuspx
+        else
+            imin = ijsrccorn[1,1]-radiuspx
+            imax = ijsrccorn[2,1]+radiuspx
+            jmin = ijsrccorn[1,2]-radiuspx
+            jmax = ijsrccorn[3,2]+radiuspx
+        end
 
         for j=jmin:jmax
             for i=imin:imax
@@ -187,7 +201,7 @@ function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::AbstractVector{<:Real
                     continue
 
                 else
-                    xcur,ycur = sphericaldeg2cartesian(grd.r[i],grd.θ[j])                    
+                    xcur,ycur = polardeg2cartesian(grd.r[i],grd.θ[j])                    
                     # inverse of geometrical spreading
                     ra = sqrt((xcur-xsrc)^2+(ysrc-ycur)^2)
                     if ra<=rmax
@@ -200,7 +214,7 @@ function smoothgradaroundsrc2D!(grad::AbstractArray,xysrc::AbstractVector{<:Real
         end
 
     else
-        error("smoothgradaroundsrc2D!(): Wrong grid type.")
+        error("smoothgradaroundsrc!(): Wrong grid type.")
 
     end # if
     
@@ -209,8 +223,9 @@ end
 
 ################################################################3
 
-function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::AbstractVector{<:Real},grd::Union{Grid3D,Grid3DSphere} ;
-                                radiuspx::Integer)
+function smoothgradaroundsrc!(grad::AbstractArray,xyzsrc::AbstractVector{<:Real},
+                              grd::Union{Grid3DCart,Grid3DSphere} ;
+                              radiuspx::Integer)
 
     ## no smoothing
     if radiuspx==0
@@ -219,20 +234,29 @@ function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::AbstractVector{<:Rea
         error("smoothgradaroundsrc!(): 'radius'<0 ")
     end
 
-    if typeof(grd)==Grid3D
+    if typeof(grd)==Grid3DCart
         # Cartesian
 
         xsrc,ysrc,zsrc = xyzsrc[1],xyzsrc[2],xyzsrc[3]
-        isr,jsr,ksr = findclosestnode(xsrc,ysrc,zsrc,grd.xinit,grd.yinit,grd.zinit,grd.hgrid)
-        nx,ny,nz = grd.nx,grd.ny,grd.nz
+        ijksrccorn = findenclosingbox(grd,xyzsrc)
+        nx,ny,nz = grd.grsize
 
         rmax = radiuspx*grd.hgrid
-        imin = isr-radiuspx
-        imax = isr+radiuspx
-        jmin = jsr-radiuspx
-        jmax = jsr+radiuspx
-        kmin = ksr-radiuspx
-        kmax = ksr+radiuspx
+        if size(ijksrccorn,1)==1
+            imin = ijksrccorn[1]-radiuspx
+            imax = ijksrccorn[1]+radiuspx
+            jmin = ijksrccorn[2]-radiuspx
+            jmax = ijksrccorn[2]+radiuspx
+            kmin = ijksrccorn[3]-radiuspx
+            kmax = ijksrccorn[3]+radiuspx
+        else
+            imin = ijksrccorn[1,1]-radiuspx
+            imax = ijksrccorn[2,1]+radiuspx
+            jmin = ijksrccorn[1,2]-radiuspx
+            jmax = ijksrccorn[3,2]+radiuspx
+            kmin = ijksrccorn[1,1]-radiuspx
+            kmax = ijksrccorn[4,1]+radiuspx
+        end
 
         for k=kmin:kmax
             for j=jmin:jmax
@@ -261,20 +285,28 @@ function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::AbstractVector{<:Rea
     elseif typeof(grd)==Grid3DSphere
         # Spherical
         rsrc,θsrc,φsrc = xyzsrc[1],xyzsrc[2],xyzsrc[3]
-        isr,jsr,ksr = findclosestnode_sph(rsrc,θsrc,φsrc,grd.rinit,grd.θinit,grd.φinit,
-                                          grd.Δr,grd.Δθ,grd.Δφ)
+        ijksrccorn = findenclosingbox(grd,xysrc)
+     
         nr,nθ,nφ = grd.nr,grd.nθ,grd.nφ
         xsrc,ysrc,zsrc = sphericaldeg2cartesian(rsrc,θsrc,φsrc)
 
-
         ## for simplicity rmax is defined in terms of the radius only
         rmax = radiuspx*grd.Δr
-        imin = isr-radiuspx
-        imax = isr+radiuspx
-        jmin = jsr-radiuspx
-        jmax = jsr+radiuspx
-        kmin = ksr-radiuspx
-        kmax = ksr+radiuspx
+        if size(ijksrccorn,1)==1
+            imin = ijksrccorn[1]-radiuspx
+            imax = ijksrccorn[1]+radiuspx
+            jmin = ijksrccorn[2]-radiuspx
+            jmax = ijksrccorn[2]+radiuspx
+            kmin = ijksrccorn[3]-radiuspx
+            kmax = ijksrccorn[3]+radiuspx
+        else
+            imin = ijksrccorn[1,1]-radiuspx
+            imax = ijksrccorn[2,1]+radiuspx
+            jmin = ijksrccorn[1,2]-radiuspx
+            jmax = ijksrccorn[3,2]+radiuspx
+            kmin = ijksrccorn[1,1]-radiuspx
+            kmax = ijksrccorn[4,1]+radiuspx
+        end
 
         for k=kmin:kmax
             for j=jmin:jmax
@@ -298,7 +330,7 @@ function smoothgradaroundsrc3D!(grad::AbstractArray,xyzsrc::AbstractVector{<:Rea
         end
 
     else
-        error("smoothgradaroundsrc3D!(): Wrong grid type.")
+        error("smoothgradaroundsrc!(): Wrong grid type.")
 
     end # if
 
@@ -309,104 +341,36 @@ end
 
 ########################################################################
 
-@inline function sphericaldeg2cartesian(r,θ,φ)
+@inline function sphericaldeg2cartesian(r::Real,θ::Real,φ::Real)
     x = r * sind(θ) * cosd(φ) 
     y = r * sind(θ) * sind(φ)
     z = r * cosd(θ)
     return x,y,z
 end
 
-@inline function sphericaldeg2cartesian(r,θ)
+@inline function polardeg2cartesian(r::Real,θ::Real)
     x = r * cosd(θ) 
-    y = r * sind(θ) 
+    y = r * sind(θ) # input in degrees
     return x,y
+end
+
+@inline function polarrad2cartesian(r::Real,θ::Real)
+    x = r * cos(θ) 
+    y = r * sin(θ) # input in radiants
+    return x,y
+end
+
+@inline function cartesian2polardeg(x::Real,y::Real)
+    r = sqrt(x^2+y^2)
+    θ = atand(y,x) # output in degrees
+    return r,θ
+end
+
+@inline function cartesian2polarrad(x::Real,y::Real)
+    r = sqrt(x^2+y^2)
+    θ = atan(y,x) # output in radiants
+    return r,θ
 end
 
 ########################################################################
 
-
-########################################################################
-
-# function raytrace2doneshot(ttime::Array{Float64,2},grd::Grid2D,coordrec::Array{Float64,2},
-#                            coordsrc::Vector{Float64})
-
-#     nx,ny = grd.nx,grd.ny
-#     nrec = size(coordrec,1)
-#     HUGE = 1e30
-#     tmprayij = MVector(0,0)
-
-#     # indices for exploring neighboring points
-#     neigh = SA[1  0;
-#                0  1;
-#               -1  0;
-#                0 -1;
-#                1  1;
-#               -1  1;
-#                1 -1;
-#               -1 -1]
-
-#     raycoo = zeros(nx*ny,2)
-#     rays = Vector{Array{Float64,2}}(undef,nrec)
-#     tmpi,tmpj = 0,0
-#     nelemray = 0
-
-#     for r=1:nrec
-
-#         xrec,yrec = coordrec[r,1],coordrec[r,2]
-#         raycoo[:,:] .= 0.0
-        
-#         # initial coordinates, i.e., receiver location
-#         raycoo[1,:] .= (xrec,yrec)
-
-#         # find the closest node to the source point
-#         icur,jcur = findclosestnode(xrec,yrec,grd.xinit,grd.yinit,grd.hgrid)
-
-#         @show icur,jcur
-#         ## single ray
-#         smallesttt = ttime[icur,jcur]
-#         l=2
-#         notonsource = true
-#         while notonsource
-
-
-#             display(ttime[icur-1:icur+1,jcur-1:jcur+1])
-
-#             foundsmallertt = false
-#             for ne=1:8 ## eight neighbors
-#                 i = icur + neigh[ne,1]
-#                 j = jcur + neigh[ne,2]
-#                 ## if the point is out of bounds skip this iteration
-#                 if (i>nx) || (i<1) || (j>ny) || (j<1)
-#                     continue
-#                 end
-
-#                 if ttime[i,j]<smallesttt
-#                     smallesttt = ttime[i,j]
-#                     tmprayij[:] .= (i,j)
-#                     foundsmallertt = true
-#                     #@show i,j,smallesttt
-#                 end
-#             end
-
-#             if foundsmallertt
-#                 #@show l,tmprayij
-#                 icur,jcur = tmprayij[1],tmprayij[2]
-#                 raycoo[l,:] .= (grd.hgrid*(tmprayij[1]-1)+grd.xinit,grd.hgrid*(tmprayij[2]-1)+grd.yinit)
-#                 l+=1
-
-#                 #@show icur,jcur,smallesttt
-#             else
-#                 raycoo[l,:] .= coordsrc[:]
-#                 nelemray = l
-#                 notonsource = false
-#             end
-
-#         end # while
-
-#         #@show nelemray
-#         rays[r] = raycoo[1:nelemray,:]
-
-#     end # r=1:nrec
-
-#     return rays
-# end

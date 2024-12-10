@@ -1,108 +1,150 @@
 
+module SaveGrid2VTKExt
 
+using EikonalSolvers
 using WriteVTK
+using DocStringExtensions
+
+#export savemodelvtk
 
 #######################################################
 
-function savevtk(flname::String,grd::GridEik,datadict::Dict; kind::String)
-    firstk=collect(keys(datadict))[1]
-    nddata = ndims(datadict[firstk])
-    if typeof(grd) <: GridEik2D
-        ND=2
-    elseif typeof(grd) <: GridEik3D
-        ND=3
-    end
-    @assert nddata==ND
-    @show ND
+"""
+$(TYPEDSIGNATURES)
 
-    if ND==2
-        savevtk2D(flname,grd,datadict,kind=kind)
-    elseif ND==3
-        savevtk3D(flname,grd,datadict,kind=kind)
+Save a model to VTK file format for Grid2DCart grids.
+"""
+function EikonalSolvers.savemodelvtk(flname::String,grd::Grid2DCart,datadict::Dict; kind::String="points")
+
+    if kind=="cells"
+
+        nx = grd.nx
+        ny = grd.ny
+        h2 = grd.hgrid/2.0
+
+        # cell vertices N+1 long
+        x = [grd.x.-h2..., grd.x[end].+h2]
+        y = [grd.y.-h2..., grd.y[end].+h2]
+        
+        ### create vtk file
+        vtkfile = vtk_grid(flname, x,y)  # 2-D
+
+        # add cell data
+        for (key,arr) in datadict
+            if ndims(arr)>2
+                for i=1:size(arr,3)
+                    vtk_cell_data(vtkfile, arr[:,:,i], string(key,"  #$i"))
+                end
+            else
+                vtk_cell_data(vtkfile, arr, key)
+            end
+        end
+
+        # save the file
+        outfiles = vtk_save(vtkfile)
+
+
+    elseif kind=="points"
+
+        ### create vtk file
+        vtkfile = vtk_grid(flname, grd.x,grd.y)  # 2-D
+
+        # add point data
+        for (key,arr) in datadict
+            if ndims(arr)>2
+                for i=1:size(arr,3)
+                    vtk_point_data(vtkfile, arr[:,:,i], string(key,"  #$i"))
+                end
+            else
+                vtk_point_data(vtkfile, arr, key)
+            end
+        end
+
+        # save the file
+        outfiles = vtk_save(vtkfile)
+
     else
-        error("savevtk(): Wrong array dimensions.")
+        
+        error("savevtk(): Wrong argument 'kind'.")   
     end
-    return nothing
+    return
 end
 
 #######################################################
-    
-function savevtk2D(flname,grd::Grid2D,datadict::Dict; kind::String)
 
-    # if kind=="cells"
 
-    #     nx = grd.nx
-    #     ny = grd.ny
-    #     h2 = grd.hgrid/2.0
+"""
+$(TYPEDSIGNATURES)
 
-    #     # cell vertices
-    #     xy = zeros(2,nx+1,ny+1)
-    #     for j=1:ny
-    #         for i=1:nx            
-    #             x = grd.x[i]-h2
-    #             y = grd.y[j]-h2
-    #             xy[i,j] = (x,y)
-    #         end
-    #     end
-    #     xy[
+Save a model to VTK file format for Grid3DCart grids.
+"""
+function EikonalSolvers.savemodelvtk(flname::String,grd::Grid3DCart,datadict::Dict; kind::String="points")
+
+
+    if kind=="cells"
+
+        nx = grd.nx
+        ny = grd.ny
+        nz = grd.nz
+        h2 = grd.hgrid/2.0
+
+        # cell vertices N+1 long
+        x = [grd.x.-h2..., grd.x[end].+h2]
+        y = [grd.y.-h2..., grd.y[end].+h2]
+        z = [grd.z.-h2..., grd.z[end].+h2]
         
-    #     ### create vtk file
-    #     vtkfile = vtk_grid(flname, xy)  # 2-D
+        ### create vtk file
+        vtkfile = vtk_grid(flname, x,y,z)  # 3-D
 
-    #     # add cell data
-    #     for (key,arr) in datadict
-    #         if ndims(arr)>2
-    #             for i=1:size(arr,3)
-    #                 vtk_cell_data(vtkfile, arr[:,:,i], string(key,"  #$i"))
-    #             end
-    #         else
-    #             vtk_cell_data(vtkfile, arr, key)
-    #         end
-    #     end
+        # add cell data
+        for (key,arr) in datadict
+            if ndims(arr)>3
+                for i=1:size(arr,4)
+                    vtk_cell_data(vtkfile, arr[:,:,:,i], string(key,"  #$i"))
+                end
+            else
+                vtk_cell_data(vtkfile, arr, key)
+            end
+        end
 
-    #     # save the file
-    #     outfiles = vtk_save(vtkfile)
+        # save the file
+        outfiles = vtk_save(vtkfile)
 
 
-    # elseif kind=="points"
+    elseif kind=="points"
 
-    #     ## point grid
-    #     xypts = [grd.x,grd.y]
+        ### create vtk file
+        vtkfile = vtk_grid(flname, grd.x,grd.y,grd.z)  # 3-D
 
-    #     ### create vtk file
-    #     vtkfile = vtk_grid(flname, xypts)  # 2-D
+        # add point data
+        for (key,arr) in datadict
+            if ndims(arr)>3
+                for i=1:size(arr,4)
+                    vtk_point_data(vtkfile, arr[:,:,:,i], string(key,"  #$i"))
+                end
+            else
+                vtk_point_data(vtkfile, arr, key)
+            end
+        end
 
-    #     # add point data
-    #     for (key,arr) in datadict
-    #         if ndims(arr)>2
-    #             for i=1:size(arr,3)
-    #                 vtk_point_data(vtkfile, arr[:,:,i], string(key,"  #$i"))
-    #             end
-    #         else
-    #             vtk_point_data(vtkfile, arr, key)
-    #         end
-    #     end
+        # save the file
+        outfiles = vtk_save(vtkfile)
 
-    #     # save the file
-    #     outfiles = vtk_save(vtkfile)
+    else
         
-    # end
-        
-
-    error("savevtk(): Grid2D -Not yet implemented.")
-
+        error("savevtk(): Wrong argument 'kind'.")   
+    end
+    return
 end
 
 #######################################################
-    
-function savevtk3D(flname,grd::Grid3D,datadict::Dict; kind::String)
 
-    error("savevtk(): Grid3D -Not yet implemented.")
+"""
+$(TYPEDSIGNATURES)
 
-end
-#######################################################
-    
-function savevtk2D(flname,grd::Grid2DSphere,datadict::Dict; kind::String)
+Save a model to VTK file format for Grid2DSphere grids.
+"""
+function EikonalSolvers.savemodelvtk(flname::String,grd::Grid2DSphere,datadict::Dict; kind::String="points")
     
     Δr = grd.Δr
     Δθ = grd.Δθ
@@ -199,11 +241,18 @@ function savevtk2D(flname,grd::Grid2DSphere,datadict::Dict; kind::String)
         
     end
 
+    return
 end
 
 #######################################################
 
-function savevtk3D(flname,grd::Grid3DSphere,datadict::Dict; kind::String)
+
+"""
+$(TYPEDSIGNATURES)
+
+Save a model to VTK file format for Grid3DSphere grids.
+"""
+function EikonalSolvers.savemodelvtk(flname::String,grd::Grid3DSphere,datadict::Dict; kind::String="points")
     
     Δr = grd.Δr
     Δθ = grd.Δθ
@@ -366,3 +415,7 @@ function savevtk3D(flname,grd::Grid3DSphere,datadict::Dict; kind::String)
 end
 
 ###########################################################
+
+
+end # module
+

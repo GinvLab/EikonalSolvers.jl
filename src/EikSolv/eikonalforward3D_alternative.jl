@@ -40,9 +40,9 @@ The computations are run in parallel depending on the number of workers (nworker
 - `ttime`: if `returntt==true` additionally return the array(s) of traveltime on the entire gridded model
 
 """
-function traveltime3Dalt(vel::Array{Float64,3},grd::Grid3D,coordsrc::Array{Float64,2},
-                      coordrec::Vector{Array{Float64,2}}; ttalgo::String,
-                      returntt::Bool=false) 
+function eiktraveltime3Dalt(vel::Array{Float64,3},grd::Grid3DCart,coordsrc::Array{Float64,2},
+                            coordrec::Vector{Array{Float64,2}}; ttalgo::String,
+                            returntt::Bool=false) 
     
     #println("Check the source/rec to be in bounds!!!")
     @assert size(coordsrc,2)==3
@@ -121,7 +121,7 @@ $(TYPEDSIGNATURES)
   Compute the forward problem for a group of sources.
 """
 function ttforwsomesrc3Dalt(vel::Array{Float64,3},coordsrc::Array{Float64,2},
-                            coordrec::Vector{Array{Float64,2}},grd::Grid3D,
+                            coordrec::Vector{Array{Float64,2}},grd::Grid3DCart,
                             ttalgo::String ; returntt::Bool=false )
     
     nsrc = size(coordsrc,1)
@@ -190,7 +190,7 @@ $(TYPEDSIGNATURES)
 
  Fast sweeping method for a single source in 3D using using Podvin-Lecomte stencils on a staggered grid.
 """
-function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D) 
+function ttFS_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3DCart) 
 
     epsilon = 1e-5
 
@@ -667,7 +667,7 @@ $(TYPEDSIGNATURES)
 
  Fast marching method for a single source in 3D using using Podvin-Lecomte stencils on a staggered grid.
 """
-function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3D) 
+function ttFMM_podlec(vel::Array{Float64,3},src::Vector{Float64},grd::Grid3DCart) 
 
     epsilon = 1e-5
     
@@ -827,7 +827,7 @@ $(TYPEDSIGNATURES)
 """
 function calcttpt_podlec(ttime::Array{Float64,3},rotste::RotoStencils,
                    onsrc::Array{Bool,3},slowness::Array{Float64,3},
-                   grd::Grid3D,HUGE::Float64,i::Int64,j::Int64,k::Int64)
+                   grd::Grid3DCart,HUGE::Float64,i::Int64,j::Int64,k::Int64)
 
 
     #HUGE::Float64 = 1.0e300
@@ -1124,7 +1124,7 @@ $(TYPEDSIGNATURES)
  Define the "box" of nodes around/including the source.
 """
 function sourceboxloctt_alternative!(ttime::Array{Float64,3},vel::Array{Float64,3},
-                                     srcpos::Vector{Float64},grd::Grid3D; staggeredgrid::Bool )
+                                     srcpos::Vector{Float64},grd::Grid3DCart; staggeredgrid::Bool )
     ## staggeredgrid keyword required!
 
     mindistsrc = 1e-5

@@ -2,44 +2,50 @@
 
 using Test
 using EikonalSolvers
-
+using Distributed
+using LinearAlgebra
 
 # Run tests
 
 # get all the functions
-include("test_suite.jl")
+include("test_cartesian_2D.jl")
+include("test_cartesian_3D.jl")
+#include("test_spherical.jl")
 
 
-testname = ["forward traveltime 2D FMM 2nd order (Cartesian coord.)", "forward traveltime 2D alternative (Cartesian coord.)",
-            "forward traveltime 3D FMM 2nd order (Cartesian coord.)",  "forward traveltime 3D FMM alternative (Cartesian coord.)",
-            "gradient traveltime 2D FMM 2nd order (Cartesian coord.)", "gradient traveltime 2D alternative (Cartesian coord.)",
-            "gradient traveltime 3D FMM 2nd order (Cartesian coord.)", "gradient traveltime 3D alternative (Cartesian coord.)",
-            "forward traveltime 2D FMM 2nd order  (spherical coord.)",
-            "gradient traveltime 2D FMM 2nd order (spherical coord.)", "gradient traveltime 2D alternative (spherical coord.)",
-            "gradient traveltime 3D FMM 2nd order (spherical coord.)", "gradient traveltime 3D alternative (spherical coord.)" ]
-
-testfun  = [test_fwdtt_2D_FMM2ndord, test_fwdtt_2D_alternative,
-            test_fwdtt_3D_FMM2ndord, test_fwdtt_3D_alternative,
-            test_gradtt_2D_FMM2ndord, test_gradtt_2D_alternative,
-            test_gradtt_3D_FMM2ndord, test_gradtt_3D_alternative,
-            test_fwdtt_2Dspher_FMM2ndord,
-            test_gradtt_2Dspher_FMM2ndord, test_gradtt_2Dspher_alternative,
-            test_fwdtt_3Dspher_FMM2ndord,
-            test_gradtt_3Dspher_FMM2ndord, test_gradtt_3Dspher_alternative ]
-            
-           
 
 nwor = nworkers()
+println("Number of workers available: $nwor")
 
-@testset "Tests " begin
-    println("\n Number of workers available: $nwor")
-    for (tn,fun) in zip(testname,testfun)
-        println()
-        printstyled("Testing $tn \n", bold=true,color=:cyan)
-        @test fun()
-    end
-    println()
+# 2D
+@testset "Eikonal vs. analytical solutions const. vel. [2D Cart. coord.]" begin
+    test_fwdtt_2D_constvel()
+end
+@testset "Eikonal vs. analytical sol., lin. grad. vel. [2D Cart. coord.]" begin
+    test_fwdtt_2D_lingrad()
 end
 
+@testset "Gradient w.r.t. velocity vs. finite differences [2D Cart. coord.]" begin
+    test_gradvel_2D()
+end
+@testset "Gradient w.r.t. source loc. vs. finite differences [2D Cart. coord.]" begin
+    test_gradsrc_2D()
+end
 
+# 3D
+@testset "Eikonal vs. analytical solutions const. vel. [3D Cart. coord.]" begin
+    test_fwdtt_3D_constvel()
+end
+<<<<<<< HEAD
+=======
+@testset "Eikonal vs. analytical sol., lin. grad. vel. [3D Cart. coord.]" begin
+    test_fwdtt_3D_lingrad()
+end
 
+@testset "Gradient w.r.t. velocity vs. finite differences [3D Cart. coord.]" begin
+    test_gradvel_3D()
+end
+@testset "Gradient w.r.t. source loc. vs. finite differences [3D Cart. coord.]" begin
+    test_gradsrc_3D()
+end
+>>>>>>> Ndim_fwdgrad

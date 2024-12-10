@@ -27,12 +27,12 @@ The computations are run in parallel depending on the number of workers (nworker
 - `grad`: the gradient as a 2D array
 
 """
-function gradttime2Dalt(vel::Array{Float64,2}, grd::GridEik2D,coordsrc::Array{Float64,2},
-                        coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
-                        stdobs::Vector{Vector{Float64}} ;    gradttalgo::String,
-                        smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
+function eikgradient2Dalt(vel::Array{Float64,2}, grd::AbstractGridEik2D,coordsrc::Array{Float64,2},
+                          coordrec::Vector{Array{Float64,2}},pickobs::Vector{Vector{Float64}},
+                          stdobs::Vector{Vector{Float64}} ;    gradttalgo::String,
+                          smoothgradsourceradius::Integer=0,smoothgrad::Bool=false )
 
-    if typeof(grd)==Grid2D
+    if typeof(grd)==Grid2DCart
         simtype = :cartesian
     elseif typeof(grd)==Grid2DSphere
         simtype = :spherical
@@ -98,7 +98,7 @@ $(TYPEDSIGNATURES)
 Calculate the gradient for some requested sources 
 """
 function calcgradsomesrc2Dalt(vel::Array{Float64,2},xysrc::Array{Float64,2},
-                           coordrec::Vector{Array{Float64,2}},grd::GridEik2D,
+                           coordrec::Vector{Array{Float64,2}},grd::AbstractGridEik2D,
                            stdobs::Vector{Vector{Float64}},pickobs1::Vector{Vector{Float64}},
                            gradalgo::String,smoothgradsourceradius::Integer )
                            
@@ -191,7 +191,7 @@ end
 """
 $(TYPEDSIGNATURES)
 """
-function recboxlocgrad!(ttime::Array{Float64,2},lambda::Array{Float64,2},ttpicks::Vector{Float64},grd::Grid2D,
+function recboxlocgrad!(ttime::Array{Float64,2},lambda::Array{Float64,2},ttpicks::Vector{Float64},grd::Grid2DCart,
                         rec::Array{Float64,2},pickobs::Vector{Float64},stdobs::Vector{Float64}; staggeredgrid::Bool)
 
     ##########################
@@ -349,7 +349,7 @@ $(TYPEDSIGNATURES)
 """
 function eikgrad_FS_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                          src::Vector{Float64},rec::Array{Float64,2},
-                         grd::Grid2D,pickobs::Vector{Float64},
+                         grd::Grid2DCart,pickobs::Vector{Float64},
                          ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(2,)
@@ -475,7 +475,7 @@ $(TYPEDSIGNATURES)
 """
 function eikgrad_FMM_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                                src::Vector{Float64},rec::Array{Float64,2},
-                               grd::Grid2D,pickobs::Vector{Float64},
+                               grd::Grid2DCart,pickobs::Vector{Float64},
                                ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(2,)
@@ -690,7 +690,7 @@ $(TYPEDSIGNATURES)
 """
 function eikgrad_FMM_hiord_SINGLESRC(ttime::Array{Float64,2},vel::Array{Float64,2},
                          src::Vector{Float64},rec::Array{Float64,2},
-                         grd::Grid2D,pickobs::Vector{Float64},
+                         grd::Grid2DCart,pickobs::Vector{Float64},
                          ttpicks::Vector{Float64},stdobs::Vector{Float64})
 
     @assert size(src)==(2,)
@@ -1577,7 +1577,7 @@ end
 $(TYPEDSIGNATURES)
 """
 function sourceboxlocgrad!(ttime::Array{Float64,2},vel::Array{Float64,2},srcpos::Vector{Float64},
-                           grd::Grid2D; staggeredgrid::Bool )
+                           grd::Grid2DCart; staggeredgrid::Bool )
     
     ##########################
     ##   Init source

@@ -1,7 +1,7 @@
 using Documenter, EikonalSolvers 
 
 makedocs(modules = [EikonalSolvers],
-         repo="https://gitlab.com/JuliaGeoph/EikonalSolvers.jl/blob/{commit}{path}#{line}", 
+         repo=Remotes.GitLab("JuliaGeoph","EikonalSolvers.jl"), #"https://gitlab.com/JuliaGeoph/EikonalSolvers.jl/blob/{commit}{path}#{line}", 
          sitename="EikonalSolvers.jl",
          authors = "Andrea Zunino",
          format = Documenter.HTML(prettyurls=get(ENV,"CI",nothing)=="true"),
@@ -9,15 +9,15 @@ makedocs(modules = [EikonalSolvers],
              "Home" => "index.md",
              "API" => "publicapi.md",
              "Private stuff" => "privatestuff.md"
-         ]
+         ],
+         warnonly = [:missing_docs, :cross_references]
          )
 
 deploydocs(
-    repo="gitlab.com/JuliaGeoph/EikonalSolvers.jl.git",   #EikonalSolvers.jl/blob/{commit}{path}#{line}",
-    #repo="../../EikonalSolvers.jl",
+    repo="gitlab.com/JuliaGeoph/EikonalSolvers.jl.git",   
     devbranch = "main",
     deploy_config = Documenter.GitLab(),
-    branch = "gl-pages"
+    branch = "gl-pages",
 )
 
 
