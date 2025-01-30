@@ -1205,17 +1205,24 @@ end
 ###########################################################################
 
 function partderivttsrcpos(xyzpt::AbstractVector,xyzsrc::AbstractVector,vel::Real)
-
-    #denom = vel * sqrt((xpt - xsrc)^2 + (ypt - ysrc)^2)
-    denom = vel .* sqrt.( sum((xyzpt.-xyzsrc).^2) )
-    @assert denom!=0.0 "partderivttsrcpos2D(): Source position and grid node position coincide."
-    # deriv_x = -(xpt - xsrc) / denom
-    # deriv_y = -(ypt - ysrc) / denom
     Ndim = length(xyzpt)
     deriv_xyz = zeros(Ndim)
-    for d=1:Ndim
-        deriv_xyz[d] = - (xyzpt[d]-xyzsrc[d]) / denom
+
+    denom = vel .* sqrt.( sum((xyzpt.-xyzsrc).^2) )
+
+    if denom==0.0
+        @warn "partderivttsrcpos2D(): Source position and grid node position coincide."
+        deriv_xyz .= 0.0
+        return deriv_xyz
+    else
+        
+        for d=1:Ndim
+            deriv_xyz[d] = - (xyzpt[d]-xyzsrc[d]) / denom
+        end
     end
+
+    # deriv_x = -(xpt - xsrc) / denom
+    # deriv_y = -(ypt - ysrc) / denom
 
     return deriv_xyz
 end

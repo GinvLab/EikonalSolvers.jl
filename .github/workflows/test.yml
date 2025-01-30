@@ -1,0 +1,41 @@
+# Run package tests
+name: Package tests
+
+on: 
+  push:
+    branches:
+      - main
+    tags: '*'
+  pull_request: 
+
+# needed to allow julia-actions/cache to delete old caches that it has created
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  run_tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        julia-version: ['1'] #['lts', '1', 'pre']
+        julia-arch: [x64] #[x64, x86]
+        os: [ubuntu-latest] #[ubuntu-latest, windows-latest, macOS-latest]
+        exclude:
+          - os: macOS-latest
+            julia-arch: x86
+            
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+          arch: ${{ matrix.julia-arch }}
+      - name: Julia cache
+        if: ${{ !env.ACT }}
+        uses: julia-actions/cache@v2
+      # - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        # with:
+        #   annotate: true
