@@ -57,7 +57,7 @@ Finally, functions are provided to back-trace rays from receivers to sources.
 
 ## Example of gradient calculations in 2D
 
-The gradient of the misfit functional (see documentation) with respect to velocity and source location can be calculated as following. A set of observed traveltimes, error on the measurements and a reference velocity model are also required, see the documentation for a detailed example.
+The **gradient of the misfit functional** (see documentation) with respect to **velocity** and **source location** can be calculated as following. A set of observed traveltimes, error on the measurements and a reference velocity model are also required, see the documentation for a detailed example.
 ```julia
 # calculate the gradient of the misfit function w.r.t. velocity
 gradvel,misf = eikgradient(vel0,grd,coordsrc,coordrec,dobs,stdobs,:gradvel)
