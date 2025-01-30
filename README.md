@@ -51,7 +51,8 @@ ttimepicks,ttimegrid = eiktraveltime(velmod,grd,coordsrc,coordrec,returntt=true)
 ![ttarrays](docs/src/images/ttime-arrays.png)
 
 Finally, functions are provided to back-trace rays from receivers to sources.
-![ttarrays](docs/src/images/rays2.png)
+
+<p align="center"><img src="docs/src/images/rays2.png" width="70%" /></p>
 
 
 ## Example of gradient calculations in 2D
