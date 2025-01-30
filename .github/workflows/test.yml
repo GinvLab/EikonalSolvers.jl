@@ -1,11 +1,12 @@
 # Run package tests
 name: Package tests
 
-on: 
+on:
   push:
     branches:
       - main
-    tags: '*'
+    tags:
+      - 'v*'
   pull_request: 
 
 # needed to allow julia-actions/cache to delete old caches that it has created

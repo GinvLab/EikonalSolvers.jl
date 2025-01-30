@@ -4,11 +4,16 @@
 [![Docs Latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://ginvlab.github.io/EikonalSolvers.jl/dev)
 
 A library to perform __seismic traveltime__ computations by solving the eikonal equation in two (__2D__) and three dimensions (__3D__) with the possibility of computing the __gradient of a misfit function__ with respect to velocity and source location. The coordinate system can be either regular Cartesian or spherical.
-The forward algorithm is based on a fast marching (FMM) method (2nd order) with a refinement of the grid around the source location. The computation of the gradient relies on the __discrete adjoint__ method. 
-
-For historical reasons, alternative solvers are available (poorly maintained), including a first order FMM method and the fast sweeping (FS) method for global updates with different kinds of local stencils. Additionally, a continuos adjoint method to calculate the gradient is also provided.
+The forward algorithm is based on a fast marching (FMM) method (2nd order) with a refinement of the grid around the source location. The computation of the gradients relies on the __discrete adjoint__ method. 
 
 Both forward and gradient (adjoint) computations can be run in parallel using either Julia's distributed computing functions for distributed memory or threads for multicore processor. The  parallelisation scheme is "by source", distributing calculations for different seismic sources to different processors.
+
+
+This code is part of a larger project `G⁻¹Lab` (a superset of HMCLab) targeting probabilistic geophysical inverse problems. Please cite the following papers if you use this code:
+
+* Andrea Zunino, Scott Keating, Andreas Fichtner (2025), **A discrete adjoint method for deterministic and probabilistic eikonal-equation-based inversion of traveltime for velocity and source location, arXiv preprint arXiv:2501.13532, [https://arxiv.org/abs/2501.13532v1](https://arxiv.org/abs/2501.13532v1).
+
+* Andrea Zunino, Lars Gebraad, Alessandro Ghirotto, Andreas Fichtner (2023), **HMCLab: a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo method**, Geophysical Journal International, Volume 235, Issue 3, Pages 2979–2991, [https://doi.org/10.1093/gji/ggad403](https://doi.org/10.1093/gji/ggad403)
 
 
 ## Example of forward calculations in 2D
@@ -44,6 +49,9 @@ Optionally it is possible to retrieve also the traveltime at all grid points.
 ttimepicks,ttimegrid = eiktraveltime(velmod,grd,coordsrc,coordrec,returntt=true)
 ```
 ![ttarrays](docs/src/images/ttime-arrays.png)
+
+Finally, functions are provided to back-trace rays from receivers to sources.
+![ttarrays](docs/src/images/rays2.png)
 
 
 ## Example of gradient calculations in 2D
