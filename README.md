@@ -11,7 +11,7 @@ Both forward and gradient (adjoint) computations can be run in parallel using ei
 
 This code is part of a larger project `G⁻¹Lab` (a superset of HMCLab) targeting probabilistic geophysical inverse problems. Please cite the following papers if you use this code:
 
-* Andrea Zunino, Scott Keating, Andreas Fichtner (2025), **A discrete adjoint method for deterministic and probabilistic eikonal-equation-based inversion of traveltime for velocity and source location, arXiv preprint arXiv:2501.13532, [https://arxiv.org/abs/2501.13532v1](https://arxiv.org/abs/2501.13532v1).
+* Andrea Zunino, Scott Keating, Andreas Fichtner (2025), **A discrete adjoint method for deterministic and probabilistic eikonal-equation-based inversion of traveltime for velocity and source location**, arXiv preprint arXiv:2501.13532, [https://arxiv.org/abs/2501.13532v1](https://arxiv.org/abs/2501.13532v1).
 
 * Andrea Zunino, Lars Gebraad, Alessandro Ghirotto, Andreas Fichtner (2023), **HMCLab: a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo method**, Geophysical Journal International, Volume 235, Issue 3, Pages 2979–2991, [https://doi.org/10.1093/gji/ggad403](https://doi.org/10.1093/gji/ggad403)
 

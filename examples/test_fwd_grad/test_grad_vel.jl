@@ -12,10 +12,8 @@ function rungradvel2d()
     # create the Grid2D struct
     hgrid = 50.0 
     grd = Grid2DCart(hgrid=hgrid,
-                     xinit=0.0,
-                     yinit=0.0,
-                     nx=50,
-                     ny=30) 
+                     cooinit=(0.0,0.0),
+                     grsize=(50,30))
     nx,ny = grd.grsize
 
     nrec = 7
@@ -31,7 +29,7 @@ function rungradvel2d()
         velmod[:,i] = 23.6 * i .+ velmod[:,i]
     end
 
-    srcongrid = false
+    srcongrid = true
     if srcongrid
         println("  Source on a grid point")
         coordsrc1 = [hgrid*(nx÷2)  hgrid*(ny÷2)]
@@ -43,7 +41,7 @@ function rungradvel2d()
 
     compare_adj_FD = true
     refinesrc = [false,true]
-    gradvel_all = Vector{Any}(undef,2)
+    gradvel_all = Vector{Matrix{Float64}}(undef,2)
     gradvel_FD_all = [similar(velmod), similar(velmod)]
 
     for col=1:2
@@ -77,15 +75,15 @@ function rungradvel2d()
 
         println("\n-------------- gradient  ----------------")
         ## calculate the gradient of the misfit function
-        gradvel_all[col] = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
-                                     :gradvel,extraparams=extraparams)
+        gradvel_all[col],misf = eikgradient(vel0,grd,coordsrc2,coordrec,dobs,stdobs,
+                                            :gradvel,extraparams=extraparams)
 
    
 
         ## Compare with brute-force finite differences calculation
         dh = 0.001
         @show dh
-        gradvel_FD = similar(gradvel_all[col])
+        gradvel_FD = similar(velmod) 
         for j=1:ny
             for i=1:nx            
                 if i%10 == 0
@@ -95,9 +93,9 @@ function rungradvel2d()
                 velpdh[i,j] += dh
                 velmdh = copy(vel0)
                 velmdh[i,j] -= dh
-                misf_pdh = eikttimemisfit(velpdh,dobs,stdobs,coordsrc2,coordrec,grd;
+                misf_pdh = eikttimemisfit(velpdh,grd,coordsrc2,coordrec,dobs,stdobs;
                                         extraparams=extraparams)
-                misf_mdh = eikttimemisfit(velmdh,dobs,stdobs,coordsrc2,coordrec,grd;
+                misf_mdh = eikttimemisfit(velmdh,grd,coordsrc2,coordrec,dobs,stdobs;
                                         extraparams=extraparams)
                 gradvel_FD_all[col][i,j] = (misf_pdh-misf_mdh)/(2*dh)
             end
@@ -177,4 +175,4 @@ function rungradvel2d()
     #sleep(5)
 
     return
-end # function
+end 
