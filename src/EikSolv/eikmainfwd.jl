@@ -861,8 +861,6 @@ function createsparsederivativematrices!(grd::AbstractGridEik,
         coe_θ_2nd = [-3.0./(2.0.*Δarc)  4.0./(2.0.*Δarc)  -1.0./(2.0.*Δarc)] 
 
         allcoeff = Vector{CoeffDerivSpherical2D}(undef,Ndim)
-        # @show typeof(coe_r_1st),typeof(coe_r_2nd)
-        # @show typeof(coe_θ_1st),typeof(coe_θ_2nd)
         allcoeff[1] = CoeffDerivSpherical2D( coe_r_1st, coe_r_2nd )
         allcoeff[2] = CoeffDerivSpherical2D( coe_θ_1st, coe_θ_2nd )
 
@@ -1031,11 +1029,9 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
     caind = CartesianIndices(grsize_fine)
     linind_fine = LinearIndices(grsize_fine)
     linind_coarse = LinearIndices(grsize_window_coarse)
-    # @show grsize_window_coarse
-    # @show linind_coarse
     i_coarse = MVector{Ndim,Int64}(undef)
     Nax = ndims(caind)
-    # @show Nax
+
     for ci_fine in caind
         # loop over dimensions
         for d=1:Nax
@@ -1045,11 +1041,8 @@ function createfinegrid(grd::AbstractGridEik,xyzsrc::AbstractVector{Float64},
             i_coarse[d] = ri>=downscalefactor/2+1 ? di+2 : di+1           
         end
 
-        # @show ci_fine
-        # @show i_coarse
         irow = linind_fine[ci_fine]
         jcol = linind_coarse[CartesianIndex(i_coarse...)]
-        # @show irow,jcol
         nearneigh_oper[irow,jcol] = 1.0     
 
         # track column index for gradient calculations

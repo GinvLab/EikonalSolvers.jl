@@ -1240,7 +1240,7 @@ function partderivttsrcpos(xyzpt::AbstractVector,inpxyzsrc::AbstractVector,vel::
     ##---------------------------------------------
     ## deal with the case of the source location being
     ##   exactly aligned with one or more axes
-    shift = 1e-4*hgrid
+    shift = 1e-6*hgrid
     xyzsrc = zeros(eltype(inpxyzsrc),size(inpxyzsrc)...)
 
     for d=1:Ndim # loop over axes

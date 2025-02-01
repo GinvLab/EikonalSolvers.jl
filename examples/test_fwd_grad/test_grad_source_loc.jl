@@ -77,8 +77,8 @@ function rungradsrcloc()
         # nsrc = 1
         coordsrc2 = [#hgrid*22.53 hgrid*(grd.grsize[2]-38.812);
                      #hgrid*260.4 hgrid*(grd.grsize[2]-123.2);
-                     #hgrid*280.230 hgrid*(grd.grsize[2]-28.0);
-                     hgrid*280.0 2320.00]
+                     #hgrid*280.230 hgrid*(grd.grsize[2]-28.45);
+                     hgrid*280.0 2320.23]
         @show coordsrc2
         
         println("\n-------------- gradient  ----------------")
