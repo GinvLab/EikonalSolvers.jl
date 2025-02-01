@@ -1302,7 +1302,7 @@ function sourceboxloctt!(fmmvars::AbstractFMMVars,vel::Array{Float64,N},srcpos::
             end
    
             whichdir = findall(issrchalfway)
-            @warn "Shifting the source position along dimension(s) $(whichdir) by $(round(srcshift,sigdigits=3)) [1e-4*grd.hgrid] "
+            @warn "sourceboxloctt(): Shifting the source position along dimension(s) $(whichdir) by $(round(srcshift,sigdigits=3)) [1e-4*grd.hgrid] "
             fmmvars.srcboxpar.xyzsrc .= new_srcpos
 
             for l=1:Ncorn

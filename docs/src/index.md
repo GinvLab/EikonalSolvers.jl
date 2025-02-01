@@ -1,8 +1,4 @@
 
-
-```@meta
-EditURL = "https://gitlab.com/JuliaGeoph/EikonalSolvers.jl/-/tree/main/docs/src/"
-```
 # Contents
 
 ```@contents
@@ -19,11 +15,11 @@ For historical reasons, alternative solvers are available (poorly maintained), i
 Both forward and gradient (adjoint) computations can be run in paralle using either Julia's distributed computing functions for distributed memory or threads for multicore processor. The parallelisation scheme is "by source", distributing calculations for different seismic sources to different processors.
 
 
-This code is part of a larger project `HMCLab` ([^ZuninoGebraadetal2023]) targeting probabilistic geophysical inverse problems. Please cite the following papers if you use this code:
+This code is part of a larger project `G⁻¹Lab` (a superset of HMCLab[^ZuninoGebraadetal2023]) targeting probabilistic geophysical inverse problems. Please cite the following papers if you use this code:
 
-* Andrea Zunino, Scott Keating, Andreas Fichtner, **Eikonal tomography using the discrete adjoint state method**, in preparation.
+* Andrea Zunino, Scott Keating, Andreas Fichtner (2025), **A discrete adjoint method for deterministic and probabilistic eikonal-equation-based inversion of traveltime for velocity and source location**, arXiv preprint arXiv:2501.13532, [https://arxiv.org/abs/2501.13532v1](https://arxiv.org/abs/2501.13532v1).
 
-* Andrea Zunino, Lars Gebraad, Alessandro Ghirotto, Andreas Fichtner, **HMCLab: a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo method**, Geophysical Journal International, Volume 235, Issue 3, December 2023, Pages 2979–2991  [https://doi.org/10.1093/gji/ggad403](https://doi.org/10.1093/gji/ggad403)
+* Andrea Zunino, Lars Gebraad, Alessandro Ghirotto, Andreas Fichtner (2023), **HMCLab: a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo method**, Geophysical Journal International, Volume 235, Issue 3, Pages 2979–2991, [https://doi.org/10.1093/gji/ggad403](https://doi.org/10.1093/gji/ggad403)
 
 
 
@@ -31,17 +27,18 @@ This code is part of a larger project `HMCLab` ([^ZuninoGebraadetal2023]) target
 
 To install the package simple enter into the package manager mode in Julia by typing "`]`" at the REPL prompt and then use `add`, i.e.,
 ```
-(v1.8) pkg> add EikonalSolvers
+(v1.11) pkg> registry add https://github.com/Ginvlab/GinvLabRegistry
+(v1.11) pkg> add EikonalSolvers
 ```
 The package will be automatically downloaded from the web and installed.
 
-Alternatively, use the path where the directory of the package is located, be it remote (GitLab)
+Alternatively, use the path where the directory of the package is located, be it remote (GitHub)
 ```
-(v1.8) pkg> add https://gitlab.com/JuliaGeoph/EikonalSolvers.jl
+(v1.11) pkg> add https://github.com/GinvLab/EikonalSolvers.jl
 ```
 or local
 ```
-(v1.8) pkg> add /path/to/EikonalSolvers.jl
+(v1.11) pkg> add /<path>/<to>/EikonalSolvers.jl
 ```
 
 
@@ -59,6 +56,7 @@ where ``\tau`` is the travel time, ``x,y,z`` the spatial coordinates and ``v`` t
 In the numerical solution to the eikonal equation, there are two major components, the global scheme, which defines the strategy to update to the traveltime on the grid, i.e., the fast marching method and the local scheme, providing the finite difference stencils.
 
 The gradient computations are based on the adjoint state method (see below).
+For details please refer to the paper [^Zuninoetal2025].
 
 ## Numerical implementation
 
@@ -70,7 +68,7 @@ S = \dfrac{1}{2} \sum_i \dfrac{\left( \mathbf{\tau}_i^{\rm{calc}}(\mathbf{v})-\m
 ```
 The gradient of the above functional with respect to the velocity model ``\dfrac{d S}{d \mathbf{v}}`` can be calculated efficiently using the _adjoint_ state method (e.g., [^LeungQian2006], [^TreisterHaber2016]]). 
 
-In this package we employ the __discrete adjoint state method__ to compute both gradients with respect to velocity and source location [^Zuninoetal2024], which takes into account the non-linearity of the forward problem - i.e., _no_ linearisation of the forward model and _no_ rays are employed. The computational cost is almost independent of the number of receivers and, because of the discretization, the result is a "diffuse" sensitivity around the theoretical rays (see an example in the following). 
+In this package we employ the __discrete adjoint state method__ to compute both gradients with respect to velocity and source location [^Zuninoetal2025], which takes into account the non-linearity of the forward problem - i.e., _no_ linearisation of the forward model and _no_ rays are employed. The computational cost is almost independent of the number of receivers and, because of the discretization, the result is a "diffuse" sensitivity around the theoretical rays (see an example in the following). 
 
 
 ## Exported functions / API
@@ -428,7 +426,7 @@ The gradient is returned as an array where each row contains the partial derivat
 
 [^ZuninoGebraadetal2023]: Zunino A., Gebraad, L., Ghirotto, A. and Fichtner, A., (2023). HMCLab a framework for solving diverse geophysical inverse problems using the Hamiltonian Monte Carlo algorithm, Geophysical Journal International, Volume 235, Issue 3, December 2023, Pages 2979–2991, https://doi.org/10.1093/gji/ggad403.
 
-[^Zuninoetal2024]: Andrea Zunino, Scott Keating, Andreas Fichtner, Eikonal tomography using the discrete adjoint state method, in preparation.
+[^Zuninoetal2025]: Andrea Zunino, Scott Keating, Andreas Fichtner (2025), **A discrete adjoint method for deterministic and probabilistic eikonal-equation-based inversion of traveltime for velocity and source location, arXiv preprint arXiv:2501.13532.
  
 [^LeungQian2006]: Leung, S. and Qian, J. (2006). An adjoint state method for three-dimensional transmission traveltime tomography using first-arrivals. Communications in Mathematical Sciences, 4(1), 249-266.
 

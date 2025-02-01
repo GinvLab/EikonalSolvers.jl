@@ -47,10 +47,38 @@ function eikgradient(vel::Array{Float64,N},
     # some checks
     @assert 2<=ndims(vel)<=3
     @assert all(vel.>0.0)
+    @assert length(coordrec)==length(pickobs)
+    begin
+        for r=1:length(coordrec)
+            @assert size(coordrec[r],1)==size(pickobs[r],1)  "size(coordrec[r],1): $(size(coordrec[r],1)) \
+size(pickobs[r],1): $(size(pickobs[r],1))"
+            @assert size(stdobs[r])==size(pickobs[r]) 
+        end
+    end
     checksrcrecposition(grd,coordsrc,coordrec)
-    
+
     nsrc = size(coordsrc,1)
 
+    ##------------------------------
+    ## deal with the case of the source location being
+    ##   exactly aligned with one or more axes
+    # shift = 1e-5*grd.hgrid
+    # coordsrc = zeros(eltype(inpcoordsrc),size(inpcoordsrc)...)
+    # for s=1:nsrc
+    #     srcpos = inpcoordsrc[s,:]
+    #     for d=1:size(coordsrc,2) # loop over axes
+    #         align = mod(srcpos[d],grd.hgrid)
+    #         if align <= eps(eltype(srcpos))
+    #             coordsrc[s,d] = inpcoordsrc[s,d] + shift
+    #             @warn "Shifting source position along axis $d by $shift to prevent issues."
+    #         else
+    #             coordsrc[s,d] = inpcoordsrc[s,d]
+    #         end
+    #     end
+    # end
+    ##------------------------------
+    
+  
     if extraparams.parallelkind==:distribmem
         ##====================================
         ## Distributed memory
@@ -95,8 +123,10 @@ function eikgradient(vel::Array{Float64,N},
 
         Threads.@threads for s=1:nchu
             igrs = grpsrc[s,1]:grpsrc[s,2]
-            ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs,:],ttmisfsrc[s] = calcgradsomesrc(vel,coordsrc[igrs,:],coordrec[igrs],
-                                                                           grd,stdobs[igrs],pickobs[igrs],
+            ∂ψ∂vel_all[s],∂ψ∂xyzsrc[igrs,:],ttmisfsrc[s] = calcgradsomesrc(vel,coordsrc[igrs,:],
+                                                                           coordrec[igrs],
+                                                                           grd,stdobs[igrs],
+                                                                           pickobs[igrs],
                                                                            whichgrad,extraparams )
         end
         ∂ψ∂vel = sum(∂ψ∂vel_all)
@@ -311,8 +341,7 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
     ∂fi_∂us = sum( twoDttDS )
     ## 
     ∂ψ_∂u_s = transpose(P_Areg) * fact2∂ψ∂u
-    ∂ψ_∂u_p = transpose(∂fi_∂us) * lambda_fmmord_coarse
-
+    ∂ψ∂up_∂up∂us = transpose(∂fi_∂us) * lambda_fmmord_coarse
 
 
     ####################################################
@@ -337,12 +366,11 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
         ##     at the "onsrc" points
         ##  compute gradient
         ##############################################
-        
+
         if refinearoundsrc==false
             dus_dsr = calc_dus_dsr(lambda_fmmord_coarse,
                                    velcart,
                                    ∂ψ_∂u_s,
-                                   ∂ψ_∂u_p,
                                    fmmvars.srcboxpar,
                                    grd,
                                    xyzsrc )
@@ -358,8 +386,15 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
 
         end
 
-        #dψ_ds_r = transpose(dus_dsr) * ∂ψ_∂u_p + transpose(dus_dsr) * ∂ψ_∂u_s
-        gradsrcpos1 .= transpose(dus_dsr) * ∂ψ_∂u_p + transpose(dus_dsr) * ∂ψ_∂u_s
+        # println("\ndus_dsr:")
+        # display(dus_dsr)
+        # println("\n∂ψ∂up_∂up∂us:")
+        # display(∂ψ∂up_∂up∂us)
+        # println("\n∂ψ_∂u_s:")
+        # display(∂ψ_∂u_s)
+        
+        #dψ_ds_r = transpose(dus_dsr) * ∂ψ∂up_∂up∂us + transpose(dus_dsr) * ∂ψ_∂u_s
+        gradsrcpos1 .= transpose(dus_dsr) * ∂ψ∂up_∂up∂us + transpose(dus_dsr) * ∂ψ_∂u_s
         
     end
 
@@ -420,7 +455,7 @@ function calcgrads_singlesrc!(gradvel1::Union{AbstractArray{Float64},Nothing},
         # Gradient with respect to velocity, term T2Va
         ##===============================================
         ## FMM ordering 
-        T2Va = transpose( dus_dva ) * ∂ψ_∂u_p 
+        T2Va = transpose( dus_dva ) * ∂ψ∂up_∂up∂us 
         #T2Va = transpose(lambda_fmmord_coarse) * tmpdfidva
         ## (i,j) indices of the source points
         ijksrcreg = fmmvars.srcboxpar.ijksrc
@@ -515,7 +550,6 @@ function computestuff_finegrid!(fmmvars,adjvars,grd,srcrefvars)
     @assert findfirst( adjvars.fmmord.ttime .< 0.0)-1 == Naccpts
     ## extract computed traveltime values
     tt_fmmord = adjvars.fmmord.ttime[1:Naccpts]
-    #@show size(tt_fmmord)
     onsrccols = adjvars.fmmord.onsrccols[1:Naccpts]
     nptsonsrc = count(onsrccols)
     @assert length(onsrccols)==length(tt_fmmord)
@@ -575,8 +609,6 @@ function computestuff_finegrid!(fmmvars,adjvars,grd,srcrefvars)
     #######################################################
     ##  right hand side adj eq. == -(adjoint source)^T
     #######################################################
-    # @show size(H)
-    # @show size(.!adjvars.fmmord.onsrccols[1:Naccpts])
     # bool vector with false for src columns
     #    only part of the rectangular fine grid has been used, so [1:Naccpts]
     rq = .!onsrccols
@@ -691,11 +723,8 @@ function calc_duh_dva_finegrid!(lambda_fmmord_fine,
         qorig = srcrefvars.nearneigh_idxcoarse[tmpqorig]        
 
         for p=1:Naccpts
-            #i = p
             #  use the "full" indices (including points on source)
             porig = idxconv.lfmm2grid[p]
-
-            #@show (p,j),q,(porig,qorig)
             ## extract the proper elements from the interpolation
             ##   matrix in FMM order
             dwq_dva[p,j] = nneigh[porig,qorig]
@@ -1111,7 +1140,6 @@ Calculates the derivative of the misfit function with respect to the traveltime 
 function calc_dus_dsr(lambda_coarse::AbstractArray{Float64},
                       velcart_coarse::Array{Float64,N},
                       ∂ψ_∂u_s::AbstractVector{Float64},
-                      ∂ψ_∂u_p::AbstractVector{Float64},
                       srcboxpar_coarse,
                       grd::AbstractGridEik,
                       xyzsrc::Vector{Float64} ) where N
@@ -1145,7 +1173,7 @@ function calc_dus_dsr(lambda_coarse::AbstractArray{Float64},
             velsrc = velcart_coarse[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
         end
         ## get the derivative
-        dus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
+        dus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc,grd.hgrid)
     end
 
     return dus_dsr
@@ -1191,7 +1219,7 @@ function calc_dus_dsr_finegrid(lambda_fmmord_fine,
             velsrc = srcrefvars.velcart_fine[ijksrc[p,1],ijksrc[p,2],ijksrc[p,3]]
         end
         ## get the derivative
-        dtaus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc)
+        dtaus_dsr[p,:] .= partderivttsrcpos(xyzpt,xyzsrc,velsrc,grd_fine.hgrid)
     end
 
     trm1 = ∂u_h_dtau_s * dtaus_dsr
@@ -1204,18 +1232,42 @@ end
 
 ###########################################################################
 
-function partderivttsrcpos(xyzpt::AbstractVector,xyzsrc::AbstractVector,vel::Real)
-
-    #denom = vel * sqrt((xpt - xsrc)^2 + (ypt - ysrc)^2)
-    denom = vel .* sqrt.( sum((xyzpt.-xyzsrc).^2) )
-    @assert denom!=0.0 "partderivttsrcpos2D(): Source position and grid node position coincide."
-    # deriv_x = -(xpt - xsrc) / denom
-    # deriv_y = -(ypt - ysrc) / denom
+function partderivttsrcpos(xyzpt::AbstractVector,inpxyzsrc::AbstractVector,vel::AbstractFloat,
+                           hgrid::AbstractFloat)
     Ndim = length(xyzpt)
     deriv_xyz = zeros(Ndim)
+
+    ##---------------------------------------------
+    ## deal with the case of the source location being
+    ##   exactly aligned with one or more axes
+    shift = 1e-4*hgrid
+    xyzsrc = zeros(eltype(inpxyzsrc),size(inpxyzsrc)...)
+
+    for d=1:Ndim # loop over axes
+        align = mod(inpxyzsrc[d],hgrid)
+        if align <= eps(eltype(inpxyzsrc))
+            xyzsrc[d] = inpxyzsrc[d] + shift
+            @warn "partderivttsrcpos(): Shifting source position along axis $d by $shift, issues may arise."
+        else
+            xyzsrc[d] = inpxyzsrc[d]
+        end
+    end
+    ##---------------------------------------------
+
+    denom = vel .* sqrt.( sum((xyzpt.-xyzsrc).^2) )
+
+    if denom==0.0
+        @warn "partderivttsrcpos2D(): Source position and grid node position coincide."
+        deriv_xyz .= 0.0
+        return deriv_xyz
+    end
+    
     for d=1:Ndim
         deriv_xyz[d] = - (xyzpt[d]-xyzsrc[d]) / denom
     end
+    
+    # deriv_x = -(xpt - xsrc) / denom
+    # deriv_y = -(ypt - ysrc) / denom
 
     return deriv_xyz
 end

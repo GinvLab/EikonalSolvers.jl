@@ -2,8 +2,8 @@
 
 
 function checksrcrecposition(grd::Grid2DCart,coordsrc,coordrec)
-    @assert size(coordsrc,1)==length(coordrec)
-    @assert all(grd.x[1].<=coordsrc[:,1].<=grd.x[end])
+    @assert size(coordsrc,1)==length(coordrec) 
+    @assert all(grd.x[1].<=coordsrc[:,1].<=grd.x[end]) 
     @assert all(grd.y[1].<=coordsrc[:,2].<=grd.y[end])
     for r=1:length(coordrec)
         @assert all(grd.x[1].<=coordrec[r][:,1].<=grd.x[end])

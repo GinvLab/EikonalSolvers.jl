@@ -36,8 +36,7 @@ end
 @testset "Eikonal vs. analytical solutions const. vel. [3D Cart. coord.]" begin
     test_fwdtt_3D_constvel()
 end
-<<<<<<< HEAD
-=======
+
 @testset "Eikonal vs. analytical sol., lin. grad. vel. [3D Cart. coord.]" begin
     test_fwdtt_3D_lingrad()
 end
@@ -48,4 +47,4 @@ end
 @testset "Gradient w.r.t. source loc. vs. finite differences [3D Cart. coord.]" begin
     test_gradsrc_3D()
 end
->>>>>>> Ndim_fwdgrad
+
