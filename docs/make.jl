@@ -17,6 +17,6 @@ deploydocs(
     repo="github.com/GinvLab/EikonalSolvers.jl.git",   
     devbranch = "main",
     deploy_config = Documenter.GitHubActions(),
-    branch = "gl-pages",
+    branch = "gh-pages",
 )
 
