@@ -198,9 +198,9 @@ $(TYPEDSIGNATURES)
 
 Ray tracing utility. Given a traveltime grid and source and receiver positions, trace the rays.
 """
-function tracerays(grd::AbstractGridEik,ttime::Vector{Array{Float64}},
-                   coordsrc::Array{Float64,2},coordrec::Vector{Array{Float64,2}};
-                   steplen::Real=0.01)
+function tracerays(grd::AbstractGridEik,ttime::Vector{Array{T}},
+                   coordsrc::Array{T,2},coordrec::Vector{Array{T,2}};
+                   steplen::Real=0.01) where T
     
     nsrc = size(coordsrc,1)
     rays_srcs = Vector{Vector{Matrix{Float64}}}(undef,nsrc)
