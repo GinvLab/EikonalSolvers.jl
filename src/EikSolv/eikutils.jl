@@ -266,9 +266,9 @@ function tracerays_singlesrc(grd::AbstractGridEik,ttime::Array{Float64,N},
             
             #x,y = raypath[s,:]
             if Ndim == 2
-                gradT = gradient(itp,raypath[s,1],raypath[s,2])
+                gradT = Interpolations.gradient(itp,raypath[s,1],raypath[s,2])
             elseif Ndim == 3
-                gradT = gradient(itp,raypath[s,1],raypath[s,2],raypath[s,3])
+                gradT = Interpolations.gradient(itp,raypath[s,1],raypath[s,2],raypath[s,3])
             end
 
      
