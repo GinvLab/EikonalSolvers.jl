@@ -99,7 +99,7 @@ function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
                           (1-xd)*(1-yd)*zd ,
                           xd*yd*(1-zd) ,
                           (1-xd)*yd*zd ,
-                          xd*(1-yd)*(1-zd) ,
+                          xd*(1-yd)*zd ,
                           xd*yd*zd ]
 
         fcorn = @SVector[f000;
@@ -130,13 +130,13 @@ function trilinear_interp(f::AbstractArray{Float64,3},grd::AbstractGridEik3D,
                     f001 * (1-xd)*(1-yd)*zd +
                     f110 * xd*yd*(1-zd) +
                     f011 * (1-xd)*yd*zd +
-                    f101 * xd*(1-yd)*(1-zd) +
+                    f101 * xd*(1-yd)*zd + 
                     f111 * xd*yd*zd
 
         return interpval
     end
 
-    return interpval
+    return 
 end
 
 ###########################################################################
@@ -152,10 +152,6 @@ function calcttpt_2ndord!(fmmvars::FMMVars3D,vel::Array{Float64,3},
                           grd::AbstractGridEik3D,ijk::MVector{3,Int64},
                           codeD::MVector{3,<:Integer}) 
     
-    #######################################################
-    ##  Local solver Sethian et al., Rawlison et al.  ???##
-    #######################################################
-
     # The solution from the quadratic eq. to pick is the larger, see 
     #  Sethian, 1996, A fast marching level set method for monotonically
     #  advancing fronts, PNAS

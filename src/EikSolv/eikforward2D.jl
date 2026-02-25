@@ -99,16 +99,11 @@ function calcttpt_2ndord!(fmmvars::FMMVars2D,vel::Array{Float64,2},
                           grd::AbstractGridEik2D,ij::MVector{2,Int64},
                           codeD::MVector{2,<:Integer} )
     
-    #######################################################
-    ##  Local solver Sethian et al., Rawlison et al.  ???##
-    #######################################################
-
     # The solution from the quadratic eq. to pick is the larger, see 
     #  Sethian, 1996, A fast marching level set method for monotonically
     #  advancing fronts, PNAS
     i = ij[1]
     j = ij[2]
-
 
     # sizes, etc.
     n1,n2 = grd.grsize
